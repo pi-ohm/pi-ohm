@@ -19,7 +19,9 @@ function mergeConfig(base: OhmConfig, patch: Partial<OhmConfig>): OhmConfig {
   };
 }
 
-export async function loadOhmConfig(cwd: string): Promise<{ config: OhmConfig; loadedFrom: string | null }> {
+export async function loadOhmConfig(
+  cwd: string,
+): Promise<{ config: OhmConfig; loadedFrom: string | null }> {
   let config = buildDefaultConfig(FEATURE_CATALOG);
   let loadedFrom: string | null = null;
 

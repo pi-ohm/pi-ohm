@@ -39,7 +39,10 @@ async function renderStatus(_pi: ExtensionAPI, ctx: ExtensionContext) {
   const enabled = getEnabledFocusFeatureCount(config);
 
   if (!ctx.hasUI) return;
-  ctx.ui.setStatus("ohm", `mode:${config.defaultMode} · ${enabled}/${OHM_FOCUS_FEATURES.length} focus features`);
+  ctx.ui.setStatus(
+    "ohm",
+    `mode:${config.defaultMode} · ${enabled}/${OHM_FOCUS_FEATURES.length} focus features`,
+  );
 
   if (!config.features.handoffVisualizer) {
     ctx.ui.setWidget("ohm-handoff-map", undefined, { placement: "belowEditor" });
@@ -130,9 +133,7 @@ export default function registerOhmFeaturesExtension(pi: ExtensionAPI) {
   pi.registerCommand("ohm-missing", {
     description: "Show recommended next features beyond the initial focus set",
     handler: async (_args, ctx) => {
-      const lines = RECOMMENDED_NEXT_FEATURES.map(
-        (item) => `- ${item.name}: ${item.reason}`,
-      );
+      const lines = RECOMMENDED_NEXT_FEATURES.map((item) => `- ${item.name}: ${item.reason}`);
       const text = ["Likely missing next layers", "", ...lines].join("\n");
 
       if (!ctx.hasUI) {

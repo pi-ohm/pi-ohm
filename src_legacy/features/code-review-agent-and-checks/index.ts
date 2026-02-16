@@ -9,5 +9,10 @@ export const code_review_agent_and_checksFeature: FeatureDefinition = {
   status: "planned",
   path: "src/features/code-review-agent-and-checks",
   dependsOn: ["subagents-task-delegation"],
-  sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/review", "https://ampcode.com/news/agentic-code-review", "https://ampcode.com/news/liberating-code-review"],
+  sourceUrls: [
+    "https://ampcode.com/manual",
+    "https://ampcode.com/news/review",
+    "https://ampcode.com/news/agentic-code-review",
+    "https://ampcode.com/news/liberating-code-review",
+  ],
 };

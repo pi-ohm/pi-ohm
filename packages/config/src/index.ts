@@ -96,9 +96,7 @@ function expandHome(value: string): string {
 
 export function resolveOhmConfigDir(): string {
   const envDir =
-    process.env.PI_CONFIG_DIR ??
-    process.env.PI_CODING_AGENT_DIR ??
-    process.env.PI_AGENT_DIR;
+    process.env.PI_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR ?? process.env.PI_AGENT_DIR;
 
   if (envDir && envDir.trim().length > 0) {
     return expandHome(envDir.trim());
@@ -164,9 +162,9 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
   next.defaultMode = normalizeMode(patch.defaultMode, next.defaultMode);
   next.subagentBackend = normalizeSubagentBackend(patch.subagentBackend, next.subagentBackend);
 
-  const featurePatch = (patch.features && typeof patch.features === "object"
-    ? (patch.features as JsonMap)
-    : {}) as JsonMap;
+  const featurePatch = (
+    patch.features && typeof patch.features === "object" ? (patch.features as JsonMap) : {}
+  ) as JsonMap;
 
   next.features.handoff = normalizeBoolean(featurePatch.handoff, next.features.handoff);
   next.features.subagents = normalizeBoolean(featurePatch.subagents, next.features.subagents);
@@ -183,21 +181,27 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     next.features.painterImagegen,
   );
 
-  const painterPatch = (patch.painter && typeof patch.painter === "object"
-    ? (patch.painter as JsonMap)
-    : {}) as JsonMap;
+  const painterPatch = (
+    patch.painter && typeof patch.painter === "object" ? (patch.painter as JsonMap) : {}
+  ) as JsonMap;
 
-  const googlePatch = (painterPatch.googleNanoBanana && typeof painterPatch.googleNanoBanana === "object"
-    ? (painterPatch.googleNanoBanana as JsonMap)
-    : {}) as JsonMap;
+  const googlePatch = (
+    painterPatch.googleNanoBanana && typeof painterPatch.googleNanoBanana === "object"
+      ? (painterPatch.googleNanoBanana as JsonMap)
+      : {}
+  ) as JsonMap;
 
-  const openaiPatch = (painterPatch.openai && typeof painterPatch.openai === "object"
-    ? (painterPatch.openai as JsonMap)
-    : {}) as JsonMap;
+  const openaiPatch = (
+    painterPatch.openai && typeof painterPatch.openai === "object"
+      ? (painterPatch.openai as JsonMap)
+      : {}
+  ) as JsonMap;
 
-  const azurePatch = (painterPatch.azureOpenai && typeof painterPatch.azureOpenai === "object"
-    ? (painterPatch.azureOpenai as JsonMap)
-    : {}) as JsonMap;
+  const azurePatch = (
+    painterPatch.azureOpenai && typeof painterPatch.azureOpenai === "object"
+      ? (painterPatch.azureOpenai as JsonMap)
+      : {}
+  ) as JsonMap;
 
   next.painter.googleNanoBanana.enabled = normalizeBoolean(
     googlePatch.enabled,
@@ -291,16 +295,16 @@ function applyExtensionSettings(config: OhmRuntimeConfig): OhmRuntimeConfig {
   );
 
   next.painter.googleNanoBanana.model = normalizeString(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-google-model",
-      next.painter.googleNanoBanana.model,
-    ),
+    getSetting(OHM_EXTENSION_NAME, "painter-google-model", next.painter.googleNanoBanana.model),
     next.painter.googleNanoBanana.model,
   );
 
   next.painter.openai.enabled = normalizeBoolean(
-    getSetting(OHM_EXTENSION_NAME, "painter-openai-enabled", next.painter.openai.enabled ? "on" : "off"),
+    getSetting(
+      OHM_EXTENSION_NAME,
+      "painter-openai-enabled",
+      next.painter.openai.enabled ? "on" : "off",
+    ),
     next.painter.openai.enabled,
   );
 
@@ -319,11 +323,7 @@ function applyExtensionSettings(config: OhmRuntimeConfig): OhmRuntimeConfig {
   );
 
   next.painter.azureOpenai.deployment = normalizeString(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-azure-deployment",
-      next.painter.azureOpenai.deployment,
-    ),
+    getSetting(OHM_EXTENSION_NAME, "painter-azure-deployment", next.painter.azureOpenai.deployment),
     next.painter.azureOpenai.deployment,
   );
 

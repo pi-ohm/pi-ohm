@@ -9,5 +9,8 @@ export const walkthroughs_and_clickable_diagramsFeature: FeatureDefinition = {
   status: "planned",
   path: "src/features/walkthroughs-and-clickable-diagrams",
   dependsOn: ["librarian-remote-code-search"],
-  sourceUrls: ["https://ampcode.com/news/walkthrough", "https://ampcode.com/news/clickable-diagrams"],
+  sourceUrls: [
+    "https://ampcode.com/news/walkthrough",
+    "https://ampcode.com/news/clickable-diagrams",
+  ],
 };

@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: false
+  commands:
+    oxfmt:
+      glob: "**/*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: yarn oxfmt -- {staged_files}
+      stage_fixed: true
+
+    oxlint:
+      glob: "**/*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: yarn oxlint -- {staged_files}

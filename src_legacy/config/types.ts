@@ -11,7 +11,9 @@ export interface OhmConfig {
 }
 
 export function buildDefaultConfig(features: FeatureDefinition[]): OhmConfig {
-  const p0Features = features.filter((feature) => feature.phase === "P0").map((feature) => feature.slug);
+  const p0Features = features
+    .filter((feature) => feature.phase === "P0")
+    .map((feature) => feature.slug);
 
   return {
     defaultMode: "smart",

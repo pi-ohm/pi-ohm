@@ -9,5 +9,9 @@ export const workspace_settings_and_entitlementsFeature: FeatureDefinition = {
   status: "planned",
   path: "src/features/workspace-settings-and-entitlements",
   dependsOn: [],
-  sourceUrls: ["https://ampcode.com/news/cli-workspace-settings", "https://ampcode.com/news/workspace-entitlements", "https://ampcode.com/manual"],
+  sourceUrls: [
+    "https://ampcode.com/news/cli-workspace-settings",
+    "https://ampcode.com/news/workspace-entitlements",
+    "https://ampcode.com/manual",
+  ],
 };

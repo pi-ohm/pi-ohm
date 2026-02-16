@@ -14,7 +14,10 @@ export default function registerOhmExtension(pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     const { config } = await loadOhmConfig(ctx.cwd);
     if (!ctx.hasUI) return;
-    ctx.ui.setStatus("ohm", `mode:${config.defaultMode} · ${summarizeFeatureFlags(config.enabledFeatures)}`);
+    ctx.ui.setStatus(
+      "ohm",
+      `mode:${config.defaultMode} · ${summarizeFeatureFlags(config.enabledFeatures)}`,
+    );
   });
 
   pi.registerCommand("ohm-features", {

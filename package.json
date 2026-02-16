@@ -2,23 +2,22 @@
   "name": "pi-ohm",
   "version": "0.2.0",
   "private": true,
-  "packageManager": "yarn@4.12.0",
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
-  "license": "MIT",
-  "workspaces": [
-    "packages/*"
-  ],
   "keywords": [
+    "amp",
+    "ampcode",
+    "handoff",
+    "imagegen",
+    "ohm",
     "pi",
     "pi-coding-agent",
     "pi-package",
-    "ohm",
-    "handoff",
     "subagents",
-    "thread-search",
-    "imagegen",
-    "amp",
-    "ampcode"
+    "thread-search"
+  ],
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
   ],
   "files": [
     "extensions/",
@@ -29,14 +28,16 @@
     "LICENSE",
     "tsconfig.json"
   ],
-  "pi": {
-    "extensions": [
-      "./node_modules/@juanibiapina/pi-extension-settings/dist/index.js",
-      "./extensions"
-    ]
-  },
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
+    "lint": "yarn oxlint -- .",
+    "lint:fix": "yarn oxlint -- --fix .",
+    "oxfmt": "oxfmt --write",
+    "format": "yarn oxfmt -- .",
+    "format:check": "yarn oxfmt -- --check .",
+    "hooks:install": "lefthook install",
+    "postinstall": "if [ -d .git ]; then lefthook install; fi"
   },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
@@ -46,6 +47,17 @@
     "@mariozechner/pi-coding-agent": "^0.52.0",
     "@mariozechner/pi-tui": "^0.52.0",
     "@types/node": "^24.3.1",
+    "lefthook": "^2.1.1",
+    "oxfmt": "^0.33.0",
+    "oxlint": "^1.48.0",
+    "oxlint-tsgolint": "^0.14.0",
     "typescript": "^5.9.3"
+  },
+  "packageManager": "yarn@4.12.0",
+  "pi": {
+    "extensions": [
+      "./node_modules/@juanibiapina/pi-extension-settings/dist/index.js",
+      "./extensions"
+    ]
   }
 }

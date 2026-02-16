@@ -1,422 +1,346 @@
 import type { FeatureDefinition } from "./core/feature";
 
-export const FEATURE_CATALOG: FeatureDefinition[] =
-[
+export const FEATURE_CATALOG: FeatureDefinition[] = [
   {
-    "slug": "modes-smart-rush-deep-large",
-    "name": "Modes: smart/rush/deep/large",
-    "ampFeature": "Agent Modes (smart, rush, deep, hidden large)",
-    "description": "Mode abstraction, presets, model + reasoning configuration, and mode switching UX.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/modes-smart-rush-deep-large",
-    "dependsOn": [],
-    "sourceUrls": [
+    slug: "modes-smart-rush-deep-large",
+    name: "Modes: smart/rush/deep/large",
+    ampFeature: "Agent Modes (smart, rush, deep, hidden large)",
+    description:
+      "Mode abstraction, presets, model + reasoning configuration, and mode switching UX.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/modes-smart-rush-deep-large",
+    dependsOn: [],
+    sourceUrls: [
       "https://ampcode.com/manual",
       "https://ampcode.com/news/rush-mode",
       "https://ampcode.com/news/deep-mode",
-      "https://ampcode.com/news/large-mode"
-    ]
-  },
-  {
-    "slug": "command-palette-and-shortcuts",
-    "name": "Command Palette + Shortcuts",
-    "ampFeature": "Always-available command palette replacing slash-first workflows",
-    "description": "Unified command launcher and keyboard shortcut layer for common workflows.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/command-palette-and-shortcuts",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/command-palette"
-    ]
-  },
-  {
-    "slug": "agents-md-guidance-and-mentions",
-    "name": "AGENTS.md Guidance + @Mentions",
-    "ampFeature": "Hierarchical AGENTS.md loading with @-mentions and globs",
-    "description": "Guidance resolution from cwd/parents/subtrees, plus referenced docs with granular globs.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/agents-md-guidance-and-mentions",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "handoff-and-auto-handoff",
-    "name": "Handoff + Auto-handoff",
-    "ampFeature": "Goal-directed handoff replacing compaction",
-    "description": "Manual and agent-triggered handoff for focused thread continuation with context transfer.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/handoff-and-auto-handoff",
-    "dependsOn": [
-      "agents-md-guidance-and-mentions"
+      "https://ampcode.com/news/large-mode",
     ],
-    "sourceUrls": [
+  },
+  {
+    slug: "command-palette-and-shortcuts",
+    name: "Command Palette + Shortcuts",
+    ampFeature: "Always-available command palette replacing slash-first workflows",
+    description: "Unified command launcher and keyboard shortcut layer for common workflows.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/command-palette-and-shortcuts",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/command-palette"],
+  },
+  {
+    slug: "agents-md-guidance-and-mentions",
+    name: "AGENTS.md Guidance + @Mentions",
+    ampFeature: "Hierarchical AGENTS.md loading with @-mentions and globs",
+    description:
+      "Guidance resolution from cwd/parents/subtrees, plus referenced docs with granular globs.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/agents-md-guidance-and-mentions",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "handoff-and-auto-handoff",
+    name: "Handoff + Auto-handoff",
+    ampFeature: "Goal-directed handoff replacing compaction",
+    description:
+      "Manual and agent-triggered handoff for focused thread continuation with context transfer.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/handoff-and-auto-handoff",
+    dependsOn: ["agents-md-guidance-and-mentions"],
+    sourceUrls: [
       "https://ampcode.com/manual",
       "https://ampcode.com/news/handoff",
-      "https://ampcode.com/news/ask-to-handoff"
-    ]
-  },
-  {
-    "slug": "thread-references-read-thread",
-    "name": "Thread References + read_thread",
-    "ampFeature": "Reference other threads by URL/ID and pull relevant context",
-    "description": "Cross-thread context import by mentioning thread URLs or IDs.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/thread-references-read-thread",
-    "dependsOn": [
-      "handoff-and-auto-handoff"
+      "https://ampcode.com/news/ask-to-handoff",
     ],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/read-threads"
-    ]
   },
   {
-    "slug": "thread-search-find-thread",
-    "name": "Thread Search + find_thread",
-    "ampFeature": "Search threads by keyword and touched files",
-    "description": "Index and query session history to locate prior work quickly.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/thread-search-find-thread",
-    "dependsOn": [
-      "thread-references-read-thread"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/find-threads"
-    ]
+    slug: "thread-references-read-thread",
+    name: "Thread References + read_thread",
+    ampFeature: "Reference other threads by URL/ID and pull relevant context",
+    description: "Cross-thread context import by mentioning thread URLs or IDs.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/thread-references-read-thread",
+    dependsOn: ["handoff-and-auto-handoff"],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/read-threads"],
   },
   {
-    "slug": "thread-map-visualization",
-    "name": "Thread Map Visualization",
-    "ampFeature": "Map of related threads (handoff, mentions, forks)",
-    "description": "Graph view for thread lineage and navigation patterns.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/thread-map-visualization",
-    "dependsOn": [
-      "thread-references-read-thread",
-      "handoff-and-auto-handoff"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/news/thread-map"
-    ]
+    slug: "thread-search-find-thread",
+    name: "Thread Search + find_thread",
+    ampFeature: "Search threads by keyword and touched files",
+    description: "Index and query session history to locate prior work quickly.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/thread-search-find-thread",
+    dependsOn: ["thread-references-read-thread"],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/find-threads"],
   },
   {
-    "slug": "thread-labels-archive-and-visibility",
-    "name": "Thread Labels, Archive, Visibility",
-    "ampFeature": "Labels, archive, and configurable thread visibility",
-    "description": "Thread organization and sharing controls across personal/workspace contexts.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/thread-labels-archive-and-visibility",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/thread-labels"
-    ]
+    slug: "thread-map-visualization",
+    name: "Thread Map Visualization",
+    ampFeature: "Map of related threads (handoff, mentions, forks)",
+    description: "Graph view for thread lineage and navigation patterns.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/thread-map-visualization",
+    dependsOn: ["thread-references-read-thread", "handoff-and-auto-handoff"],
+    sourceUrls: ["https://ampcode.com/news/thread-map"],
   },
   {
-    "slug": "agents-panel-thread-orchestration",
-    "name": "Agents Panel + Thread Orchestration",
-    "ampFeature": "UI for monitoring/managing multiple active threads",
-    "description": "Dashboard-like management of active threads and quick switching.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/agents-panel-thread-orchestration",
-    "dependsOn": [
-      "thread-labels-archive-and-visibility"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/news/agents-panel"
-    ]
+    slug: "thread-labels-archive-and-visibility",
+    name: "Thread Labels, Archive, Visibility",
+    ampFeature: "Labels, archive, and configurable thread visibility",
+    description: "Thread organization and sharing controls across personal/workspace contexts.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/thread-labels-archive-and-visibility",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/thread-labels"],
   },
   {
-    "slug": "subagents-task-delegation",
-    "name": "Subagents / Task Delegation",
-    "ampFeature": "Task tool for isolated subagent execution",
-    "description": "Pluggable delegation interface (external CLI/plugin based for Pi).",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/subagents-task-delegation",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
+    slug: "agents-panel-thread-orchestration",
+    name: "Agents Panel + Thread Orchestration",
+    ampFeature: "UI for monitoring/managing multiple active threads",
+    description: "Dashboard-like management of active threads and quick switching.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/agents-panel-thread-orchestration",
+    dependsOn: ["thread-labels-archive-and-visibility"],
+    sourceUrls: ["https://ampcode.com/news/agents-panel"],
   },
   {
-    "slug": "oracle-second-opinion",
-    "name": "Oracle Second Opinion",
-    "ampFeature": "Secondary reasoning model for planning/debugging/review",
-    "description": "Escalation path to stronger reasoning model/tool for difficult tasks.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/oracle-second-opinion",
-    "dependsOn": [
-      "subagents-task-delegation"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/gpt-5-oracle"
-    ]
+    slug: "subagents-task-delegation",
+    name: "Subagents / Task Delegation",
+    ampFeature: "Task tool for isolated subagent execution",
+    description: "Pluggable delegation interface (external CLI/plugin based for Pi).",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/subagents-task-delegation",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
   },
   {
-    "slug": "librarian-remote-code-search",
-    "name": "Librarian Remote Code Search",
-    "ampFeature": "Cross-repo code search and explanation subagent",
-    "description": "Remote repository research across public/private code hosts.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/librarian-remote-code-search",
-    "dependsOn": [
-      "subagents-task-delegation"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/librarian"
-    ]
+    slug: "oracle-second-opinion",
+    name: "Oracle Second Opinion",
+    ampFeature: "Secondary reasoning model for planning/debugging/review",
+    description: "Escalation path to stronger reasoning model/tool for difficult tasks.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/oracle-second-opinion",
+    dependsOn: ["subagents-task-delegation"],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/gpt-5-oracle"],
   },
   {
-    "slug": "code-review-agent-and-checks",
-    "name": "Code Review Agent + Checks",
-    "ampFeature": "Composable review agent with check-specific subagents",
-    "description": "Diff review workflows, CLI/editor entrypoints, and .agents/checks policy packs.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/code-review-agent-and-checks",
-    "dependsOn": [
-      "subagents-task-delegation"
-    ],
-    "sourceUrls": [
+    slug: "librarian-remote-code-search",
+    name: "Librarian Remote Code Search",
+    ampFeature: "Cross-repo code search and explanation subagent",
+    description: "Remote repository research across public/private code hosts.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/librarian-remote-code-search",
+    dependsOn: ["subagents-task-delegation"],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/librarian"],
+  },
+  {
+    slug: "code-review-agent-and-checks",
+    name: "Code Review Agent + Checks",
+    ampFeature: "Composable review agent with check-specific subagents",
+    description: "Diff review workflows, CLI/editor entrypoints, and .agents/checks policy packs.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/code-review-agent-and-checks",
+    dependsOn: ["subagents-task-delegation"],
+    sourceUrls: [
       "https://ampcode.com/manual",
       "https://ampcode.com/news/review",
       "https://ampcode.com/news/agentic-code-review",
-      "https://ampcode.com/news/liberating-code-review"
-    ]
-  },
-  {
-    "slug": "look-at-media-analysis",
-    "name": "Look-at Media Analysis",
-    "ampFeature": "Analyze PDFs/images via dedicated side model context",
-    "description": "Media extraction tool that keeps main context lean.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/look-at-media-analysis",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/news/look-at",
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "painter-image-generation-and-editing",
-    "name": "Painter Image Generation + Editing",
-    "ampFeature": "Generate/edit images from prompts and references",
-    "description": "Image creation, redaction, and iterative design support.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/painter-image-generation-and-editing",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/news/painter",
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "walkthroughs-and-clickable-diagrams",
-    "name": "Walkthroughs + Clickable Diagrams",
-    "ampFeature": "Interactive diagrams and code-linked Mermaid nodes",
-    "description": "Generate shareable architecture walkthroughs with drill-down navigation.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/walkthroughs-and-clickable-diagrams",
-    "dependsOn": [
-      "librarian-remote-code-search"
+      "https://ampcode.com/news/liberating-code-review",
     ],
-    "sourceUrls": [
-      "https://ampcode.com/news/walkthrough",
-      "https://ampcode.com/news/clickable-diagrams"
-    ]
   },
   {
-    "slug": "skills-system-and-user-invocation",
-    "name": "Skills System + User Invocation",
-    "ampFeature": "Skill discovery + user-invokable skills",
-    "description": "Skill catalog, precedence rules, and explicit user invocation UX.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/skills-system-and-user-invocation",
-    "dependsOn": [],
-    "sourceUrls": [
+    slug: "look-at-media-analysis",
+    name: "Look-at Media Analysis",
+    ampFeature: "Analyze PDFs/images via dedicated side model context",
+    description: "Media extraction tool that keeps main context lean.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/look-at-media-analysis",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/news/look-at", "https://ampcode.com/manual"],
+  },
+  {
+    slug: "painter-image-generation-and-editing",
+    name: "Painter Image Generation + Editing",
+    ampFeature: "Generate/edit images from prompts and references",
+    description: "Image creation, redaction, and iterative design support.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/painter-image-generation-and-editing",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/news/painter", "https://ampcode.com/manual"],
+  },
+  {
+    slug: "walkthroughs-and-clickable-diagrams",
+    name: "Walkthroughs + Clickable Diagrams",
+    ampFeature: "Interactive diagrams and code-linked Mermaid nodes",
+    description: "Generate shareable architecture walkthroughs with drill-down navigation.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/walkthroughs-and-clickable-diagrams",
+    dependsOn: ["librarian-remote-code-search"],
+    sourceUrls: [
+      "https://ampcode.com/news/walkthrough",
+      "https://ampcode.com/news/clickable-diagrams",
+    ],
+  },
+  {
+    slug: "skills-system-and-user-invocation",
+    name: "Skills System + User Invocation",
+    ampFeature: "Skill discovery + user-invokable skills",
+    description: "Skill catalog, precedence rules, and explicit user invocation UX.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/skills-system-and-user-invocation",
+    dependsOn: [],
+    sourceUrls: [
       "https://ampcode.com/manual",
       "https://ampcode.com/news/agent-skills",
       "https://ampcode.com/news/user-invokable-skills",
-      "https://ampcode.com/news/slashing-custom-commands"
-    ]
-  },
-  {
-    "slug": "mcp-skill-lazy-loading-and-oauth",
-    "name": "MCP in Skills + Lazy Loading + OAuth",
-    "ampFeature": "Tool exposure only when skills load, with OAuth-enabled MCP",
-    "description": "MCP integration strategy focused on token efficiency and trust controls.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/mcp-skill-lazy-loading-and-oauth",
-    "dependsOn": [
-      "skills-system-and-user-invocation"
+      "https://ampcode.com/news/slashing-custom-commands",
     ],
-    "sourceUrls": [
+  },
+  {
+    slug: "mcp-skill-lazy-loading-and-oauth",
+    name: "MCP in Skills + Lazy Loading + OAuth",
+    ampFeature: "Tool exposure only when skills load, with OAuth-enabled MCP",
+    description: "MCP integration strategy focused on token efficiency and trust controls.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/mcp-skill-lazy-loading-and-oauth",
+    dependsOn: ["skills-system-and-user-invocation"],
+    sourceUrls: [
       "https://ampcode.com/manual",
-      "https://ampcode.com/news/lazy-load-mcp-with-skills"
-    ]
+      "https://ampcode.com/news/lazy-load-mcp-with-skills",
+    ],
   },
   {
-    "slug": "toolboxes-custom-script-tools",
-    "name": "Toolboxes (Custom Script Tools)",
-    "ampFeature": "AMP_TOOLBOX executable tool protocol",
-    "description": "Simple deterministic tool integration via executable scripts.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/toolboxes-custom-script-tools",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual",
-      "https://ampcode.com/news/toolboxes"
-    ]
+    slug: "toolboxes-custom-script-tools",
+    name: "Toolboxes (Custom Script Tools)",
+    ampFeature: "AMP_TOOLBOX executable tool protocol",
+    description: "Simple deterministic tool integration via executable scripts.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/toolboxes-custom-script-tools",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/toolboxes"],
   },
   {
-    "slug": "permissions-policy-engine",
-    "name": "Permissions Policy Engine",
-    "ampFeature": "Allow/ask/reject/delegate tool permission rules",
-    "description": "Rule engine for secure tool execution with optional external delegates.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/permissions-policy-engine",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
+    slug: "permissions-policy-engine",
+    name: "Permissions Policy Engine",
+    ampFeature: "Allow/ask/reject/delegate tool permission rules",
+    description: "Rule engine for secure tool execution with optional external delegates.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/permissions-policy-engine",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
   },
   {
-    "slug": "workspace-settings-and-entitlements",
-    "name": "Workspace Settings + Entitlements",
-    "ampFeature": "Per-workspace settings and spend limits",
-    "description": "Repo-local settings + org-level spending controls / quotas.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/workspace-settings-and-entitlements",
-    "dependsOn": [],
-    "sourceUrls": [
+    slug: "workspace-settings-and-entitlements",
+    name: "Workspace Settings + Entitlements",
+    ampFeature: "Per-workspace settings and spend limits",
+    description: "Repo-local settings + org-level spending controls / quotas.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/workspace-settings-and-entitlements",
+    dependsOn: [],
+    sourceUrls: [
       "https://ampcode.com/news/cli-workspace-settings",
       "https://ampcode.com/news/workspace-entitlements",
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "cli-execute-mode-and-stream-json",
-    "name": "CLI Execute Mode + Stream JSON",
-    "ampFeature": "Headless execution and machine-readable streaming output",
-    "description": "Automation-friendly CLI mode for scripts/CI integrations.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/cli-execute-mode-and-stream-json",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "ide-bridge-and-diagnostics",
-    "name": "IDE Bridge + Diagnostics",
-    "ampFeature": "CLI<->IDE bridge for diagnostics, file context, and edits",
-    "description": "Integration points for VS Code/JetBrains/Neovim/Zed contextual editing.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/ide-bridge-and-diagnostics",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "shell-mode-queue-edit-undo",
-    "name": "Shell Mode + Queue + Edit/Undo",
-    "ampFeature": "$ shell mode, queued prompts, message editing with rollback",
-    "description": "Workflow accelerators for iterative agent loops and control.",
-    "phase": "P1",
-    "status": "planned",
-    "path": "src/features/shell-mode-queue-edit-undo",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "model-routing-and-multi-provider-strategy",
-    "name": "Model Routing + Multi-provider Strategy",
-    "ampFeature": "Multi-model routing by task type and mode",
-    "description": "Provider-aware routing defaults for quality/speed/cost tradeoffs.",
-    "phase": "P0",
-    "status": "planned",
-    "path": "src/features/model-routing-and-multi-provider-strategy",
-    "dependsOn": [
-      "modes-smart-rush-deep-large"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "themes-and-terminal-ui-customization",
-    "name": "Themes + Terminal UI Customization",
-    "ampFeature": "Theme presets and custom terminal color packs",
-    "description": "UI theming and per-workflow visual signaling.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/themes-and-terminal-ui-customization",
-    "dependsOn": [],
-    "sourceUrls": [
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "sdk-automation-typescript-python",
-    "name": "SDK Automation (TS/Python)",
-    "ampFeature": "Programmatic execution through SDKs",
-    "description": "Headless SDK invocation patterns and event-stream handling.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/sdk-automation-typescript-python",
-    "dependsOn": [
-      "cli-execute-mode-and-stream-json"
-    ],
-    "sourceUrls": [
-      "https://ampcode.com/news/python-sdk",
-      "https://ampcode.com/manual"
-    ]
-  },
-  {
-    "slug": "usage-cost-and-social-sharing",
-    "name": "Usage Cost + Social Sharing",
-    "ampFeature": "Usage/cost telemetry and public thread/profile workflows",
-    "description": "Cost observability and optional social coding primitives.",
-    "phase": "P2",
-    "status": "planned",
-    "path": "src/features/usage-cost-and-social-sharing",
-    "dependsOn": [],
-    "sourceUrls": [
       "https://ampcode.com/manual",
-      "https://ampcode.com/news/social-coding"
-    ]
-  }
+    ],
+  },
+  {
+    slug: "cli-execute-mode-and-stream-json",
+    name: "CLI Execute Mode + Stream JSON",
+    ampFeature: "Headless execution and machine-readable streaming output",
+    description: "Automation-friendly CLI mode for scripts/CI integrations.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/cli-execute-mode-and-stream-json",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "ide-bridge-and-diagnostics",
+    name: "IDE Bridge + Diagnostics",
+    ampFeature: "CLI<->IDE bridge for diagnostics, file context, and edits",
+    description: "Integration points for VS Code/JetBrains/Neovim/Zed contextual editing.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/ide-bridge-and-diagnostics",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "shell-mode-queue-edit-undo",
+    name: "Shell Mode + Queue + Edit/Undo",
+    ampFeature: "$ shell mode, queued prompts, message editing with rollback",
+    description: "Workflow accelerators for iterative agent loops and control.",
+    phase: "P1",
+    status: "planned",
+    path: "src/features/shell-mode-queue-edit-undo",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "model-routing-and-multi-provider-strategy",
+    name: "Model Routing + Multi-provider Strategy",
+    ampFeature: "Multi-model routing by task type and mode",
+    description: "Provider-aware routing defaults for quality/speed/cost tradeoffs.",
+    phase: "P0",
+    status: "planned",
+    path: "src/features/model-routing-and-multi-provider-strategy",
+    dependsOn: ["modes-smart-rush-deep-large"],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "themes-and-terminal-ui-customization",
+    name: "Themes + Terminal UI Customization",
+    ampFeature: "Theme presets and custom terminal color packs",
+    description: "UI theming and per-workflow visual signaling.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/themes-and-terminal-ui-customization",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual"],
+  },
+  {
+    slug: "sdk-automation-typescript-python",
+    name: "SDK Automation (TS/Python)",
+    ampFeature: "Programmatic execution through SDKs",
+    description: "Headless SDK invocation patterns and event-stream handling.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/sdk-automation-typescript-python",
+    dependsOn: ["cli-execute-mode-and-stream-json"],
+    sourceUrls: ["https://ampcode.com/news/python-sdk", "https://ampcode.com/manual"],
+  },
+  {
+    slug: "usage-cost-and-social-sharing",
+    name: "Usage Cost + Social Sharing",
+    ampFeature: "Usage/cost telemetry and public thread/profile workflows",
+    description: "Cost observability and optional social coding primitives.",
+    phase: "P2",
+    status: "planned",
+    path: "src/features/usage-cost-and-social-sharing",
+    dependsOn: [],
+    sourceUrls: ["https://ampcode.com/manual", "https://ampcode.com/news/social-coding"],
+  },
 ] as FeatureDefinition[];
 
 export const FEATURE_SLUGS = FEATURE_CATALOG.map((feature) => feature.slug);
