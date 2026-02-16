@@ -8,7 +8,7 @@ export type FocusFeatureId =
 export interface FocusFeatureDefinition {
   id: FocusFeatureId;
   title: string;
-  modulePath: `packages/features/src/features/${string}`;
+  modulePath: `packages/features/src/${string}`;
   summary: string;
 }
 
@@ -16,31 +16,31 @@ export const OHM_FOCUS_FEATURES: FocusFeatureDefinition[] = [
   {
     id: "handoff",
     title: "Handoff",
-    modulePath: "packages/features/src/features/handoff",
+    modulePath: "packages/features/src/handoff",
     summary: "Task-focused context transfer into a new thread/session.",
   },
   {
     id: "subagents",
     title: "Subagents",
-    modulePath: "packages/features/src/features/subagents",
+    modulePath: "packages/features/src/subagents",
     summary: "Delegation to external agent backends until native subagents exist.",
   },
   {
     id: "session-thread-search",
     title: "Session/Thread Search",
-    modulePath: "packages/features/src/features/session-thread-search",
+    modulePath: "packages/features/src/session-thread-search",
     summary: "Find previous threads/sessions by keyword and touched files.",
   },
   {
     id: "handoff-visualizer",
     title: "Handoff Visualizer",
-    modulePath: "packages/features/src/features/handoff-visualizer",
+    modulePath: "packages/features/src/handoff-visualizer",
     summary: "Show linked handoff graph in session/resume workflows.",
   },
   {
     id: "painter-imagegen",
     title: "Painter/ImageGen",
-    modulePath: "packages/features/src/features/painter-imagegen",
+    modulePath: "packages/features/src/painter-imagegen",
     summary: "Image generation/editing via Google Nano Banana + OpenAI/Azure OpenAI.",
   },
 ];

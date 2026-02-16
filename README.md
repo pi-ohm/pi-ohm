@@ -17,12 +17,11 @@ pi-ohm/
 │       └── src/
 │           ├── extension.ts         # commands + UI/status wiring
 │           ├── manifest.ts          # focused feature definitions
-│           └── features/
-│               ├── handoff/
-│               ├── subagents/
-│               ├── session-thread-search/
-│               ├── handoff-visualizer/
-│               └── painter-imagegen/
+│           ├── handoff/
+│           ├── subagents/
+│           ├── session-thread-search/
+│           ├── handoff-visualizer/
+│           └── painter-imagegen/
 ├── src_legacy/                      # previous full feature catalog (reference only)
 ├── AGENTS.md
 ├── package.json
