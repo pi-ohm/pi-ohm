@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import registerOhmExtension from "../src/extension";
+import registerOhmFeaturesExtension from "../packages/features/src/extension";
 
 export default function (pi: ExtensionAPI) {
-  registerOhmExtension(pi);
+  registerOhmFeaturesExtension(pi);
 }

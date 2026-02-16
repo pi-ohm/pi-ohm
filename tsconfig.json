@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
@@ -10,5 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["extensions/**/*.ts", "src/**/*.ts"]
+  "include": ["extensions/**/*.ts", "packages/**/*.ts"],
+  "exclude": ["node_modules", "src_legacy"]
 }

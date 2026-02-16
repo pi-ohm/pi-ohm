@@ -1,30 +1,30 @@
 # AGENTS.md
 
-## Mission
+## Repo shape
 
-This repository is a **modular Amp-like feature pack for Pi**. We are intentionally building in slices and preserving a strict feature boundary per module under `src/features/*`.
+This is a **monorepo** for Pi Ohm.
 
-## Non-negotiables
+- `packages/config` → shared config loading + settings integration
+- `packages/features` → focused feature modules + extension wiring
+- `src_legacy` → full catalog/reference from earlier scaffold (**do not delete**)
 
-1. Keep each capability isolated in `src/features/<feature-slug>/`.
-2. Put cross-cutting primitives in `src/core/*` and config in `src/config/*`.
-3. Do not couple feature modules directly; use feature flags + dependency declarations in `src/feature-catalog.ts`.
-4. Preserve the naming convention (`kebab-case` slugs) and keep the slug identical to folder names.
-5. Keep scaffolding docs up-to-date: whenever a feature folder is added/renamed, update the root `README.md` table.
+## Rules
 
-## Subagent strategy for Pi
+1. Keep `src_legacy` intact as historical/reference material.
+2. New work goes only in `packages/*`.
+3. Prioritize focused feature set over broad parity:
+   - handoff
+   - subagents
+   - session/thread search
+   - handoff visualizer in session/resume UX
+   - painter/imagegen (Google Nano Banana + OpenAI/Azure OpenAI)
+4. Register user-facing settings through `@juanibiapina/pi-extension-settings`.
+5. Support file-based config in:
+   - project: `.pi/ohm.json`
+   - global dir: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.json`
+   - additional providers file: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
 
-Pi does not ship Amp-style subagents natively. Implement subagent behavior through a backend interface in `subagents-task-delegation`:
+## Notes
 
-- `interactive-shell` backend (default scaffold): delegate to external agents (pi/claude/gemini/aider) via an adapter.
-- `custom-plugin` backend: integrate with a dedicated extension package when available.
-- `none`: disable delegation.
-
-## Configuration
-
-Planned config files:
-
-- Project: `.pi/ohm.json`
-- Global fallback: `~/.pi/agent/ohm.json`
-
-Keep configuration additive and backwards-compatible.
+- Pi does not have built-in Amp-style subagents. Treat subagent execution as adapter-backed.
+- Keep command names under the `ohm-*` namespace.

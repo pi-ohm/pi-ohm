@@ -1,24 +1,26 @@
 {
   "name": "pi-ohm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Modular Amp-inspired extension scaffold for Pi.",
+  "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
   "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
   "keywords": [
     "pi",
     "pi-coding-agent",
     "pi-package",
-    "amp",
     "ohm",
-    "extensions",
-    "skills",
-    "modes",
     "handoff",
-    "subagents"
+    "subagents",
+    "thread-search",
+    "imagegen"
   ],
   "files": [
     "extensions/",
-    "src/",
+    "packages/",
+    "src_legacy/",
     "AGENTS.md",
     "README.md",
     "LICENSE",
@@ -26,18 +28,20 @@
   ],
   "pi": {
     "extensions": [
+      "./node_modules/@juanibiapina/pi-extension-settings/dist/index.js",
       "./extensions"
     ]
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@sinclair/typebox": "*"
+  "dependencies": {
+    "@juanibiapina/pi-extension-settings": "^0.5.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "@types/node": "^24.3.1"
+    "@mariozechner/pi-coding-agent": "^0.52.0",
+    "@mariozechner/pi-tui": "^0.52.0",
+    "@types/node": "^24.3.1",
+    "typescript": "^5.9.3"
   }
 }
