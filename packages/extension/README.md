@@ -1,4 +1,4 @@
-# @pi-phm/extension
+# pi-ohm
 
 Install the full feature bundle for Pi:
 
@@ -8,5 +8,5 @@ Install the full feature bundle for Pi:
 - painter/imagegen
 
 ```bash
-pi install npm:@pi-phm/extension
+pi install npm:pi-ohm
 ```

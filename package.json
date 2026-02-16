@@ -1,5 +1,5 @@
 {
-  "name": "pi-ohm",
+  "name": "pi-ohm-monorepo",
   "version": "0.2.0",
   "private": true,
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",

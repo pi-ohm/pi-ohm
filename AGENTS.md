@@ -9,7 +9,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*` packages.
 - `packages/subagents` → subagent delegation
 - `packages/session-search` → session/thread search
 - `packages/painter` → image generation providers
-- `packages/extension` → bundle package registering all features
+- `packages/extension` → `pi-ohm` bundle package registering all features
 - `src_legacy` → preserved full catalog/reference (**do not delete**)
 
 ## Rules
@@ -36,4 +36,4 @@ Each feature package should be installable by itself through npm:
 
 Full bundle package:
 
-- `@pi-phm/extension`
+- `pi-ohm`

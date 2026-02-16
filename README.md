@@ -1,6 +1,6 @@
 # pi-ohm
 
-Monorepo for **modular Pi feature packages** under the `@pi-phm/*` npm scope.
+Monorepo for **modular Pi feature packages** under `@pi-phm/*`, plus the unscoped bundle package `pi-ohm`.
 
 ## Package manager
 
@@ -27,7 +27,7 @@ pi-ohm/
 │   ├── subagents/                  # @pi-phm/subagents
 │   ├── session-search/             # @pi-phm/session-search
 │   ├── painter/                    # @pi-phm/painter
-│   └── extension/                  # @pi-phm/extension (bundle)
+│   └── extension/                  # pi-ohm (bundle package)
 ├── src_legacy/                     # preserved reference scaffold (do not delete)
 └── .github/workflows/              # CI/publish workflows
 ```
@@ -46,7 +46,7 @@ pi install npm:@pi-phm/painter
 Or install the full bundle:
 
 ```bash
-pi install npm:@pi-phm/extension
+pi install npm:pi-ohm
 ```
 
 ## Config model
@@ -63,7 +63,7 @@ The settings UI is integrated through `@juanibiapina/pi-extension-settings`.
 
 ## Commands (bundle)
 
-When using `@pi-phm/extension`:
+When using `pi-ohm`:
 
 - `/ohm-features`
 - `/ohm-config`
@@ -87,13 +87,13 @@ Feature-specific commands:
 - `.github/workflows/release.yml` → Changesets-based release PR + npm publish + GitHub releases/tags on `main`
 - `.github/workflows/publish.yml` → manual publish (`workflow_dispatch`) for one package or all
 
-Publish workflow expects `NPM_TOKEN` in repository secrets.
+Release workflow uses npm **Trusted Publishing** (GitHub OIDC), so no long-lived npm token is required.
 
 Publish order (when doing it manually):
 
 1. `@pi-phm/config`
 2. feature packages (`handoff`, `subagents`, `session-search`, `painter`)
-3. `@pi-phm/extension`
+3. `pi-ohm`
 
 ## Versioning + changelog strategy
 
@@ -112,6 +112,16 @@ Select the package(s), choose bump type (patch/minor/major), and write release n
 1. Changesets action opens/updates a **Version Packages** PR on `main`.
 2. Merge that PR to commit version bumps + `CHANGELOG.md` updates.
 3. Action publishes packages to npm and creates **tagged GitHub releases**.
+
+### Trusted publishing setup (npm)
+
+1. Publish `pi-ohm` once from an owner account to claim the name.
+2. In npm package settings for each published package (`pi-ohm`, `@pi-phm/*`), add a **Trusted Publisher**:
+   - Provider: GitHub Actions
+   - Repository: this repo
+   - Workflow: `.github/workflows/release.yml`
+   - Branch: `main`
+3. Keep `id-token: write` permission in workflows and do **not** use long-lived `NPM_TOKEN` for releases.
 
 ### Local release commands
 

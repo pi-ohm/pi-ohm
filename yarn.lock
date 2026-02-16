@@ -1560,21 +1560,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@pi-phm/extension@workspace:packages/extension":
-  version: 0.0.0-use.local
-  resolution: "@pi-phm/extension@workspace:packages/extension"
-  dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
-    "@pi-phm/handoff": "workspace:*"
-    "@pi-phm/painter": "workspace:*"
-    "@pi-phm/session-search": "workspace:*"
-    "@pi-phm/subagents": "workspace:*"
-  peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-  languageName: unknown
-  linkType: soft
-
 "@pi-phm/handoff@workspace:*, @pi-phm/handoff@workspace:packages/handoff":
   version: 0.0.0-use.local
   resolution: "@pi-phm/handoff@workspace:packages/handoff"
@@ -3913,9 +3898,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pi-ohm@workspace:.":
+"pi-ohm-monorepo@workspace:.":
   version: 0.0.0-use.local
-  resolution: "pi-ohm@workspace:."
+  resolution: "pi-ohm-monorepo@workspace:."
   dependencies:
     "@changesets/changelog-git": "npm:^0.2.1"
     "@changesets/cli": "npm:^2.29.7"
@@ -3929,6 +3914,21 @@ __metadata:
     oxlint-tsgolint: "npm:^0.14.0"
     typescript: "npm:^5.9.3"
     zod: "npm:^4"
+  languageName: unknown
+  linkType: soft
+
+"pi-ohm@workspace:packages/extension":
+  version: 0.0.0-use.local
+  resolution: "pi-ohm@workspace:packages/extension"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+    "@pi-phm/handoff": "workspace:*"
+    "@pi-phm/painter": "workspace:*"
+    "@pi-phm/session-search": "workspace:*"
+    "@pi-phm/subagents": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
 
