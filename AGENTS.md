@@ -23,6 +23,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*` packages.
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
 6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
+7. For release-impacting changes in publishable packages, add a changeset (`yarn changeset`).
 
 ## Packaging goal
 

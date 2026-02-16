@@ -28,6 +28,9 @@
     "tsconfig.json"
   ],
   "scripts": {
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
     "lint": "yarn oxlint -- .",
@@ -43,6 +46,8 @@
     "zod": "^4"
   },
   "devDependencies": {
+    "@changesets/changelog-git": "^0.2.1",
+    "@changesets/cli": "^2.29.7",
     "@mariozechner/pi-coding-agent": "^0.52.0",
     "@mariozechner/pi-tui": "^0.52.0",
     "@types/node": "^24.3.1",

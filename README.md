@@ -84,6 +84,7 @@ Feature-specific commands:
 ## GitHub Actions (scaffolded)
 
 - `.github/workflows/ci.yml` → install + typecheck on PR/push
+- `.github/workflows/release.yml` → Changesets-based release PR + npm publish + GitHub releases/tags on `main`
 - `.github/workflows/publish.yml` → manual publish (`workflow_dispatch`) for one package or all
 
 Publish workflow expects `NPM_TOKEN` in repository secrets.
@@ -93,3 +94,28 @@ Publish order (when doing it manually):
 1. `@pi-phm/config`
 2. feature packages (`handoff`, `subagents`, `session-search`, `painter`)
 3. `@pi-phm/extension`
+
+## Versioning + changelog strategy
+
+This repo uses **Changesets** for package versioning and changelogs.
+
+### In a feature PR
+
+```bash
+yarn changeset
+```
+
+Select the package(s), choose bump type (patch/minor/major), and write release notes.
+
+### Release flow
+
+1. Changesets action opens/updates a **Version Packages** PR on `main`.
+2. Merge that PR to commit version bumps + `CHANGELOG.md` updates.
+3. Action publishes packages to npm and creates **tagged GitHub releases**.
+
+### Local release commands
+
+```bash
+yarn version-packages   # apply changesets to package versions/changelogs
+yarn release            # publish (normally done in CI)
+```
