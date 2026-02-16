@@ -69,33 +69,39 @@ Pi Ohm uses both:
 
 `@juanibiapina/pi-extension-settings` is loaded first via `pi.extensions` in `package.json`, so settings registration is available before Pi Ohm registers its own settings.
 
-### Example `.pi/ohm.json`
+### Example `.pi/ohm.jsonc`
 
-```json
+```jsonc
 {
   "defaultMode": "smart",
   "subagentBackend": "interactive-shell",
   "features": {
-    "handoff": true,
-    "subagents": true,
+    "handoff": {
+      "enabled": true,
+      "replaceCompact": false, // instead of compacting, a session will be handed off to a new agent with instructions to search the previous session
+      "visualizer": true
+    }
+    "subagents": true, // TODO: make this granular
     "sessionThreadSearch": true,
-    "handoffVisualizer": true,
-    "painterImagegen": true
-  },
-  "painter": {
-    "googleNanoBanana": {
+    "painter": {
       "enabled": true,
-      "model": "gemini-2.5-flash-image-preview"
-    },
-    "openai": {
-      "enabled": true,
-      "model": "gpt-image-1"
-    },
-    "azureOpenai": {
-      "enabled": false,
-      "deployment": "",
-      "endpoint": "",
-      "apiVersion": "2025-04-01-preview"
+      "providers": {
+        "googleNanoBanana": {
+          "enabled": true,
+          "model": "gemini-3-pro-image-preview"
+        },
+        "openai": {
+          "enabled": true,
+          "model": "gpt-image-1"
+        },
+        "azureOpenai": {
+          "enabled": false,
+          "deployment": "{env:AZURE_OPENAI_DEPLOYMENT}",
+          "endpoint": "{env:AZURE_OPENAI_ENDPOINT}",
+          "key": "{env:AZURE_OPENAI_KEY}",
+          "apiVersion": "2025-04-01-preview"
+        }
+      }
     }
   }
 }
