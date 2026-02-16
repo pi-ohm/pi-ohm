@@ -23,5 +23,9 @@
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

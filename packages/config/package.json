@@ -19,5 +19,9 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }
