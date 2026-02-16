@@ -16,7 +16,9 @@
     "handoff",
     "subagents",
     "thread-search",
-    "imagegen"
+    "imagegen",
+    "amp",
+    "ampcode"
   ],
   "files": [
     "extensions/",
