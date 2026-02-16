@@ -1,0 +1,43 @@
+{
+  "name": "pi-ohm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Modular Amp-inspired extension scaffold for Pi.",
+  "license": "MIT",
+  "keywords": [
+    "pi",
+    "pi-coding-agent",
+    "pi-package",
+    "amp",
+    "ohm",
+    "extensions",
+    "skills",
+    "modes",
+    "handoff",
+    "subagents"
+  ],
+  "files": [
+    "extensions/",
+    "src/",
+    "AGENTS.md",
+    "README.md",
+    "LICENSE",
+    "tsconfig.json"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@types/node": "^24.3.1"
+  }
+}
