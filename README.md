@@ -29,6 +29,19 @@ pi-ohm/
 └── tsconfig.json
 ```
 
+## Package manager: Yarn workspaces (latest)
+
+This repo uses **Yarn workspaces** and pins Yarn via `packageManager`.
+
+```bash
+corepack enable
+corepack prepare yarn@stable --activate
+yarn --version   # expected: 4.12.0
+
+yarn install
+yarn typecheck
+```
+
 ## Focused feature set (current priority)
 
 Instead of implementing every cataloged capability first, Pi Ohm focuses on:

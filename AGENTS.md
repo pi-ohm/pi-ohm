@@ -23,6 +23,7 @@ This is a **monorepo** for Pi Ohm.
    - project: `.pi/ohm.json`
    - global dir: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.json`
    - additional providers file: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
+6. Use **Yarn workspaces** (`yarn install`, `yarn typecheck`) instead of npm commands.
 
 ## Notes
 
