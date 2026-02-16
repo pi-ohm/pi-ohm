@@ -73,10 +73,11 @@ Pi Ohm uses both:
 
 ```jsonc
 {
-  "defaultMode": "smart",
+  "mode": "smart",
   "subagentBackend": "interactive-shell",
   "features": {
     "handoff": {
+      "model": "github-copilot/claude-opus-4-6", // model for handoff prompt
       "enabled": true,
       "replaceCompact": false, // instead of compacting, a session will be handed off to a new agent with instructions to search the previous session
       "visualizer": true
