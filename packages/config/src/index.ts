@@ -8,7 +8,7 @@ import {
   type SettingDefinition,
 } from "@juanibiapina/pi-extension-settings";
 
-export const OHM_EXTENSION_NAME = "pi-ohm";
+export const OHM_EXTENSION_NAME = "pi-phm";
 
 export type OhmMode = "rush" | "smart" | "deep";
 export type OhmSubagentBackend = "none" | "interactive-shell" | "custom-plugin";
@@ -376,7 +376,12 @@ export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntim
   };
 }
 
+let didRegisterSettings = false;
+
 export function registerOhmSettings(pi: ExtensionAPI): void {
+  if (didRegisterSettings) return;
+  didRegisterSettings = true;
+
   const settings: SettingDefinition[] = [
     {
       id: "default-mode",

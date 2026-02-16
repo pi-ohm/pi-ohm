@@ -1,0 +1,99 @@
+name: Publish Packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Workspace package to publish"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - config
+          - handoff
+          - subagents
+          - session-search
+          - painter
+          - extension
+      dryRun:
+        description: "Publish as dry-run"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Setup Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.12.0 --activate
+          yarn --version
+
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Publish selected package(s)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dry_flag=""
+          if [ "${{ inputs.dryRun }}" = "true" ]; then
+            dry_flag="--dry-run"
+          fi
+
+          publish_workspace() {
+            local pkg="$1"
+            echo "Publishing ${pkg} ${dry_flag}"
+            yarn workspace "${pkg}" npm publish --access public --tolerate-republish ${dry_flag}
+          }
+
+          case "${{ inputs.package }}" in
+            config)
+              publish_workspace "@pi-phm/config"
+              ;;
+            handoff)
+              publish_workspace "@pi-phm/handoff"
+              ;;
+            subagents)
+              publish_workspace "@pi-phm/subagents"
+              ;;
+            session-search)
+              publish_workspace "@pi-phm/session-search"
+              ;;
+            painter)
+              publish_workspace "@pi-phm/painter"
+              ;;
+            extension)
+              publish_workspace "@pi-phm/extension"
+              ;;
+            all)
+              publish_workspace "@pi-phm/config"
+              publish_workspace "@pi-phm/handoff"
+              publish_workspace "@pi-phm/subagents"
+              publish_workspace "@pi-phm/session-search"
+              publish_workspace "@pi-phm/painter"
+              publish_workspace "@pi-phm/extension"
+              ;;
+            *)
+              echo "Unknown package input: ${{ inputs.package }}"
+              exit 1
+              ;;
+          esac

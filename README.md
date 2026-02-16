@@ -1,148 +1,95 @@
 # pi-ohm
 
-Focused Amp-inspired workflows for Pi, now organized as a monorepo.
+Monorepo for **modular Pi feature packages** under the `@pi-phm/*` npm scope.
 
-## Monorepo layout
+## Package manager
 
-```text
-pi-ohm/
-├── extensions/
-│   └── index.ts                     # Pi extension entrypoint
-├── packages/
-│   ├── config/
-│   │   ├── package.json
-│   │   └── src/index.ts             # config loading + extension-settings integration
-│   └── features/
-│       ├── package.json
-│       └── src/
-│           ├── extension.ts         # commands + UI/status wiring
-│           ├── manifest.ts          # focused feature definitions
-│           ├── handoff/
-│           ├── subagents/
-│           ├── session-thread-search/
-│           ├── handoff-visualizer/
-│           └── painter-imagegen/
-├── src_legacy/                      # previous full feature catalog (reference only)
-├── AGENTS.md
-├── package.json
-└── tsconfig.json
-```
-
-## Package manager: Yarn workspaces (latest)
-
-This repo uses **Yarn workspaces** and pins Yarn via `packageManager`.
+This repo uses Yarn workspaces (latest stable pinned).
 
 ```bash
 corepack enable
 corepack prepare yarn@stable --activate
-yarn --version   # expected: 4.12.0
+yarn --version
 
 yarn install
 yarn typecheck
 ```
 
-## Focused feature set (current priority)
+## Workspace layout
 
-Instead of implementing every cataloged capability first, Pi Ohm focuses on:
-
-1. **Handoff**
-2. **Subagents**
-3. **Session/thread search**
-4. **Handoff visualizer** in session/resume workflows
-5. **Painter/ImageGen** with:
-   - Google Nano Banana
-   - OpenAI
-   - Azure OpenAI
-
-The old broad catalog remains available in `src_legacy` for reference.
-
-## Configuration
-
-Pi Ohm uses both:
-
-- **Extension settings UI** via [`@juanibiapina/pi-extension-settings`](https://www.npmjs.com/package/@juanibiapina/pi-extension-settings)
-- **File-based config** loaded from:
-  - Project: `.pi/ohm.json`
-  - Global: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | ~/.pi/agent}/ohm.json`
-  - Additional providers file: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | ~/.pi/agent}/ohm.providers.json`
-
-`@juanibiapina/pi-extension-settings` is loaded first via `pi.extensions` in `package.json`, so settings registration is available before Pi Ohm registers its own settings.
-
-### Example `.pi/ohm.jsonc`
-
-```jsonc
-{
-  "mode": "smart",
-  "subagentBackend": "interactive-shell",
-  "features": {
-    "handoff": {
-      "model": "github-copilot/claude-opus-4-6", // model for handoff prompt
-      "enabled": true,
-      "replaceCompact": false, // instead of compacting, a session will be handed off to a new agent with instructions to search the previous session
-      "visualizer": true
-    }
-    "subagents": true, // TODO: make this granular
-    "sessionThreadSearch": true,
-    "painter": {
-      "enabled": true,
-      "providers": {
-        "googleNanoBanana": {
-          "enabled": true,
-          "model": "gemini-3-pro-image-preview"
-        },
-        "openai": {
-          "enabled": true,
-          "model": "gpt-image-1"
-        },
-        "azureOpenai": {
-          "enabled": false,
-          "deployment": "{env:AZURE_OPENAI_DEPLOYMENT}",
-          "endpoint": "{env:AZURE_OPENAI_ENDPOINT}",
-          "key": "{env:AZURE_OPENAI_KEY}",
-          "apiVersion": "2025-04-01-preview"
-        }
-      }
-    }
-  }
-}
+```text
+pi-ohm/
+├── extensions/
+│   └── index.ts                    # local dev entrypoint (registers bundle package)
+├── packages/
+│   ├── config/                     # @pi-phm/config
+│   ├── handoff/                    # @pi-phm/handoff (includes visualizer)
+│   ├── subagents/                  # @pi-phm/subagents
+│   ├── session-search/             # @pi-phm/session-search
+│   ├── painter/                    # @pi-phm/painter
+│   └── extension/                  # @pi-phm/extension (bundle)
+├── src_legacy/                     # preserved reference scaffold (do not delete)
+└── .github/workflows/              # CI/publish workflows
 ```
 
-### Example `ohm.providers.json`
+## Install options (modular)
 
-```json
-{
-  "googleNanoBanana": {
-    "enabled": true,
-    "model": "gemini-2.5-flash-image-preview"
-  },
-  "openai": {
-    "enabled": true,
-    "model": "gpt-image-1"
-  },
-  "azureOpenai": {
-    "enabled": true,
-    "deployment": "imagegen-prod",
-    "endpoint": "https://example.openai.azure.com",
-    "apiVersion": "2025-04-01-preview"
-  }
-}
+Install only what you need:
+
+```bash
+pi install npm:@pi-phm/handoff
+pi install npm:@pi-phm/subagents
+pi install npm:@pi-phm/session-search
+pi install npm:@pi-phm/painter
 ```
 
-## Commands (scaffold)
+Or install the full bundle:
 
-- `/ohm-features` — show focus modules + enabled state
-- `/ohm-config` — show effective merged runtime config and loaded paths
-- `/ohm-missing` — show likely next layers to add
+```bash
+pi install npm:@pi-phm/extension
+```
 
-## Likely missing next layers
+## Config model
 
-You are probably not missing much for the first slice, but the next highest-value additions are:
+Feature packages share runtime config from `@pi-phm/config`.
 
-1. **Modes (rush/smart/deep)** to tune speed vs depth per task.
-2. **Permissions policy layer** to safely gate delegated/subagent commands.
-3. **Skills + MCP lazy loading** to avoid tool/context bloat as features grow.
+Config files:
+
+- project: `.pi/ohm.json`
+- global: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | PI_AGENT_DIR | ~/.pi/agent}/ohm.json`
+- providers: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | PI_AGENT_DIR | ~/.pi/agent}/ohm.providers.json`
+
+The settings UI is integrated through `@juanibiapina/pi-extension-settings`.
+
+## Commands (bundle)
+
+When using `@pi-phm/extension`:
+
+- `/ohm-features`
+- `/ohm-config`
+- `/ohm-missing`
+
+Feature-specific commands:
+
+- `/ohm-handoff`
+- `/ohm-subagents`
+- `/ohm-session-search`
+- `/ohm-painter`
 
 ## Notes
 
-- `src_legacy` was renamed from the previous `src` and intentionally preserved.
-- This repo currently scaffolds structure + config integration; feature internals still need incremental implementation.
+- `src_legacy` contains the broader catalog and is intentionally preserved for reference.
+- Handoff + visualizer are bundled into a single package: `@pi-phm/handoff`.
+
+## GitHub Actions (scaffolded)
+
+- `.github/workflows/ci.yml` → install + typecheck on PR/push
+- `.github/workflows/publish.yml` → manual publish (`workflow_dispatch`) for one package or all
+
+Publish workflow expects `NPM_TOKEN` in repository secrets.
+
+Publish order (when doing it manually):
+
+1. `@pi-phm/config`
+2. feature packages (`handoff`, `subagents`, `session-search`, `painter`)
+3. `@pi-phm/extension`

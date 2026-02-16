@@ -1,0 +1,23 @@
+{
+  "name": "@pi-phm/session-search",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "src/extension.ts",
+  "types": "src/extension.ts",
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.52.0",
+    "@pi-phm/config": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  }
+}

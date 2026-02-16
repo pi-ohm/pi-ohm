@@ -1,12 +1,13 @@
-# @pi-ohm/config
+# @pi-phm/config
 
-Shared Pi Ohm configuration package.
+Shared runtime configuration package used by Pi PHM feature packages.
 
 Responsibilities:
 
-- register Pi Ohm settings with `@juanibiapina/pi-extension-settings`
+- register extension settings with `@juanibiapina/pi-extension-settings`
+- resolve config directory from `PI_CONFIG_DIR` / `PI_CODING_AGENT_DIR` / `PI_AGENT_DIR` / `~/.pi/agent`
 - load and merge:
   - `${cwd}/.pi/ohm.json`
-  - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.json`
-  - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
-- expose typed runtime config to feature modules
+  - `${configDir}/ohm.json`
+  - `${configDir}/ohm.providers.json`
+- expose typed runtime config helpers to feature packages

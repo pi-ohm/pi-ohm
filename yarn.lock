@@ -1245,9 +1245,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@pi-ohm/config@workspace:*, @pi-ohm/config@workspace:packages/config":
+"@pi-phm/config@workspace:*, @pi-phm/config@workspace:packages/config":
   version: 0.0.0-use.local
-  resolution: "@pi-ohm/config@workspace:packages/config"
+  resolution: "@pi-phm/config@workspace:packages/config"
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
@@ -1258,16 +1258,62 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@pi-ohm/features@workspace:packages/features":
+"@pi-phm/extension@workspace:packages/extension":
   version: 0.0.0-use.local
-  resolution: "@pi-ohm/features@workspace:packages/features"
+  resolution: "@pi-phm/extension@workspace:packages/extension"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@mariozechner/pi-tui": "npm:^0.52.0"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-phm/config": "workspace:*"
+    "@pi-phm/handoff": "workspace:*"
+    "@pi-phm/painter": "workspace:*"
+    "@pi-phm/session-search": "workspace:*"
+    "@pi-phm/subagents": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-phm/handoff@workspace:*, @pi-phm/handoff@workspace:packages/handoff":
+  version: 0.0.0-use.local
+  resolution: "@pi-phm/handoff@workspace:packages/handoff"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-phm/painter@workspace:*, @pi-phm/painter@workspace:packages/painter":
+  version: 0.0.0-use.local
+  resolution: "@pi-phm/painter@workspace:packages/painter"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-phm/session-search@workspace:*, @pi-phm/session-search@workspace:packages/session-search":
+  version: 0.0.0-use.local
+  resolution: "@pi-phm/session-search@workspace:packages/session-search"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-phm/subagents@workspace:*, @pi-phm/subagents@workspace:packages/subagents":
+  version: 0.0.0-use.local
+  resolution: "@pi-phm/subagents@workspace:packages/subagents"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
 

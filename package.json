@@ -4,11 +4,10 @@
   "private": true,
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
   "keywords": [
-    "amp",
-    "ampcode",
     "handoff",
     "imagegen",
     "ohm",
+    "pi-phm",
     "pi",
     "pi-coding-agent",
     "pi-package",
@@ -37,7 +36,7 @@
     "format": "yarn oxfmt -- .",
     "format:check": "yarn oxfmt -- --check .",
     "hooks:install": "lefthook install",
-    "postinstall": "if [ -d .git ]; then lefthook install; fi"
+    "postinstall": "sh -c 'if [ -d .git ]; then lefthook install; fi'"
   },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
