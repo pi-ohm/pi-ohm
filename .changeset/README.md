@@ -21,6 +21,6 @@ yarn release
 ## Workflow
 
 1. On feature PRs, add a changeset (`yarn changeset`) for any package that should release.
-2. On `main`, release workflow opens/updates a **Version Packages** PR.
+2. On `prod`, release workflow opens/updates a **Version Packages** PR.
 3. Merge that PR to apply version bumps and changelog updates.
 4. Release workflow publishes to npm and creates GitHub tags/releases.

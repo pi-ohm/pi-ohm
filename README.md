@@ -89,7 +89,8 @@ Feature-specific commands:
 ## GitHub Actions (scaffolded)
 
 - `.github/workflows/ci.yml` → install + typecheck on PR/push
-- `.github/workflows/release.yml` → Changesets-based release PR + npm publish + GitHub releases/tags on `main`
+- `.github/workflows/changeset-check.yml` → requires `.changeset/*.md` on PRs that modify `packages/*`
+- `.github/workflows/release.yml` → Changesets-based release PR + npm publish + GitHub releases/tags on `prod`
 - `.github/workflows/publish.yml` → manual publish (`workflow_dispatch`) for one package or all
 
 Release workflow uses npm **Trusted Publishing** (GitHub OIDC), so no long-lived npm token is required.
@@ -114,9 +115,22 @@ Select the package(s), choose bump type (patch/minor/major), and write release n
 
 ### Release flow
 
-1. Changesets action opens/updates a **Version Packages** PR on `main`.
+1. Changesets action opens/updates a **Version Packages** PR on `prod`.
 2. Merge that PR to commit version bumps + `CHANGELOG.md` updates.
 3. Action publishes packages to npm and creates **tagged GitHub releases**.
+
+### Branching model (recommended)
+
+- `dev` = default integration branch
+- `prod` = release branch
+
+Release behavior:
+
+1. Merge feature PRs into `dev` (with changesets).
+2. Open/merge `dev -> prod` PR.
+3. Push to `prod` triggers release workflow:
+   - if release notes are pending, it opens/updates a **Version Packages** PR
+   - after that PR is merged, next `prod` run publishes to npm and creates GitHub releases/tags
 
 ### Trusted publishing setup (npm)
 
@@ -125,8 +139,20 @@ Select the package(s), choose bump type (patch/minor/major), and write release n
    - Provider: GitHub Actions
    - Repository: this repo
    - Workflow: `.github/workflows/release.yml`
-   - Branch: `main`
+   - Branch: `prod`
 3. Keep `id-token: write` permission in workflows and do **not** use long-lived `NPM_TOKEN` for releases.
+
+### Are changesets auto-generated from commits?
+
+No. Changesets are not inferred from commit messages by default.
+
+You need to add them explicitly in feature PRs:
+
+```bash
+yarn changeset
+```
+
+If you want commit-driven auto-versioning instead, that is a separate approach (for example, semantic-release + conventional commits), not Changesets default behavior.
 
 ### Local release commands
 
