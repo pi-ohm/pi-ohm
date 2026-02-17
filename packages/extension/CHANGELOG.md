@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.2](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.1...pi-ohm-v0.6.2) (2026-02-17)
+
+
+### Miscellaneous Chores
+
+* **pi-ohm:** Synchronize pi-ohm-lockstep versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.2
+    * @pi-ohm/handoff bumped to 0.6.2
+    * @pi-ohm/modes bumped to 0.6.2
+    * @pi-ohm/painter bumped to 0.6.2
+    * @pi-ohm/session-search bumped to 0.6.2
+    * @pi-ohm/subagents bumped to 0.6.2
+
 ## [0.6.1](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.0...pi-ohm-v0.6.1) (2026-02-17)
 
 
