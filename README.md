@@ -107,6 +107,7 @@ This repo uses **release-please** for versioning/changelogs.
 - release-please opens/updates a release PR on `dev`.
 - Merging that release PR updates versions/changelogs and tags on `dev`.
 - Stable npm `latest` publish happens when those release commits are promoted to `prod`.
+- On `prod` publish, a single GitHub release (`pi-ohm-vX.Y.Z`) is upserted with aggregated notes from all package changelogs.
 - Package versions are kept in lockstep (`@pi-ohm/*` + `pi-ohm` all receive the same version per release).
 
 Config files:
