@@ -3,6 +3,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 
 interface CliArgs {
   version: string;
@@ -98,8 +99,94 @@ function normalizeSection(section: string): string {
     .trim();
 }
 
+function parseSemver(value: string): [number, number, number] {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value);
+  if (!match) throw new Error(`Invalid semver '${value}'`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+function compareSemver(a: string, b: string): number {
+  const [aMaj, aMin, aPatch] = parseSemver(a);
+  const [bMaj, bMin, bPatch] = parseSemver(b);
+  if (aMaj !== bMaj) return aMaj - bMaj;
+  if (aMin !== bMin) return aMin - bMin;
+  return aPatch - bPatch;
+}
+
+function getPreviousPiOhmTag(version: string): string | null {
+  const result = spawnSync("git", ["tag", "-l", "pi-ohm-v*"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to list tags: ${result.stderr.trim()}`);
+  }
+
+  const tags = result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((tag) => ({ tag, version: tag.replace(/^pi-ohm-v/, "") }))
+    .filter(({ version: tagVersion }) => /^\d+\.\d+\.\d+$/.test(tagVersion));
+
+  const previous = tags
+    .filter(({ version: tagVersion }) => compareSemver(tagVersion, version) < 0)
+    .sort((left, right) => compareSemver(right.version, left.version))[0];
+
+  return previous?.tag ?? null;
+}
+
+function getAllowedCommitsForVersion(version: string): Set<string> {
+  const currentTag = `pi-ohm-v${version}`;
+  const previousTag = getPreviousPiOhmTag(version);
+
+  if (!previousTag) {
+    return new Set();
+  }
+
+  const result = spawnSync("git", ["log", "--format=%H", `${previousTag}..${currentTag}`], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Failed to read commits for ${previousTag}..${currentTag}: ${result.stderr.trim()}`,
+    );
+  }
+
+  const set = new Set<string>();
+  for (const line of result.stdout.split("\n")) {
+    const sha = line.trim();
+    if (!sha) continue;
+    set.add(sha);
+    set.add(sha.slice(0, 7));
+  }
+
+  return set;
+}
+
+function filterSectionCommits(section: string, allowedCommits: Set<string>): string {
+  if (allowedCommits.size === 0) {
+    return section;
+  }
+
+  return section
+    .split("\n")
+    .filter((line) => {
+      const match = /commit\/([0-9a-f]{7,40})/i.exec(line);
+      if (!match) return true;
+      return allowedCommits.has(match[1]);
+    })
+    .join("\n");
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const allowedCommits = getAllowedCommitsForVersion(args.version);
 
   const sections: string[] = [];
 
@@ -107,7 +194,7 @@ async function main(): Promise<void> {
     const changelogPath = path.join(repoRoot, source.path);
     const changelog = await readFile(changelogPath, "utf8");
     const rawSection = extractVersionSection(changelog, args.version);
-    const normalizedSection = normalizeSection(rawSection);
+    const normalizedSection = normalizeSection(filterSectionCommits(rawSection, allowedCommits));
 
     sections.push(`## ${source.label}\n\n${normalizedSection || "_No package-specific changes._"}`);
   }
