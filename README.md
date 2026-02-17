@@ -73,6 +73,7 @@ Feature-specific commands:
 
 - `/ohm-handoff`
 - `/ohm-subagents`
+- `/ohm-subagent <id>`
 - `/ohm-session-search`
 - `/ohm-painter`
 
