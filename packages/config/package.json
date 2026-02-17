@@ -1,16 +1,25 @@
 {
   "name": "@pi-ohm/config",
   "version": "0.6.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/config"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
-  "files": [
-    "src/",
-    "README.md"
-  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
     "@mariozechner/pi-coding-agent": "^0.52.0",
@@ -19,14 +28,5 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
-  },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
-    "directory": "packages/config"
   }
 }

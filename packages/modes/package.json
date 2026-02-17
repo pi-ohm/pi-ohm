@@ -1,17 +1,21 @@
 {
   "name": "@pi-ohm/modes",
   "version": "0.6.0",
-  "type": "module",
-  "main": "src/extension.ts",
-  "types": "src/extension.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/modes"
+  },
   "files": [
     "src/",
     "README.md"
   ],
-  "pi": {
-    "extensions": [
-      "./src/extension.ts"
-    ]
+  "type": "module",
+  "main": "src/extension.ts",
+  "types": "src/extension.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.52.0",
@@ -20,13 +24,9 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
-    "directory": "packages/modes"
+  "pi": {
+    "extensions": [
+      "./src/extension.ts"
+    ]
   }
 }

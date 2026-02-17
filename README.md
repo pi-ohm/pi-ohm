@@ -23,17 +23,17 @@ Coming soon
 ## Install options
 
 - Modular installs:
-    ```bash
-    pi install npm:@pi-ohm/modes
-    pi install npm:@pi-ohm/handoff
-    pi install npm:@pi-ohm/subagents
-    pi install npm:@pi-ohm/session-search
-    pi install npm:@pi-ohm/painter
-    ```
+  ```bash
+  pi install npm:@pi-ohm/modes
+  pi install npm:@pi-ohm/handoff
+  pi install npm:@pi-ohm/subagents
+  pi install npm:@pi-ohm/session-search
+  pi install npm:@pi-ohm/painter
+  ```
 - Install full bundle (recommended):
-    ```bash
-    pi install npm:pi-ohm
-    ```
+  ```bash
+  pi install npm:pi-ohm
+  ```
 
 ## Commands (bundle)
 

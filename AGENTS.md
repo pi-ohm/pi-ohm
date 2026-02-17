@@ -35,22 +35,9 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 - Scope is required for all conventional commits.
 - Multiple scopes are allowed with commas, e.g. `fix(session,subagents): ...`.
 
-**Allowed scopes:**
-
-- `config`
-- `modes`
-- `handoff`
-- `subagents`
-- `session-search`
-- `session` (alias for `session-search`)
-- `painter`
-- `pi-ohm`
-- `ohm`
-- `docs`
-- `repo`
-- `root`
-
 ### Scope usage guide
+
+**Allowed scopes:**
 
 - `config`: changes in `packages/config` (settings, config loading, path/env resolution).
 - `modes`: changes in `packages/modes` (rush/smart/deep behavior, mode commands).

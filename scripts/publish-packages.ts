@@ -95,10 +95,6 @@ function parseArgs(argv: string[]): CliArgs {
     }
   }
 
-  if (args.channel !== "latest" && args.channel !== "dev") {
-    throw new Error(`Unsupported channel '${args.channel}'. Use 'latest' or 'dev'.`);
-  }
-
   return args;
 }
 

@@ -1,16 +1,25 @@
-pre-commit:
-  parallel: false
-  commands:
-    oxfmt:
-      glob: "**/*.{js,jsx,ts,tsx,mjs,cjs}"
-      run: yarn oxfmt -- {staged_files}
-      stage_fixed: true
-
-    oxlint:
-      glob: "**/*.{js,jsx,ts,tsx,mjs,cjs}"
-      run: yarn oxlint -- {staged_files}
-
 commit-msg:
   commands:
     validate:
       run: node --experimental-strip-types ./scripts/validate-commits.ts --message-file {1}
+
+pre-push:
+  parallel: false
+  commands:
+    oxfmt-check:
+      run: yarn format:check
+
+    oxlint:
+      run: yarn lint
+
+    typecheck:
+      run: yarn typecheck
+
+pre-merge-commit:
+  parallel: false
+  commands:
+    oxfmt-check:
+      run: yarn format:check
+
+    oxlint:
+      run: yarn lint

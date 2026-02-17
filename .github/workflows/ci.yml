@@ -59,5 +59,11 @@ jobs:
       - name: Install
         run: yarn install --immutable
 
+      - name: Format check
+        run: yarn format:check
+
+      - name: Lint
+        run: yarn lint
+
       - name: Typecheck
         run: yarn typecheck
