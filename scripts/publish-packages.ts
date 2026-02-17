@@ -120,15 +120,6 @@ function run(command: string, args: string[], options: { cwd?: string } = {}): v
   }
 }
 
-function runQuiet(command: string, args: string[]): number {
-  const result = spawnSync(command, args, {
-    stdio: ["ignore", "pipe", "pipe"],
-    env: process.env,
-  });
-
-  return result.status ?? 1;
-}
-
 function asBaseVersion(version: string): string {
   const [base] = version.split("-");
   return base;
@@ -205,9 +196,42 @@ function rewriteInternalDependencies(
   }
 }
 
-function versionExistsOnNpm(name: string, version: string): boolean {
-  const exitCode = runQuiet("npm", ["view", `${name}@${version}`, "version", "--json"]);
-  return exitCode === 0;
+async function versionExistsOnNpm(name: string, version: string): Promise<boolean> {
+  const encodedName = encodeURIComponent(name);
+  const registry =
+    process.env.npm_config_registry ??
+    process.env.NPM_CONFIG_REGISTRY ??
+    "https://registry.npmjs.org/";
+  const base = registry.endsWith("/") ? registry : `${registry}/`;
+  const packageUrl = `${base}${encodedName}`;
+
+  try {
+    const response = await fetch(packageUrl, {
+      headers: {
+        Accept: "application/vnd.npm.install-v1+json, application/json",
+      },
+    });
+
+    if (response.status === 404) {
+      return false;
+    }
+
+    if (response.ok) {
+      const payload = (await response.json()) as { versions?: Record<string, unknown> };
+      return Boolean(
+        payload.versions && Object.prototype.hasOwnProperty.call(payload.versions, version),
+      );
+    }
+  } catch {
+    // fallback below
+  }
+
+  const probe = spawnSync("npm", ["view", `${name}@${version}`, "version", "--json"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+  });
+
+  return probe.status === 0;
 }
 
 async function main(): Promise<void> {
@@ -256,7 +280,7 @@ async function main(): Promise<void> {
       throw new Error(`Missing target version for ${name}`);
     }
 
-    if (versionExistsOnNpm(name, targetVersion)) {
+    if (await versionExistsOnNpm(name, targetVersion)) {
       console.log(`Skipping ${name}@${targetVersion} (already published)`);
       continue;
     }
