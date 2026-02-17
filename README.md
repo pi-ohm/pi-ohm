@@ -1,6 +1,18 @@
-# pi-ohm
+<p align="center">
+  <img src="./assets/ohm-transparent.png" alt="pi-ohm logo" width="220" />
+</p>
+<p align="center">
+  <h5 align="center">
+    <a href="ohm.moe">pi-ohm</a>
+  </h5>
+  <a href="https://www.npmjs.com/package/pi-ohm">
+    <img src="https://img.shields.io/npm/v/pi-ohm?label=npm%20(pi-ohm)" alt="npm version" />
+  </a>
+</p>
 
 Monorepo for modular Pi feature packages under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
+
+pi-ohm provides focused, Amp-inspired workflows for Pi as modular installable packages (modes, handoff, subagents, session search, painter) and as a single bundled extension.
 
 ## Package manager
 
