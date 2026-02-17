@@ -1,9 +1,8 @@
-name: Release (Changesets)
+name: Release (release-please)
 
 on:
   push:
-    branches:
-      - prod
+    branches: ["prod"]
 
 jobs:
   release:
@@ -15,33 +14,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
         with:
-          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: prod
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
 
       - name: Setup Node
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
-
-      - name: Install
-        run: yarn install --immutable
-
-      - name: Create Release PR or Publish
-        uses: changesets/action@v1
+      - name: Publish released package versions to npm
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: "true"
-        with:
-          version: yarn version-packages
-          publish: yarn release
-          title: "chore(release): version packages"
-          commit: "chore(release): version packages"
-          createGithubReleases: true
+        run: |
+          node ./scripts/publish-packages.mjs --channel latest

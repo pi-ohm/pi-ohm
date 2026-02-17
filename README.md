@@ -1,16 +1,14 @@
 # pi-ohm
 
-Monorepo for **modular Pi feature packages** under `@pi-phm/*` and `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
+Monorepo for modular Pi feature packages under `@pi-phm/*` and `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
 
 ## Package manager
 
-This repo uses Yarn workspaces (latest stable pinned).
+This repo uses Yarn workspaces.
 
 ```bash
 corepack enable
 corepack prepare yarn@stable --activate
-yarn --version
-
 yarn install
 yarn typecheck
 ```
@@ -29,13 +27,13 @@ pi-ohm/
 │   ├── session-search/             # @pi-phm/session-search
 │   ├── painter/                    # @pi-phm/painter
 │   └── extension/                  # pi-ohm (bundle package)
+├── scripts/
+│   └── publish-packages.mjs
 ├── src_legacy/                     # preserved reference scaffold (do not delete)
-└── .github/workflows/              # CI/publish workflows
+└── .github/workflows/
 ```
 
-## Install options (modular)
-
-Install only what you need:
+## Install options
 
 ```bash
 pi install npm:@pi-ohm/modes
@@ -43,120 +41,91 @@ pi install npm:@pi-phm/handoff
 pi install npm:@pi-phm/subagents
 pi install npm:@pi-phm/session-search
 pi install npm:@pi-phm/painter
-```
 
-Or install the full bundle:
-
-```bash
+# full bundle
 pi install npm:pi-ohm
 ```
 
-## Config model
-
-Feature packages share runtime config from `@pi-phm/config`.
-
-Config files:
-
-- project: `.pi/ohm.json`
-- global: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | PI_AGENT_DIR | ~/.pi/agent}/ohm.json`
-- providers: `${PI_CONFIG_DIR | PI_CODING_AGENT_DIR | PI_AGENT_DIR | ~/.pi/agent}/ohm.providers.json`
-
-The settings UI is integrated through `@juanibiapina/pi-extension-settings`.
-
 ## Commands (bundle)
-
-When using `pi-ohm`:
 
 - `/ohm-features`
 - `/ohm-config`
 - `/ohm-missing`
 - `/ohm-modes`
 - `/ohm-mode <rush|smart|deep>`
-
-Feature-specific commands:
-
 - `/ohm-handoff`
 - `/ohm-subagents`
 - `/ohm-subagent <id>`
 - `/ohm-session-search`
 - `/ohm-painter`
 
-## Notes
-
-- `src_legacy` contains the broader catalog and is intentionally preserved for reference.
-- Handoff + visualizer are bundled into a single package: `@pi-phm/handoff`.
-
-## GitHub Actions (scaffolded)
-
-- `.github/workflows/ci.yml` → install + typecheck on PR/push
-- `.github/workflows/changeset-check.yml` → requires `.changeset/*.md` on PRs that modify `packages/*`
-- `.github/workflows/release.yml` → Changesets-based release PR + npm publish + GitHub releases/tags on `prod`
-- `.github/workflows/publish.yml` → manual publish (`workflow_dispatch`) for one package or all
-
-Release workflow uses npm **Trusted Publishing** (GitHub OIDC), so no long-lived npm token is required.
-
-Publish order (when doing it manually):
-
-1. `@pi-phm/config`
-2. feature packages (`modes`, `handoff`, `subagents`, `session-search`, `painter`)
-3. `pi-ohm`
-
-## Versioning + changelog strategy
-
-This repo uses **Changesets** for package versioning and changelogs.
-
-### In a feature PR
-
-```bash
-yarn changeset
-```
-
-Select the package(s), choose bump type (patch/minor/major), and write release notes.
-
-### Release flow
-
-1. Changesets action opens/updates a **Version Packages** PR on `prod`.
-2. Merge that PR to commit version bumps + `CHANGELOG.md` updates.
-3. Action publishes packages to npm and creates **tagged GitHub releases**.
-
-### Branching model (recommended)
+## Branch model
 
 - `dev` = default integration branch
 - `prod` = release branch
 
-Release behavior:
+Flow:
 
-1. Merge feature PRs into `dev` (with changesets).
+1. Merge feature PRs into `dev`.
 2. Open/merge `dev -> prod` PR.
-3. Push to `prod` triggers release workflow:
-   - if release notes are pending, it opens/updates a **Version Packages** PR
-   - after that PR is merged, next `prod` run publishes to npm and creates GitHub releases/tags
+3. Push to `prod` runs release automation.
 
-### Trusted publishing setup (npm)
+## Release strategy (release-please)
 
-1. Publish `pi-ohm` once from an owner account to claim the name.
-2. In npm package settings for each published package (`pi-ohm`, `@pi-ohm/modes`, `@pi-phm/*`), add a **Trusted Publisher**:
-   - Provider: GitHub Actions
-   - Repository: this repo
-   - Workflow: `.github/workflows/release.yml`
-   - Branch: `prod`
-3. Keep `id-token: write` permission in workflows and do **not** use long-lived `NPM_TOKEN` for releases.
+This repo uses **release-please** for versioning/changelogs and GitHub releases.
 
-### Are changesets auto-generated from commits?
+- Conventional commits drive version bumps (`feat:` => minor, `fix:` => patch, `feat!` / `BREAKING CHANGE` => major).
+- release-please opens/updates a release PR on `prod`.
+- Merging that release PR updates versions/changelogs, creates tags/GitHub releases, and publishes npm `latest`.
 
-No. Changesets are not inferred from commit messages by default.
+Config files:
 
-You need to add them explicitly in feature PRs:
+- `.release-please-config.json`
+- `.release-please-manifest.json`
+
+## npm publishing channels
+
+### Stable (`latest`)
+
+- Trigger: push to `prod`
+- Workflow: `.github/workflows/release.yml`
+- Publishes released versions to npm with `latest` tag
+
+### Dev snapshots (`dev`)
+
+- Trigger: push to `dev`
+- Workflow: `.github/workflows/publish-dev.yml`
+- Publishes all packages as prerelease builds with `dev` tag (version suffix includes run/sha)
+
+Install dev builds with `@dev`, for example:
 
 ```bash
-yarn changeset
+npm i pi-ohm@dev
+npm i @pi-ohm/modes@dev
+npm i @pi-phm/subagents@dev
 ```
 
-If you want commit-driven auto-versioning instead, that is a separate approach (for example, semantic-release + conventional commits), not Changesets default behavior.
+## Trusted publishing (npm)
 
-### Local release commands
+For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-phm/*`), configure npm Trusted Publisher:
 
-```bash
-yarn version-packages   # apply changesets to package versions/changelogs
-yarn release            # publish (normally done in CI)
-```
+- Provider: GitHub Actions
+- Repository: this repo
+- Workflow: `.github/workflows/release.yml` (stable)
+- Branch: `prod`
+
+And for dev snapshots:
+
+- Workflow: `.github/workflows/publish-dev.yml`
+- Branch: `dev`
+
+No long-lived `NPM_TOKEN` is required.
+
+## Manual publishing
+
+Use `.github/workflows/publish.yml` (`workflow_dispatch`) for manual publish to either `latest` or `dev` channel.
+
+## Notes
+
+- `src_legacy` is intentionally preserved.
+- Handoff + visualizer stay bundled in `@pi-phm/handoff`.

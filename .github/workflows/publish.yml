@@ -1,4 +1,4 @@
-name: Publish Packages
+name: Publish Packages (Manual)
 
 on:
   workflow_dispatch:
@@ -17,11 +17,14 @@ on:
           - session-search
           - painter
           - pi-ohm
-      dryRun:
-        description: "Publish as dry-run"
+      channel:
+        description: "npm dist-tag channel"
         required: true
-        default: true
-        type: boolean
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
 
 jobs:
   publish:
@@ -39,70 +42,49 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
-
-      - name: Install
-        run: yarn install --immutable
-
       - name: Publish selected package(s)
-        shell: bash
         env:
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: "true"
+        shell: bash
         run: |
           set -euo pipefail
 
-          dry_flag=""
-          if [ "${{ inputs.dryRun }}" = "true" ]; then
-            dry_flag="--dry-run"
-          fi
-
-          publish_dir() {
-            local dir="$1"
-            echo "Publishing ${dir} ${dry_flag}"
-            (
-              cd "${dir}"
-              npm publish --access public ${dry_flag}
-            )
-          }
-
           case "${{ inputs.package }}" in
             config)
-              publish_dir "packages/config"
+              only="@pi-phm/config"
               ;;
             modes)
-              publish_dir "packages/modes"
+              only="@pi-ohm/modes"
               ;;
             handoff)
-              publish_dir "packages/handoff"
+              only="@pi-phm/handoff"
               ;;
             subagents)
-              publish_dir "packages/subagents"
+              only="@pi-phm/subagents"
               ;;
             session-search)
-              publish_dir "packages/session-search"
+              only="@pi-phm/session-search"
               ;;
             painter)
-              publish_dir "packages/painter"
+              only="@pi-phm/painter"
               ;;
             pi-ohm)
-              publish_dir "packages/extension"
+              only="pi-ohm"
               ;;
             all)
-              publish_dir "packages/config"
-              publish_dir "packages/modes"
-              publish_dir "packages/handoff"
-              publish_dir "packages/subagents"
-              publish_dir "packages/session-search"
-              publish_dir "packages/painter"
-              publish_dir "packages/extension"
+              only=""
               ;;
             *)
               echo "Unknown package input: ${{ inputs.package }}"
               exit 1
               ;;
           esac
+
+          cmd=(node ./scripts/publish-packages.mjs --channel "${{ inputs.channel }}")
+          if [[ -n "${only}" ]]; then
+            cmd+=(--only "${only}")
+          fi
+
+          echo "Running: ${cmd[*]}"
+          "${cmd[@]}"
