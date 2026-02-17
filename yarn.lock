@@ -1245,20 +1245,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@pi-ohm/modes@workspace:*, @pi-ohm/modes@workspace:packages/modes":
+"@pi-ohm/config@workspace:*, @pi-ohm/config@workspace:packages/config":
   version: 0.0.0-use.local
-  resolution: "@pi-ohm/modes@workspace:packages/modes"
-  dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
-  peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-  languageName: unknown
-  linkType: soft
-
-"@pi-phm/config@workspace:*, @pi-phm/config@workspace:packages/config":
-  version: 0.0.0-use.local
-  resolution: "@pi-phm/config@workspace:packages/config"
+  resolution: "@pi-ohm/config@workspace:packages/config"
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
@@ -1269,45 +1258,56 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@pi-phm/handoff@workspace:*, @pi-phm/handoff@workspace:packages/handoff":
+"@pi-ohm/handoff@workspace:*, @pi-ohm/handoff@workspace:packages/handoff":
   version: 0.0.0-use.local
-  resolution: "@pi-phm/handoff@workspace:packages/handoff"
+  resolution: "@pi-ohm/handoff@workspace:packages/handoff"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
 
-"@pi-phm/painter@workspace:*, @pi-phm/painter@workspace:packages/painter":
+"@pi-ohm/modes@workspace:*, @pi-ohm/modes@workspace:packages/modes":
   version: 0.0.0-use.local
-  resolution: "@pi-phm/painter@workspace:packages/painter"
+  resolution: "@pi-ohm/modes@workspace:packages/modes"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
 
-"@pi-phm/session-search@workspace:*, @pi-phm/session-search@workspace:packages/session-search":
+"@pi-ohm/painter@workspace:*, @pi-ohm/painter@workspace:packages/painter":
   version: 0.0.0-use.local
-  resolution: "@pi-phm/session-search@workspace:packages/session-search"
+  resolution: "@pi-ohm/painter@workspace:packages/painter"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
 
-"@pi-phm/subagents@workspace:*, @pi-phm/subagents@workspace:packages/subagents":
+"@pi-ohm/session-search@workspace:*, @pi-ohm/session-search@workspace:packages/session-search":
   version: 0.0.0-use.local
-  resolution: "@pi-phm/subagents@workspace:packages/subagents"
+  resolution: "@pi-ohm/session-search@workspace:packages/session-search"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-ohm/subagents@workspace:*, @pi-ohm/subagents@workspace:packages/subagents":
+  version: 0.0.0-use.local
+  resolution: "@pi-ohm/subagents@workspace:packages/subagents"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
@@ -3231,12 +3231,12 @@ __metadata:
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/handoff": "workspace:*"
     "@pi-ohm/modes": "workspace:*"
-    "@pi-phm/config": "workspace:*"
-    "@pi-phm/handoff": "workspace:*"
-    "@pi-phm/painter": "workspace:*"
-    "@pi-phm/session-search": "workspace:*"
-    "@pi-phm/subagents": "workspace:*"
+    "@pi-ohm/painter": "workspace:*"
+    "@pi-ohm/session-search": "workspace:*"
+    "@pi-ohm/subagents": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown

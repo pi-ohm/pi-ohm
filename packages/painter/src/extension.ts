@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-phm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 
 export default function registerPainterExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
@@ -46,7 +46,7 @@ export default function registerPainterExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm painter", text);
+      await ctx.ui.editor("pi-ohm painter", text);
     },
   });
 }

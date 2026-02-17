@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-phm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
 
 function normalizeCommandArgs(args: unknown): string[] {
@@ -106,7 +106,9 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         `Subagent: ${match.name}`,
         `id: ${match.id}`,
         `available: ${isAvailable ? "yes" : "no"}`,
-        match.requiresPackage ? `requiresPackage: ${match.requiresPackage}` : "requiresPackage: none",
+        match.requiresPackage
+          ? `requiresPackage: ${match.requiresPackage}`
+          : "requiresPackage: none",
         "",
         "When to use:",
         ...match.whenToUse.map((line) => `- ${line}`),

@@ -52,22 +52,22 @@ jobs:
 
           case "${{ inputs.package }}" in
             config)
-              only="@pi-phm/config"
+              only="@pi-ohm/config"
               ;;
             modes)
               only="@pi-ohm/modes"
               ;;
             handoff)
-              only="@pi-phm/handoff"
+              only="@pi-ohm/handoff"
               ;;
             subagents)
-              only="@pi-phm/subagents"
+              only="@pi-ohm/subagents"
               ;;
             session-search)
-              only="@pi-phm/session-search"
+              only="@pi-ohm/session-search"
               ;;
             painter)
-              only="@pi-phm/painter"
+              only="@pi-ohm/painter"
               ;;
             pi-ohm)
               only="pi-ohm"

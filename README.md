@@ -1,6 +1,6 @@
 # pi-ohm
 
-Monorepo for modular Pi feature packages under `@pi-phm/*` and `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
+Monorepo for modular Pi feature packages under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
 
 ## Package manager
 
@@ -20,12 +20,12 @@ pi-ohm/
 ├── extensions/
 │   └── index.ts                    # local dev entrypoint (registers bundle package)
 ├── packages/
-│   ├── config/                     # @pi-phm/config
+│   ├── config/                     # @pi-ohm/config
 │   ├── modes/                      # @pi-ohm/modes
-│   ├── handoff/                    # @pi-phm/handoff (includes visualizer)
-│   ├── subagents/                  # @pi-phm/subagents
-│   ├── session-search/             # @pi-phm/session-search
-│   ├── painter/                    # @pi-phm/painter
+│   ├── handoff/                    # @pi-ohm/handoff (includes visualizer)
+│   ├── subagents/                  # @pi-ohm/subagents
+│   ├── session-search/             # @pi-ohm/session-search
+│   ├── painter/                    # @pi-ohm/painter
 │   └── extension/                  # pi-ohm (bundle package)
 ├── scripts/
 │   └── publish-packages.ts
@@ -37,10 +37,10 @@ pi-ohm/
 
 ```bash
 pi install npm:@pi-ohm/modes
-pi install npm:@pi-phm/handoff
-pi install npm:@pi-phm/subagents
-pi install npm:@pi-phm/session-search
-pi install npm:@pi-phm/painter
+pi install npm:@pi-ohm/handoff
+pi install npm:@pi-ohm/subagents
+pi install npm:@pi-ohm/session-search
+pi install npm:@pi-ohm/painter
 
 # full bundle
 pi install npm:pi-ohm
@@ -102,12 +102,12 @@ Install dev builds with `@dev`, for example:
 ```bash
 npm i pi-ohm@dev
 npm i @pi-ohm/modes@dev
-npm i @pi-phm/subagents@dev
+npm i @pi-ohm/subagents@dev
 ```
 
 ## Trusted publishing (npm)
 
-For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-phm/*`), configure npm Trusted Publisher:
+For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-ohm/*`), configure npm Trusted Publisher:
 
 - Provider: GitHub Actions
 - Repository: this repo
@@ -128,4 +128,4 @@ Use `.github/workflows/publish.yml` (`workflow_dispatch`) for manual publish to 
 ## Notes
 
 - `src_legacy` is intentionally preserved.
-- Handoff + visualizer stay bundled in `@pi-phm/handoff`.
+- Handoff + visualizer stay bundled in `@pi-ohm/handoff`.

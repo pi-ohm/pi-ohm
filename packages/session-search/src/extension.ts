@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-phm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 
 export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
@@ -29,7 +29,7 @@ export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm session search", text);
+      await ctx.ui.editor("pi-ohm session search", text);
     },
   });
 }

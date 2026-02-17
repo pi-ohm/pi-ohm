@@ -1,4 +1,4 @@
-# @pi-phm/config
+# @pi-ohm/config
 
 Shared runtime configuration package used by Pi PHM feature packages.
 

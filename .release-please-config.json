@@ -7,22 +7,22 @@
   "plugins": ["node-workspace"],
   "packages": {
     "packages/config": {
-      "package-name": "@pi-phm/config"
+      "package-name": "@pi-ohm/config"
     },
     "packages/modes": {
       "package-name": "@pi-ohm/modes"
     },
     "packages/handoff": {
-      "package-name": "@pi-phm/handoff"
+      "package-name": "@pi-ohm/handoff"
     },
     "packages/subagents": {
-      "package-name": "@pi-phm/subagents"
+      "package-name": "@pi-ohm/subagents"
     },
     "packages/session-search": {
-      "package-name": "@pi-phm/session-search"
+      "package-name": "@pi-ohm/session-search"
     },
     "packages/painter": {
-      "package-name": "@pi-phm/painter"
+      "package-name": "@pi-ohm/painter"
     },
     "packages/extension": {
       "package-name": "pi-ohm"

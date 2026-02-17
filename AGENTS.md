@@ -2,7 +2,7 @@
 
 ## Repo shape
 
-This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and `pi-ohm` packages.
+This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
 
 - `packages/config` → shared config/settings helpers
 - `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
@@ -33,10 +33,10 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and 
 
 Each feature package should be installable by itself through npm:
 
-- `@pi-phm/handoff`
-- `@pi-phm/subagents`
-- `@pi-phm/session-search`
-- `@pi-phm/painter`
+- `@pi-ohm/handoff`
+- `@pi-ohm/subagents`
+- `@pi-ohm/session-search`
+- `@pi-ohm/painter`
 - `@pi-ohm/modes`
 
 Full bundle package:
