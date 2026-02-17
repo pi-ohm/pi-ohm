@@ -88,7 +88,7 @@ function extractVersionSection(content: string, version: string): string {
 }
 
 function normalizeSection(section: string): string {
-  return section
+  let normalized = section
     .split("\n")
     .filter((line) => !line.includes("Synchronize pi-ohm-lockstep versions"))
     .filter((line) => !line.trim().match(/^#+\s+Miscellaneous Chores$/))
@@ -97,6 +97,39 @@ function normalizeSection(section: string): string {
     .replace(/^## /gm, "### ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  const lines = normalized.split("\n");
+  const kept: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (!line.startsWith("#### ")) {
+      kept.push(line);
+      continue;
+    }
+
+    let end = index + 1;
+    while (end < lines.length && !lines[end].startsWith("#### ")) {
+      end += 1;
+    }
+
+    const body = lines
+      .slice(index + 1, end)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (body.length > 0) {
+      kept.push(...lines.slice(index, end));
+    }
+
+    index = end - 1;
+  }
+
+  normalized = kept.join("\n");
+  normalized = normalized.replace(/\n{3,}/g, "\n\n").trim();
+
+  return normalized;
 }
 
 function parseSemver(value: string): [number, number, number] {
@@ -195,8 +228,12 @@ async function main(): Promise<void> {
     const changelog = await readFile(changelogPath, "utf8");
     const rawSection = extractVersionSection(changelog, args.version);
     const normalizedSection = normalizeSection(filterSectionCommits(rawSection, allowedCommits));
+    const hasDetails = /^####\s+/m.test(normalizedSection);
+    const sectionBody = hasDetails
+      ? normalizedSection
+      : `${normalizedSection}\n\n_No package-specific changes in this release range._`;
 
-    sections.push(`## ${source.label}\n\n${normalizedSection || "_No package-specific changes._"}`);
+    sections.push(`## ${source.label}\n\n${sectionBody}`);
   }
 
   const body = [
