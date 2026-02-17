@@ -32,6 +32,14 @@ jobs:
               echo "Initial push detected; skipping commit range validation."
               exit 0
             fi
+
+             if ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+               echo "before SHA not found locally (history rewrite/force-push). Validating HEAD commit only."
+               git log -1 --pretty=%B > /tmp/ci-commit-message.txt
+               node --experimental-strip-types ./scripts/validate-commits.ts --message-file /tmp/ci-commit-message.txt
+               exit 0
+             fi
+
             range="$before..${{ github.sha }}"
           fi
 
