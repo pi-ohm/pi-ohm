@@ -73,3 +73,9 @@ Each feature package should be installable by itself through npm:
 Full bundle package:
 
 - `pi-ohm`
+
+## Testing Framework
+
+You should often write failing tests for implementations prior to actually implementing them.
+
+If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
