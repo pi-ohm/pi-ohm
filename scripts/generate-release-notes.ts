@@ -94,6 +94,7 @@ function normalizeSection(section: string): string {
     .join("\n")
     .replace(/^### /gm, "#### ")
     .replace(/^## /gm, "### ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
