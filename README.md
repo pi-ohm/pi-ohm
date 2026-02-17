@@ -16,7 +16,45 @@ Current features include: modes, subagents (librarian, finder, oracle, painter),
 
 Docs coming soon at [ohm.moe](https://ohm.moe).
 
-## Package manager
+#### Highlights
+
+Coming soon
+
+#### Install options
+
+- Modular installs:
+    ```bash
+    pi install npm:@pi-ohm/modes
+    pi install npm:@pi-ohm/handoff
+    pi install npm:@pi-ohm/subagents
+    pi install npm:@pi-ohm/session-search
+    pi install npm:@pi-ohm/painter
+    ```
+- Install full bundle (recommended):
+    ```bash
+    pi install npm:pi-ohm
+    ```
+
+#### Commands (bundle)
+
+- `/ohm-features`
+- `/ohm-config`
+- `/ohm-missing`
+- `/ohm-modes`
+- `/ohm-mode <rush|smart|deep>`
+- `/ohm-handoff`
+- `/ohm-subagents`
+- `/ohm-subagent <id>`
+- `/ohm-session-search`
+- `/ohm-painter`
+
+<details>
+  <summary>
+    <strong>Development</strong>
+    <p>Yarn workspaces, linting, formatting, etc.</p>
+  </summary>
+
+#### Package manager
 
 This repo uses Yarn workspaces.
 
@@ -27,7 +65,7 @@ yarn install
 yarn typecheck
 ```
 
-## Workspace layout
+#### Workspace layout
 
 ```text
 pi-ohm/
@@ -43,37 +81,10 @@ pi-ohm/
 │   └── extension/                  # pi-ohm (bundle package)
 ├── scripts/
 │   └── publish-packages.ts
-├── src_legacy/                     # preserved reference scaffold (do not delete)
 └── .github/workflows/
 ```
 
-## Install options
-
-```bash
-pi install npm:@pi-ohm/modes
-pi install npm:@pi-ohm/handoff
-pi install npm:@pi-ohm/subagents
-pi install npm:@pi-ohm/session-search
-pi install npm:@pi-ohm/painter
-
-# full bundle
-pi install npm:pi-ohm
-```
-
-## Commands (bundle)
-
-- `/ohm-features`
-- `/ohm-config`
-- `/ohm-missing`
-- `/ohm-modes`
-- `/ohm-mode <rush|smart|deep>`
-- `/ohm-handoff`
-- `/ohm-subagents`
-- `/ohm-subagent <id>`
-- `/ohm-session-search`
-- `/ohm-painter`
-
-## Branch model
+#### Branch model
 
 - `dev` = default integration branch
 - `prod` = release branch
@@ -84,7 +95,7 @@ Flow:
 2. Open/merge `dev -> prod` PR.
 3. Push to `prod` runs release automation.
 
-## Release strategy (release-please)
+#### Release strategy (release-please)
 
 This repo uses **release-please** for versioning/changelogs and GitHub releases.
 
@@ -98,15 +109,15 @@ Config files:
 - `.release-please-config.json`
 - `.release-please-manifest.json`
 
-## npm publishing channels
+#### npm publishing channels
 
-### Stable (`latest`)
+##### Stable (`latest`)
 
 - Trigger: push to `prod`
 - Workflow: `.github/workflows/release.yml`
 - Publishes released versions to npm with `latest` tag
 
-### Dev snapshots (`dev`)
+##### Dev snapshots (`dev`)
 
 - Trigger: push to `dev`
 - Workflow: `.github/workflows/release.yml`
@@ -121,7 +132,7 @@ npm i @pi-ohm/modes@dev
 npm i @pi-ohm/subagents@dev
 ```
 
-## Trusted publishing (npm)
+#### Trusted publishing (npm)
 
 For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-ohm/*`), configure npm Trusted Publisher:
 
@@ -134,9 +145,11 @@ If npm only allows one trusted-publisher workflow/branch pairing, keep Trusted P
 
 No long-lived `NPM_TOKEN` is required.
 
-## Manual publishing
+#### Manual publishing
 
 Use `.github/workflows/release.yml` (`workflow_dispatch`) for manual publish to either `latest` or `dev` channel.
+
+</details>
 
 ## Notes
 
