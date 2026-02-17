@@ -28,6 +28,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 7. Branch model: `dev` is default integration branch; `prod` is release branch.
 8. Versioning/changelog automation is release-please (not changesets).
 9. Use conventional commits for release automation (`feat:`, `fix:`, `feat!`, etc.).
+10. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
 
 ## Packaging goal
 

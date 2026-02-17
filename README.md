@@ -77,6 +77,7 @@ This repo uses **release-please** for versioning/changelogs and GitHub releases.
 - Conventional commits drive version bumps (`feat:` => minor, `fix:` => patch, `feat!` / `BREAKING CHANGE` => major).
 - release-please opens/updates a release PR on `prod`.
 - Merging that release PR updates versions/changelogs, creates tags/GitHub releases, and publishes npm `latest`.
+- Package versions are kept in lockstep (`@pi-ohm/*` + `pi-ohm` all receive the same version per release).
 
 Config files:
 

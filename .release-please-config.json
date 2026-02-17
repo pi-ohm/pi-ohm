@@ -4,27 +4,52 @@
   "include-component-in-tag": true,
   "include-v-in-tag": true,
   "separate-pull-requests": false,
-  "plugins": ["node-workspace"],
+  "plugins": [
+    {
+      "type": "node-workspace",
+      "merge": false
+    },
+    {
+      "type": "linked-versions",
+      "groupName": "pi-ohm-lockstep",
+      "components": [
+        "config",
+        "modes",
+        "handoff",
+        "subagents",
+        "session-search",
+        "painter",
+        "extension"
+      ]
+    }
+  ],
   "packages": {
     "packages/config": {
+      "component": "config",
       "package-name": "@pi-ohm/config"
     },
     "packages/modes": {
+      "component": "modes",
       "package-name": "@pi-ohm/modes"
     },
     "packages/handoff": {
+      "component": "handoff",
       "package-name": "@pi-ohm/handoff"
     },
     "packages/subagents": {
+      "component": "subagents",
       "package-name": "@pi-ohm/subagents"
     },
     "packages/session-search": {
+      "component": "session-search",
       "package-name": "@pi-ohm/session-search"
     },
     "packages/painter": {
+      "component": "painter",
       "package-name": "@pi-ohm/painter"
     },
     "packages/extension": {
+      "component": "extension",
       "package-name": "pi-ohm"
     }
   }
