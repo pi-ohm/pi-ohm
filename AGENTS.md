@@ -27,8 +27,21 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
 7. Branch model: `dev` is default integration branch; `prod` is release branch.
 8. Versioning/changelog automation is release-please (not changesets).
-9. Use conventional commits for release automation (`feat:`, `fix:`, `feat!`, etc.).
+9. Use conventional commits for release automation (`feat(subagents):`, `fix:(root,modes)`, `feat(config)!:`, etc.).
 10. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
+
+## Conventional Commits
+
+- Commits must be scoped to a package.
+
+**Full list of scopes:**
+- `config`
+- `modes`
+- `handoff`
+- `subagents`
+- `session-search` / `session`
+- `painter`
+- `mono` / `monorepo` / `root` / `ohm`
 
 ## Packaging goal
 
