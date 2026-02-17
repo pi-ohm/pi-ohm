@@ -52,7 +52,8 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         const needsPainterPackage = agent.id === "painter";
         const available = !needsPainterPackage || config.features.painterImagegen;
         const availability = available ? "available" : "requires painter feature/package";
-        return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability}]`;
+        const invocation = agent.primary ? "primary-tool" : "delegated";
+        return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability} · ${invocation}]`;
       });
 
       const text = [
@@ -106,6 +107,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         `Subagent: ${match.name}`,
         `id: ${match.id}`,
         `available: ${isAvailable ? "yes" : "no"}`,
+        `invocation: ${match.primary ? "primary-tool" : "delegated"}`,
         match.requiresPackage
           ? `requiresPackage: ${match.requiresPackage}`
           : "requiresPackage: none",

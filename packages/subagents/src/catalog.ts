@@ -4,6 +4,11 @@ export interface OhmSubagentDefinition {
   id: OhmSubagentId;
   name: string;
   summary: string;
+  /**
+   * When true, this profile should be exposed as a directly invokable primary tool
+   * instead of requiring delegated Task-style invocation.
+   */
+  primary?: boolean;
   whenToUse: string[];
   scaffoldPrompt: string;
   requiresPackage?: string;
@@ -14,6 +19,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
     id: "librarian",
     name: "Librarian",
     summary: "Multi-repo codebase understanding subagent (GitHub/Bitbucket architecture analysis).",
+    primary: true,
     whenToUse: [
       "Understand architecture across multiple repositories",
       "Build implementation maps before migration/refactor",
