@@ -1,4 +1,9 @@
-export type OhmSubagentId = "librarian" | "oracle" | "finder" | "task" | "painter";
+export type OhmSubagentId =
+  | "librarian"
+  | "oracle"
+  | "finder"
+  | "task"
+  | "painter";
 
 export interface OhmSubagentDefinition {
   id: OhmSubagentId;
@@ -18,12 +23,17 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "librarian",
     name: "Librarian",
-    summary: "Multi-repo codebase understanding subagent (GitHub/Bitbucket architecture analysis).",
+    summary:
+      "A specialized codebase understanding agent that helps you answer questions about large, complex codebases. Works by reading from temporary local github checkouts. Works as your personal, multi-repository codebase expert, providing thorough analysis and comprehensive explanations across repositories",
     primary: true,
     whenToUse: [
-      "Understand architecture across multiple repositories",
-      "Build implementation maps before migration/refactor",
-      "Trace ownership boundaries across services",
+      "Understanding complex multi-repository codebases and how they work",
+      "Exploring relationships between different repositories",
+      "Analyzing architectural patterns across large open-source projects",
+      "Finding specific implementations across multiple codebases",
+      "Understanding code evolution and commit history",
+      "Getting comprehensive explanations of how major features work",
+      "Exploring how systems are designed end-to-end across repositories",
     ],
     scaffoldPrompt:
       "Analyze this codebase (and linked repos if provided). Build an architecture map: boundaries, key modules, integration points, and risky coupling.",
@@ -34,9 +44,11 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
     summary:
       "Reasoning-heavy advisor for code review, architecture feedback, complex debugging, and planning.",
     whenToUse: [
-      "Get second-opinion architecture critique",
-      "Review risky design decisions before implementation",
-      "Debug ambiguous failures with hypothesis ranking",
+      "Code reviews and architecture feedback",
+      "Finding difficult bugs in codepaths that flow across many files",
+      "Planning complex implementations or refactors",
+      "Answering complex technical questions that require deep technical reasoning",
+      "Providing an alternative point of view when you are struggling to solve a problem",
     ],
     scaffoldPrompt:
       "Act as a critical reviewer. Challenge assumptions, rank risks, and provide a concrete implementation plan with trade-offs.",
@@ -44,40 +56,44 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "finder",
     name: "Finder",
-    summary: "Concept/behavior-based search subagent for multi-step codebase discovery.",
+    summary:
+      "Intelligently search your codebase: Use it for complex, multi-step search tasks where you need to find code based on functionality or concepts rather than exact matches. Anytime you want to chain multiple grep calls you should use this tool.",
     whenToUse: [
-      "Find all call sites for a behavior, not just symbol references",
-      "Map data flow across modules",
-      "Locate implicit coupling and duplicated logic",
+      "You must locate code by behavior or concept",
+      "You need to run multiple greps in sequence",
+      "You must correlate or look for connection between several areas of the codebase",
+      `You must filter broad terms ("config", "logger", "cache") by context.`,
+      `You need answers to questions such as "Where do we validate JWT authentication headers?" or "Which module handles file-watcher retry logic"`,
     ],
     scaffoldPrompt:
       "Search this codebase for all implementations and call paths related to the requested behavior. Return files, rationale, and confidence.",
   },
-  {
-    id: "task",
-    name: "Task",
-    summary: "Independent execution subagent for parallelizable tasks with isolated tool context.",
-    whenToUse: [
-      "Parallelize work across unrelated app areas",
-      "Delegate focused implementation tasks",
-      "Run isolated experiments without polluting main context",
-    ],
-    scaffoldPrompt:
-      "Execute this focused implementation task independently. Return a concise summary of changes, validation, and follow-up risks.",
-  },
-  {
-    id: "painter",
-    name: "Painter",
-    summary: "Image generation/editing subagent used only on explicit request.",
-    whenToUse: [
-      "Generate concept/mock images",
-      "Edit existing images based on prompt instructions",
-      "Produce visual assets when user explicitly asks for image output",
-    ],
-    scaffoldPrompt:
-      "Generate or edit an image per user request. Confirm intent first, then return prompt + provider/model metadata with result notes.",
-    requiresPackage: "@pi-ohm/painter",
-  },
+  // {
+  //   id: "task",
+  //   name: "Task",
+  //   summary:
+  //     "Independent execution subagent for parallelizable tasks with isolated tool context.",
+  //   whenToUse: [
+  //     "Parallelize work across unrelated app areas",
+  //     "Delegate focused implementation tasks",
+  //     "Run isolated experiments without polluting main context",
+  //   ],
+  //   scaffoldPrompt:
+  //     "Execute this focused implementation task independently. Return a concise summary of changes, validation, and follow-up risks.",
+  // },
+  // {
+  //   id: "painter",
+  //   name: "Painter",
+  //   summary: "Image generation/editing subagent used only on explicit request.",
+  //   whenToUse: [
+  //     "Generate concept/mock images",
+  //     "Edit existing images based on prompt instructions",
+  //     "Produce visual assets when user explicitly asks for image output",
+  //   ],
+  //   scaffoldPrompt:
+  //     "Generate or edit an image per user request. Confirm intent first, then return prompt + provider/model metadata with result notes.",
+  //   requiresPackage: "@pi-ohm/painter",
+  // },
 ] as const;
 
 export function getSubagentById(id: string): OhmSubagentDefinition | undefined {
