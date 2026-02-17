@@ -31,8 +31,11 @@ const ALLOWED_SCOPES = new Set([
   "session",
   "painter",
   "pi-ohm",
+  "extension",
   "ohm",
   "docs",
+  "deps",
+  "release",
   "repo",
   "root",
 ]);

@@ -46,8 +46,11 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 - `session-search` / `session`: changes in `packages/session-search`.
 - `painter`: changes in `packages/painter` (image providers, model routing, painter commands).
 - `pi-ohm`: changes in `packages/extension` (bundle wiring/manifest).
+- `extension`: alias for `pi-ohm` scope (same meaning; bundle wiring/manifest).
 - `ohm`: cross-feature user-facing behavior affecting multiple feature packages.
 - `docs`: documentation-only changes (README, AGENTS, contributing/release docs).
+- `deps`: dependency-only updates (versions, lockfile, dependency policy).
+- `release`: release automation/config/versioning process changes.
 - `repo`: CI/workflows, release automation, scripts, tooling, non-package infra.
 - `root`: broad repo-level refactors when no better scope fits.
 
