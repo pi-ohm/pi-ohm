@@ -9,3 +9,8 @@ pre-commit:
     oxlint:
       glob: "**/*.{js,jsx,ts,tsx,mjs,cjs}"
       run: yarn oxlint -- {staged_files}
+
+commit-msg:
+  commands:
+    validate:
+      run: node --experimental-strip-types ./scripts/validate-commits.ts --message-file {1}
