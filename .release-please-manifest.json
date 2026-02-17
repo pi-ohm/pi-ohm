@@ -1,9 +1,9 @@
 {
-  "packages/config": "0.5.0",
-  "packages/modes": "0.5.0",
-  "packages/handoff": "0.5.0",
-  "packages/subagents": "0.5.0",
-  "packages/session-search": "0.5.0",
-  "packages/painter": "0.5.0",
-  "packages/extension": "0.5.0"
+  "packages/config": "0.6.0",
+  "packages/modes": "0.6.0",
+  "packages/handoff": "0.6.0",
+  "packages/subagents": "0.6.0",
+  "packages/session-search": "0.6.0",
+  "packages/painter": "0.6.0",
+  "packages/extension": "0.6.0"
 }
