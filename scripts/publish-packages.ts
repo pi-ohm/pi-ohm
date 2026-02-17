@@ -1,10 +1,26 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require("node:child_process");
-const { mkdtemp, readFile, rm, writeFile, cp } = require("node:fs/promises");
-const { tmpdir } = require("node:os");
-const path = require("node:path");
+import { spawnSync } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile, cp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+type PublishChannel = "latest" | "dev";
+
+interface CliArgs {
+  channel: PublishChannel;
+  only: string[] | null;
+}
+
+interface LoadedPackage {
+  relDir: string;
+  absDir: string;
+  pkg: Record<string, unknown> & { name: string; version: string };
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS = [
@@ -15,22 +31,28 @@ const PACKAGE_DIRS = [
   "packages/session-search",
   "packages/painter",
   "packages/extension",
-];
+] as const;
 
-function parseArgs(argv) {
-  const args = { channel: "latest", only: null };
+function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = { channel: "latest", only: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
 
     if (arg === "--channel" && argv[i + 1]) {
-      args.channel = argv[i + 1];
+      const channel = argv[i + 1];
+      if (channel === "latest" || channel === "dev") {
+        args.channel = channel;
+      }
       i += 1;
       continue;
     }
 
     if (arg.startsWith("--channel=")) {
-      args.channel = arg.slice("--channel=".length);
+      const channel = arg.slice("--channel=".length);
+      if (channel === "latest" || channel === "dev") {
+        args.channel = channel;
+      }
       continue;
     }
 
@@ -59,11 +81,11 @@ function parseArgs(argv) {
   return args;
 }
 
-async function readJson(filePath) {
-  return JSON.parse(await readFile(filePath, "utf8"));
+async function readJson(filePath: string): Promise<Record<string, unknown>> {
+  return JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
 }
 
-function run(command, args, options = {}) {
+function run(command: string, args: string[], options: { cwd?: string } = {}): void {
   const result = spawnSync(command, args, {
     stdio: "inherit",
     env: process.env,
@@ -77,27 +99,32 @@ function run(command, args, options = {}) {
   }
 }
 
-function runQuiet(command, args, options = {}) {
-  return spawnSync(command, args, {
+function runQuiet(command: string, args: string[]): number {
+  const result = spawnSync(command, args, {
     stdio: ["ignore", "pipe", "pipe"],
     env: process.env,
-    ...options,
   });
+
+  return result.status ?? 1;
 }
 
-function asBaseVersion(version) {
+function asBaseVersion(version: string): string {
   const [base] = version.split("-");
   return base;
 }
 
-function buildDevSuffix() {
+function buildDevSuffix(): string {
   const runId = process.env.GITHUB_RUN_ID ?? `${Date.now()}`;
   const runAttempt = process.env.GITHUB_RUN_ATTEMPT ?? "1";
   const sha = (process.env.GITHUB_SHA ?? "local").slice(0, 7);
   return `dev.${runId}.${runAttempt}.${sha}`;
 }
 
-function normalizeWorkspaceRange(range, resolvedVersion, channel) {
+function normalizeWorkspaceRange(
+  range: string,
+  resolvedVersion: string,
+  channel: PublishChannel,
+): string {
   if (!range.startsWith("workspace:")) {
     return range;
   }
@@ -123,19 +150,25 @@ function normalizeWorkspaceRange(range, resolvedVersion, channel) {
   return resolvedVersion;
 }
 
-function rewriteInternalDependencies(pkg, versionByName, channel) {
+function rewriteInternalDependencies(
+  pkg: Record<string, unknown> & { name: string },
+  versionByName: Map<string, string>,
+  channel: PublishChannel,
+): void {
   const dependencyFields = [
     "dependencies",
     "peerDependencies",
     "optionalDependencies",
     "devDependencies",
-  ];
+  ] as const;
 
   for (const field of dependencyFields) {
     const section = pkg[field];
     if (!section || typeof section !== "object") continue;
 
-    for (const [depName, depRange] of Object.entries(section)) {
+    const dependencySection = section as Record<string, unknown>;
+
+    for (const [depName, depRange] of Object.entries(dependencySection)) {
       if (typeof depRange !== "string") continue;
       if (!depRange.startsWith("workspace:")) continue;
 
@@ -146,30 +179,34 @@ function rewriteInternalDependencies(pkg, versionByName, channel) {
         );
       }
 
-      section[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+      dependencySection[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
     }
   }
 }
 
-function versionExistsOnNpm(name, version) {
-  const probe = runQuiet("npm", ["view", `${name}@${version}`, "version", "--json"]);
-  return probe.status === 0;
+function versionExistsOnNpm(name: string, version: string): boolean {
+  const exitCode = runQuiet("npm", ["view", `${name}@${version}`, "version", "--json"]);
+  return exitCode === 0;
 }
 
-async function main() {
+async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
-  const packages = [];
+  const packages: LoadedPackage[] = [];
   for (const relDir of PACKAGE_DIRS) {
     const absDir = path.join(repoRoot, relDir);
     const pkgPath = path.join(absDir, "package.json");
-    const pkg = await readJson(pkgPath);
+    const rawPkg = await readJson(pkgPath);
 
-    packages.push({ relDir, absDir, pkg });
+    if (typeof rawPkg.name !== "string" || typeof rawPkg.version !== "string") {
+      throw new Error(`Invalid package.json in ${relDir}`);
+    }
+
+    packages.push({ relDir, absDir, pkg: rawPkg as LoadedPackage["pkg"] });
   }
 
   const selected = args.only
-    ? packages.filter((item) => args.only.includes(item.pkg.name))
+    ? packages.filter((item) => args.only?.includes(item.pkg.name))
     : packages;
 
   if (selected.length === 0) {
@@ -177,7 +214,7 @@ async function main() {
   }
 
   const devSuffix = buildDevSuffix();
-  const versionByName = new Map();
+  const versionByName = new Map<string, string>();
 
   for (const item of packages) {
     const nextVersion =
@@ -210,8 +247,12 @@ async function main() {
       await cp(item.absDir, tempPkgDir, { recursive: true });
 
       const tempPkgPath = path.join(tempPkgDir, "package.json");
-      const tempPkg = await readJson(tempPkgPath);
+      const rawTempPkg = await readJson(tempPkgPath);
+      if (typeof rawTempPkg.name !== "string") {
+        throw new Error(`Invalid temp package.json for ${item.relDir}`);
+      }
 
+      const tempPkg = rawTempPkg as Record<string, unknown> & { name: string; version?: string };
       tempPkg.version = targetVersion;
       rewriteInternalDependencies(tempPkg, versionByName, args.channel);
 

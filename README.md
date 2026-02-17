@@ -28,7 +28,7 @@ pi-ohm/
 │   ├── painter/                    # @pi-phm/painter
 │   └── extension/                  # pi-ohm (bundle package)
 ├── scripts/
-│   └── publish-packages.cjs
+│   └── publish-packages.ts
 ├── src_legacy/                     # preserved reference scaffold (do not delete)
 └── .github/workflows/
 ```

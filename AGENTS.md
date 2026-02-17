@@ -11,7 +11,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and 
 - `packages/session-search` → session/thread search
 - `packages/painter` → image generation providers
 - `packages/extension` → `pi-ohm` bundle package registering all features
-- `scripts/publish-packages.cjs` → publish helper used by CI workflows
+- `scripts/publish-packages.ts` → publish helper used by CI workflows
 - `src_legacy` → preserved full catalog/reference (**do not delete**)
 
 ## Rules

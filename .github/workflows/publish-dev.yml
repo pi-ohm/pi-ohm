@@ -25,4 +25,4 @@ jobs:
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: "true"
         run: |
-          node ./scripts/publish-packages.cjs --channel dev
+          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev
