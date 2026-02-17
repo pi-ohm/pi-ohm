@@ -37,6 +37,8 @@ For instance, the full schema for an opencode style agent is:
 {
   "name": "agent-name",
   "description": "agent-readable description",
+  "mode": "subagent", // primary|subagent|all (default: subagent in this package)
+  "primary": false, // when true, expose as direct top-level tool (no delegation required)
   "model": "model-name",
   "reasoningEffort": "string - typically none|low|medium|high and xhigh for gpt-5 family OpenAI models",
   "prompt": "string - prompt to use for the agent, should also accept `{file:/path/to/prompt.txt|md}`",
@@ -47,9 +49,39 @@ And can be represented in a markdown file as:
 
 ```markdown
 ---
+description: multi-repo codebase analysis helper
+mode: subagent
+primary: true
+model: openai/gpt-5
+reasoningEffort: high
 ---
 
-<prompt>
+You are the librarian. Build architecture maps and answer deep codebase questions.
 ```
 
 ## Architecture
+
+Runtime should support two invocation paths:
+
+1. **Delegated subagent path** (`primary: false`, default)
+   - Called by orchestration/delegation flow.
+   - Runs in isolated context as a delegated task.
+
+2. **Primary-tool path** (`primary: true`)
+   - Registered as a direct top-level tool entrypoint.
+   - Callable without delegation handoff.
+   - Still uses the same agent prompt/model/options schema.
+
+Default package behavior:
+
+- `librarian`: `primary: true`
+- `finder`: delegated
+- `oracle`: delegated
+
+Resolution order for definitions should remain:
+
+1. package defaults
+2. global `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
+3. project `.pi/ohm.json`
+
+Last writer wins for scalar fields (`model`, `primary`, etc), with additive merge for optional metadata arrays.

@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## General guidelines
+
+- Be concise, sacrificing grammar for brevity.
+- Write high-coverage tests. You don't need to write a million tests. Always begin with failing tests or tests that reproduce a bug.
+- Lint and check with `yarn lint` and `yarn typecheck`
+
 ## Repo shape
 
 This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
