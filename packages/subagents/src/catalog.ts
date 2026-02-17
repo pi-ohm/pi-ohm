@@ -13,8 +13,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "librarian",
     name: "Librarian",
-    summary:
-      "Multi-repo codebase understanding subagent (GitHub/Bitbucket architecture analysis).",
+    summary: "Multi-repo codebase understanding subagent (GitHub/Bitbucket architecture analysis).",
     whenToUse: [
       "Understand architecture across multiple repositories",
       "Build implementation maps before migration/refactor",
@@ -71,7 +70,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
     ],
     scaffoldPrompt:
       "Generate or edit an image per user request. Confirm intent first, then return prompt + provider/model metadata with result notes.",
-    requiresPackage: "@pi-phm/painter",
+    requiresPackage: "@pi-ohm/painter",
   },
 ] as const;
 

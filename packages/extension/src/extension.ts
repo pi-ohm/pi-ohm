@@ -1,13 +1,13 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-phm/config";
-import registerHandoffExtension from "@pi-phm/handoff";
-import registerSubagentsExtension from "@pi-phm/subagents";
-import registerSessionSearchExtension from "@pi-phm/session-search";
-import registerPainterExtension from "@pi-phm/painter";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
+import registerHandoffExtension from "@pi-ohm/handoff";
+import registerSubagentsExtension from "@pi-ohm/subagents";
+import registerSessionSearchExtension from "@pi-ohm/session-search";
+import registerPainterExtension from "@pi-ohm/painter";
 import registerModesExtension from "@pi-ohm/modes";
-import { PHM_FEATURE_PACKAGES, PHM_RECOMMENDED_NEXT } from "./manifest";
+import { OHM_FEATURE_PACKAGES, OHM_RECOMMENDED_NEXT } from "./manifest";
 
-export default function registerPiPhmExtension(pi: ExtensionAPI): void {
+export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
 
   registerHandoffExtension(pi);
@@ -17,7 +17,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
   registerModesExtension(pi);
 
   pi.registerCommand("ohm-features", {
-    description: "Show installed pi-phm feature packages and feature flags",
+    description: "Show installed pi-ohm feature packages and feature flags",
     handler: async (_args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const lines = [
@@ -30,10 +30,10 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
       ];
 
       const text = [
-        "Pi PHM bundle",
+        "Pi OHM bundle",
         "",
         "Packages:",
-        ...PHM_FEATURE_PACKAGES.map((pkg) => `- ${pkg}`),
+        ...OHM_FEATURE_PACKAGES.map((pkg) => `- ${pkg}`),
         "",
         "Feature flags:",
         ...lines.map((line) => `- ${line}`),
@@ -44,16 +44,16 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm features", text);
+      await ctx.ui.editor("pi-ohm features", text);
     },
   });
 
   pi.registerCommand("ohm-config", {
-    description: "Inspect effective Pi PHM runtime config",
+    description: "Inspect effective Pi OHM runtime config",
     handler: async (_args, ctx) => {
       const loaded = await loadOhmRuntimeConfig(ctx.cwd);
       const text = [
-        "Pi PHM effective config",
+        "Pi OHM effective config",
         "",
         JSON.stringify(loaded.config, null, 2),
         "",
@@ -69,7 +69,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm config", text);
+      await ctx.ui.editor("pi-ohm config", text);
     },
   });
 
@@ -79,7 +79,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
       const text = [
         "Likely next packages",
         "",
-        ...PHM_RECOMMENDED_NEXT.map((item) => `- ${item.name}: ${item.reason}`),
+        ...OHM_RECOMMENDED_NEXT.map((item) => `- ${item.name}: ${item.reason}`),
       ].join("\n");
 
       if (!ctx.hasUI) {
@@ -87,7 +87,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm recommended next", text);
+      await ctx.ui.editor("pi-ohm recommended next", text);
     },
   });
 }

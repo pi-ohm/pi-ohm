@@ -2,7 +2,7 @@
 
 ## Repo shape
 
-This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and `pi-ohm` packages.
+This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
 
 - `packages/config` → shared config/settings helpers
 - `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
@@ -11,6 +11,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and 
 - `packages/session-search` → session/thread search
 - `packages/painter` → image generation providers
 - `packages/extension` → `pi-ohm` bundle package registering all features
+- `scripts/publish-packages.ts` → publish helper used by CI workflows
 - `src_legacy` → preserved full catalog/reference (**do not delete**)
 
 ## Rules
@@ -24,16 +25,18 @@ This is a Yarn-workspace monorepo for publishable `@pi-phm/*`, `@pi-ohm/*`, and 
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
 6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
-7. For release-impacting changes in publishable packages, add a changeset (`yarn changeset`).
+7. Branch model: `dev` is default integration branch; `prod` is release branch.
+8. Versioning/changelog automation is release-please (not changesets).
+9. Use conventional commits for release automation (`feat:`, `fix:`, `feat!`, etc.).
 
 ## Packaging goal
 
 Each feature package should be installable by itself through npm:
 
-- `@pi-phm/handoff`
-- `@pi-phm/subagents`
-- `@pi-phm/session-search`
-- `@pi-phm/painter`
+- `@pi-ohm/handoff`
+- `@pi-ohm/subagents`
+- `@pi-ohm/session-search`
+- `@pi-ohm/painter`
 - `@pi-ohm/modes`
 
 Full bundle package:

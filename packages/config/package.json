@@ -1,5 +1,5 @@
 {
-  "name": "@pi-phm/config",
+  "name": "@pi-ohm/config",
   "version": "0.2.0",
   "type": "module",
   "main": "src/index.ts",

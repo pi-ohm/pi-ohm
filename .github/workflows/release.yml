@@ -1,12 +1,59 @@
-name: Release (Changesets)
+name: Release & Publish
 
 on:
   push:
-    branches:
-      - main
+    branches: ["dev", "prod"]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - config
+          - modes
+          - handoff
+          - subagents
+          - session-search
+          - painter
+          - pi-ohm
+      channel:
+        description: "npm dist-tag channel"
+        required: true
+        default: "latest"
+        type: choice
+        options:
+          - latest
+          - dev
 
 jobs:
-  release:
+  publish-dev:
+    if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish all packages to npm @dev
+        env:
+          NPM_CONFIG_ACCESS: public
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev
+
+  release-prod:
+    if: ${{ github.event_name == 'push' && github.ref_name == 'prod' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,8 +62,40 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
         with:
-          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: prod
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Setup Node
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish released package versions to npm @latest
+        if: ${{ steps.release.outputs.releases_created == 'true' }}
+        env:
+          NPM_CONFIG_ACCESS: public
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
+
+  publish-manual:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -24,24 +103,49 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
-
-      - name: Install
-        run: yarn install --immutable
-
-      - name: Create Release PR or Publish
-        uses: changesets/action@v1
+      - name: Publish selected package(s)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: "true"
-        with:
-          version: yarn version-packages
-          publish: yarn release
-          title: "chore(release): version packages"
-          commit: "chore(release): version packages"
-          createGithubReleases: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${{ inputs.package }}" in
+            config)
+              only="@pi-ohm/config"
+              ;;
+            modes)
+              only="@pi-ohm/modes"
+              ;;
+            handoff)
+              only="@pi-ohm/handoff"
+              ;;
+            subagents)
+              only="@pi-ohm/subagents"
+              ;;
+            session-search)
+              only="@pi-ohm/session-search"
+              ;;
+            painter)
+              only="@pi-ohm/painter"
+              ;;
+            pi-ohm)
+              only="pi-ohm"
+              ;;
+            all)
+              only=""
+              ;;
+            *)
+              echo "Unknown package input: ${{ inputs.package }}"
+              exit 1
+              ;;
+          esac
+
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
+          if [[ -n "${only}" ]]; then
+            cmd+=(--only "${only}")
+          fi
+
+          echo "Running: ${cmd[*]}"
+          "${cmd[@]}"

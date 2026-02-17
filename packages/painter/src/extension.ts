@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-phm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 
 export default function registerPainterExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
@@ -30,7 +30,7 @@ export default function registerPainterExtension(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const text = [
-        "Pi PHM: painter/imagegen",
+        "Pi OHM: painter/imagegen",
         "",
         `featureEnabled: ${config.features.painterImagegen ? "yes" : "no"}`,
         `googleNanoBanana: ${config.painter.googleNanoBanana.enabled ? "on" : "off"} (${config.painter.googleNanoBanana.model})`,
@@ -46,7 +46,7 @@ export default function registerPainterExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      await ctx.ui.editor("pi-phm painter", text);
+      await ctx.ui.editor("pi-ohm painter", text);
     },
   });
 }

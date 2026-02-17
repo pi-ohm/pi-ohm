@@ -8,7 +8,7 @@ import {
   type SettingDefinition,
 } from "@juanibiapina/pi-extension-settings";
 
-export const OHM_EXTENSION_NAME = "pi-phm";
+export const OHM_EXTENSION_NAME = "pi-ohm";
 
 export type OhmMode = "rush" | "smart" | "deep";
 export type OhmSubagentBackend = "none" | "interactive-shell" | "custom-plugin";

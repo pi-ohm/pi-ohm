@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
+  "separate-pull-requests": false,
+  "plugins": ["node-workspace"],
+  "packages": {
+    "packages/config": {
+      "package-name": "@pi-ohm/config"
+    },
+    "packages/modes": {
+      "package-name": "@pi-ohm/modes"
+    },
+    "packages/handoff": {
+      "package-name": "@pi-ohm/handoff"
+    },
+    "packages/subagents": {
+      "package-name": "@pi-ohm/subagents"
+    },
+    "packages/session-search": {
+      "package-name": "@pi-ohm/session-search"
+    },
+    "packages/painter": {
+      "package-name": "@pi-ohm/painter"
+    },
+    "packages/extension": {
+      "package-name": "pi-ohm"
+    }
+  }
+}

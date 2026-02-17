@@ -1,9 +1,9 @@
-# @pi-phm/subagents
+# @pi-ohm/subagents
 
 Install only subagent delegation support for Pi.
 
 ```bash
-pi install npm:@pi-phm/subagents
+pi install npm:@pi-ohm/subagents
 ```
 
 Scaffolded subagents:

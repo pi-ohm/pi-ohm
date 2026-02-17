@@ -4,16 +4,13 @@ import {
   registerOhmSettings,
   setOhmSetting,
   type OhmMode,
-} from "@pi-phm/config";
+} from "@pi-ohm/config";
 
 const MODES: readonly OhmMode[] = ["rush", "smart", "deep"] as const;
 
 function parseRequestedMode(args: unknown): OhmMode | null {
   if (typeof args === "string") {
-    const normalized = args
-      .trim()
-      .split(/\s+/)[0]
-      ?.toLowerCase();
+    const normalized = args.trim().split(/\s+/)[0]?.toLowerCase();
     if (!normalized) return null;
     if (normalized === "rush" || normalized === "smart" || normalized === "deep") {
       return normalized;

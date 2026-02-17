@@ -2,12 +2,13 @@
   "name": "pi-ohm-monorepo",
   "version": "0.2.0",
   "private": true,
+  "type": "module",
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
   "keywords": [
     "handoff",
     "imagegen",
     "ohm",
-    "pi-phm",
+    "pi-ohm",
     "pi",
     "pi-coding-agent",
     "pi-package",
@@ -28,9 +29,8 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "changeset": "changeset",
-    "version-packages": "changeset version",
-    "release": "changeset publish",
+    "release:dev": "node --experimental-strip-types ./scripts/publish-packages.ts --channel dev",
+    "release:latest": "node --experimental-strip-types ./scripts/publish-packages.ts --channel latest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
     "lint": "yarn oxlint -- .",
@@ -46,8 +46,6 @@
     "zod": "^4"
   },
   "devDependencies": {
-    "@changesets/changelog-git": "^0.2.1",
-    "@changesets/cli": "^2.29.7",
     "@mariozechner/pi-coding-agent": "^0.52.0",
     "@mariozechner/pi-tui": "^0.52.0",
     "@types/node": "^24.3.1",
