@@ -19,6 +19,8 @@ export interface OhmSubagentDefinition {
   requiresPackage?: string;
 }
 
+// should probably refactor these prompts... please don't sue me, Amp
+// imitation is the sincerest form of flattery
 export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "librarian",
