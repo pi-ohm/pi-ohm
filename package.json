@@ -2,6 +2,7 @@
   "name": "pi-ohm-monorepo",
   "version": "0.2.0",
   "private": true,
+  "type": "module",
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
   "keywords": [
     "handoff",

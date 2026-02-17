@@ -94,7 +94,7 @@ Config files:
 ### Dev snapshots (`dev`)
 
 - Trigger: push to `dev`
-- Workflow: `.github/workflows/publish-dev.yml`
+- Workflow: `.github/workflows/release.yml`
 - Publishes all packages as prerelease builds with `dev` tag (version suffix includes run/sha)
 
 Install dev builds with `@dev`, for example:
@@ -111,19 +111,14 @@ For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-ohm/*`), configure npm Trusted
 
 - Provider: GitHub Actions
 - Repository: this repo
-- Workflow: `.github/workflows/release.yml` (stable)
-- Branch: `prod`
-
-And for dev snapshots:
-
-- Workflow: `.github/workflows/publish-dev.yml`
-- Branch: `dev`
+- Workflow: `.github/workflows/release.yml`
+- Branch: leave unrestricted if possible (or configure to allow both `dev` and `prod` events)
 
 No long-lived `NPM_TOKEN` is required.
 
 ## Manual publishing
 
-Use `.github/workflows/publish.yml` (`workflow_dispatch`) for manual publish to either `latest` or `dev` channel.
+Use `.github/workflows/release.yml` (`workflow_dispatch`) for manual publish to either `latest` or `dev` channel.
 
 ## Notes
 
