@@ -34,7 +34,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -47,10 +46,16 @@ jobs:
 
       - name: Publish all packages to npm @dev
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_PROVENANCE: "false"
         run: |
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for dev-channel publishing."
+            exit 1
+          fi
+
+          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
 
   release-prod:
     if: ${{ github.event_name == 'push' && github.ref_name == 'prod' }}
@@ -105,11 +110,17 @@ jobs:
 
       - name: Publish selected package(s)
         env:
+          NODE_AUTH_TOKEN: ${{ inputs.channel == 'dev' && secrets.NPM_TOKEN || '' }}
           NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_PROVENANCE: ${{ inputs.channel == 'dev' && 'false' || 'true' }}
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${{ inputs.channel }}" == "dev" && -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for manual dev-channel publishing."
+            exit 1
+          fi
 
           case "${{ inputs.package }}" in
             config)
@@ -143,6 +154,9 @@ jobs:
           esac
 
           cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
+          if [[ "${{ inputs.channel }}" == "dev" ]]; then
+            cmd+=(--provenance=false)
+          fi
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
           fi
