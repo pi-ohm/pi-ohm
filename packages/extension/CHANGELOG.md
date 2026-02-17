@@ -1,0 +1,23 @@
+# Changelog
+
+## [0.3.0](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.2.0...pi-ohm-v0.3.0) (2026-02-17)
+
+
+### Features
+
+* changesets/publishing ([b82da81](https://github.com/pi-ohm/pi-ohm/commit/b82da81f08f4060ad9cd729af47b15c4117e4ab1))
+* modes ([c355c94](https://github.com/pi-ohm/pi-ohm/commit/c355c94b358afe239ccc173d4a88886d5a6093ab))
+* pi-ohm/modes pkg ([b8989c4](https://github.com/pi-ohm/pi-ohm/commit/b8989c4bffdee2d6a996ef1368ccae6bee0763c7))
+* publishing ([a6a0d3b](https://github.com/pi-ohm/pi-ohm/commit/a6a0d3b01644f4638de9ec258a5c49c53cf49dc4))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.3.0
+    * @pi-ohm/handoff bumped to 0.3.0
+    * @pi-ohm/modes bumped to 0.3.0
+    * @pi-ohm/painter bumped to 0.3.0
+    * @pi-ohm/session-search bumped to 0.3.0
+    * @pi-ohm/subagents bumped to 0.3.0

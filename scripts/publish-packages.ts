@@ -11,6 +11,7 @@ type PublishChannel = "latest" | "dev";
 interface CliArgs {
   channel: PublishChannel;
   only: string[] | null;
+  provenance: boolean | null;
 }
 
 interface LoadedPackage {
@@ -34,7 +35,7 @@ const PACKAGE_DIRS = [
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { channel: "latest", only: null };
+  const args: CliArgs = { channel: "latest", only: null, provenance: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -71,6 +72,26 @@ function parseArgs(argv: string[]): CliArgs {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean);
+      continue;
+    }
+
+    if (arg === "--provenance") {
+      args.provenance = true;
+      continue;
+    }
+
+    if (arg === "--no-provenance") {
+      args.provenance = false;
+      continue;
+    }
+
+    if (arg.startsWith("--provenance=")) {
+      const value = arg.slice("--provenance=".length).trim().toLowerCase();
+      if (value === "true" || value === "1" || value === "yes" || value === "on") {
+        args.provenance = true;
+      } else if (value === "false" || value === "0" || value === "no" || value === "off") {
+        args.provenance = false;
+      }
     }
   }
 
@@ -97,15 +118,6 @@ function run(command: string, args: string[], options: { cwd?: string } = {}): v
       `${command} ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}`,
     );
   }
-}
-
-function runQuiet(command: string, args: string[]): number {
-  const result = spawnSync(command, args, {
-    stdio: ["ignore", "pipe", "pipe"],
-    env: process.env,
-  });
-
-  return result.status ?? 1;
 }
 
 function asBaseVersion(version: string): string {
@@ -184,9 +196,42 @@ function rewriteInternalDependencies(
   }
 }
 
-function versionExistsOnNpm(name: string, version: string): boolean {
-  const exitCode = runQuiet("npm", ["view", `${name}@${version}`, "version", "--json"]);
-  return exitCode === 0;
+async function versionExistsOnNpm(name: string, version: string): Promise<boolean> {
+  const encodedName = encodeURIComponent(name);
+  const registry =
+    process.env.npm_config_registry ??
+    process.env.NPM_CONFIG_REGISTRY ??
+    "https://registry.npmjs.org/";
+  const base = registry.endsWith("/") ? registry : `${registry}/`;
+  const packageUrl = `${base}${encodedName}`;
+
+  try {
+    const response = await fetch(packageUrl, {
+      headers: {
+        Accept: "application/vnd.npm.install-v1+json, application/json",
+      },
+    });
+
+    if (response.status === 404) {
+      return false;
+    }
+
+    if (response.ok) {
+      const payload = (await response.json()) as { versions?: Record<string, unknown> };
+      return Boolean(
+        payload.versions && Object.prototype.hasOwnProperty.call(payload.versions, version),
+      );
+    }
+  } catch {
+    // fallback below
+  }
+
+  const probe = spawnSync("npm", ["view", `${name}@${version}`, "version", "--json"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+  });
+
+  return probe.status === 0;
 }
 
 async function main(): Promise<void> {
@@ -235,7 +280,7 @@ async function main(): Promise<void> {
       throw new Error(`Missing target version for ${name}`);
     }
 
-    if (versionExistsOnNpm(name, targetVersion)) {
+    if (await versionExistsOnNpm(name, targetVersion)) {
       console.log(`Skipping ${name}@${targetVersion} (already published)`);
       continue;
     }
@@ -261,6 +306,21 @@ async function main(): Promise<void> {
       const publishArgs = ["publish", "--access", "public"];
       if (args.channel === "dev") {
         publishArgs.push("--tag", "dev");
+      }
+
+      const envProvenance = process.env.NPM_CONFIG_PROVENANCE?.toLowerCase();
+      const resolvedProvenance =
+        args.provenance ??
+        (envProvenance === "true" || envProvenance === "1"
+          ? true
+          : envProvenance === "false" || envProvenance === "0"
+            ? false
+            : null);
+
+      if (resolvedProvenance === true) {
+        publishArgs.push("--provenance");
+      } else if (resolvedProvenance === false) {
+        publishArgs.push("--provenance=false");
       }
 
       console.log(`Publishing ${name}@${targetVersion} from ${item.relDir}`);
