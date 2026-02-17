@@ -98,6 +98,65 @@ jobs:
 
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
+  sync-prod-to-dev:
+    if: ${{ github.event_name == 'push' && github.ref_name == 'prod' }}
+    needs: [release-prod]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Ensure prod changes are synced back to dev via PR
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const base = 'dev';
+            const head = `${owner}:prod`;
+
+            const open = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              base,
+              head,
+              per_page: 100,
+            });
+
+            if (open.length > 0) {
+              core.info(`Existing sync PR already open: #${open[0].number}`);
+              return;
+            }
+
+            const compare = await github.rest.repos.compareCommits({
+              owner,
+              repo,
+              basehead: 'dev...prod',
+            });
+
+            if ((compare.data.ahead_by ?? 0) === 0) {
+              core.info('No prod-only commits to sync into dev.');
+              return;
+            }
+
+            const pr = await github.rest.pulls.create({
+              owner,
+              repo,
+              base,
+              head,
+              title: 'chore: sync prod back into dev',
+              body: [
+                'Automated sync PR to keep `dev` aligned with commits landed on `prod`',
+                '(release commits, manifest bumps, changelogs, and workflow updates).',
+                '',
+                'This reduces dev/prod version drift.',
+              ].join('\n'),
+            });
+
+            core.info(`Created sync PR #${pr.data.number}`);
+
   publish-manual:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest

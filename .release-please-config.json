@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "node",
-  "include-component-in-tag": true,
+  "include-component-in-tag": false,
   "include-v-in-tag": true,
   "separate-pull-requests": false,
   "plugins": [
@@ -26,30 +26,36 @@
   "packages": {
     "packages/config": {
       "component": "config",
-      "package-name": "@pi-ohm/config"
+      "package-name": "@pi-ohm/config",
+      "skip-github-release": true
     },
     "packages/modes": {
       "component": "modes",
-      "package-name": "@pi-ohm/modes"
+      "package-name": "@pi-ohm/modes",
+      "skip-github-release": true
     },
     "packages/handoff": {
       "component": "handoff",
-      "package-name": "@pi-ohm/handoff"
+      "package-name": "@pi-ohm/handoff",
+      "skip-github-release": true
     },
     "packages/subagents": {
       "component": "subagents",
-      "package-name": "@pi-ohm/subagents"
+      "package-name": "@pi-ohm/subagents",
+      "skip-github-release": true
     },
     "packages/session-search": {
       "component": "session-search",
-      "package-name": "@pi-ohm/session-search"
+      "package-name": "@pi-ohm/session-search",
+      "skip-github-release": true
     },
     "packages/painter": {
       "component": "painter",
-      "package-name": "@pi-ohm/painter"
+      "package-name": "@pi-ohm/painter",
+      "skip-github-release": true
     },
     "packages/extension": {
-      "component": "extension",
+      "component": "pi-ohm",
       "package-name": "pi-ohm"
     }
   }
