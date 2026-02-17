@@ -130,7 +130,7 @@ jobs:
               return;
             }
 
-            const compare = await github.rest.repos.compareCommits({
+            const compare = await github.rest.repos.compareCommitsWithBasehead({
               owner,
               repo,
               basehead: 'dev...prod',
