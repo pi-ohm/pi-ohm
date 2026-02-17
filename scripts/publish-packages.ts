@@ -11,6 +11,7 @@ type PublishChannel = "latest" | "dev";
 interface CliArgs {
   channel: PublishChannel;
   only: string[] | null;
+  provenance: boolean | null;
 }
 
 interface LoadedPackage {
@@ -34,7 +35,7 @@ const PACKAGE_DIRS = [
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { channel: "latest", only: null };
+  const args: CliArgs = { channel: "latest", only: null, provenance: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -71,6 +72,26 @@ function parseArgs(argv: string[]): CliArgs {
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean);
+      continue;
+    }
+
+    if (arg === "--provenance") {
+      args.provenance = true;
+      continue;
+    }
+
+    if (arg === "--no-provenance") {
+      args.provenance = false;
+      continue;
+    }
+
+    if (arg.startsWith("--provenance=")) {
+      const value = arg.slice("--provenance=".length).trim().toLowerCase();
+      if (value === "true" || value === "1" || value === "yes" || value === "on") {
+        args.provenance = true;
+      } else if (value === "false" || value === "0" || value === "no" || value === "off") {
+        args.provenance = false;
+      }
     }
   }
 
@@ -261,6 +282,21 @@ async function main(): Promise<void> {
       const publishArgs = ["publish", "--access", "public"];
       if (args.channel === "dev") {
         publishArgs.push("--tag", "dev");
+      }
+
+      const envProvenance = process.env.NPM_CONFIG_PROVENANCE?.toLowerCase();
+      const resolvedProvenance =
+        args.provenance ??
+        (envProvenance === "true" || envProvenance === "1"
+          ? true
+          : envProvenance === "false" || envProvenance === "0"
+            ? false
+            : null);
+
+      if (resolvedProvenance === true) {
+        publishArgs.push("--provenance");
+      } else if (resolvedProvenance === false) {
+        publishArgs.push("--provenance=false");
       }
 
       console.log(`Publishing ${name}@${targetVersion} from ${item.relDir}`);
