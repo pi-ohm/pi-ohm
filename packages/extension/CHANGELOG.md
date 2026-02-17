@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.0](https://github.com/pi-ohm/pi-ohm/compare/v0.4.1...v0.5.0) (2026-02-17)
+
+
+### Features
+
+* changesets/publishing ([b82da81](https://github.com/pi-ohm/pi-ohm/commit/b82da81f08f4060ad9cd729af47b15c4117e4ab1))
+* modes ([c355c94](https://github.com/pi-ohm/pi-ohm/commit/c355c94b358afe239ccc173d4a88886d5a6093ab))
+* pi-ohm/modes pkg ([b8989c4](https://github.com/pi-ohm/pi-ohm/commit/b8989c4bffdee2d6a996ef1368ccae6bee0763c7))
+* publishing ([a6a0d3b](https://github.com/pi-ohm/pi-ohm/commit/a6a0d3b01644f4638de9ec258a5c49c53cf49dc4))
+* rename packages ([b00bb7a](https://github.com/pi-ohm/pi-ohm/commit/b00bb7a9206ac72b401a2eb32723adda59b9b847))
+
+
+### Bug Fixes
+
+* add repository metadata to publishable packages ([9e7bb43](https://github.com/pi-ohm/pi-ohm/commit/9e7bb435ccaa14fdd0e70326e9b000b7222e3c6b))
+* add repository metadata to publishable packages ([dc791ad](https://github.com/pi-ohm/pi-ohm/commit/dc791ade07e565fc297e398b367cd1cb4b13f2d8))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.5.0
+    * @pi-ohm/handoff bumped to 0.5.0
+    * @pi-ohm/modes bumped to 0.5.0
+    * @pi-ohm/painter bumped to 0.5.0
+    * @pi-ohm/session-search bumped to 0.5.0
+    * @pi-ohm/subagents bumped to 0.5.0
+
 ## [0.4.1](https://github.com/pi-ohm/pi-ohm/compare/extension-v0.4.0...extension-v0.4.1) (2026-02-17)
 
 
