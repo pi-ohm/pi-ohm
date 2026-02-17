@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/pi-ohm/pi-ohm/compare/config-v0.3.0...config-v0.4.0) (2026-02-17)
+
+
+### Miscellaneous Chores
+
+* **config:** Synchronize pi-ohm-lockstep versions
+
 ## [0.3.0](https://github.com/pi-ohm/pi-ohm/compare/config-v0.2.0...config-v0.3.0) (2026-02-17)
 
 

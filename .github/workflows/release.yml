@@ -87,9 +87,15 @@ jobs:
       - name: Publish released package versions to npm @latest
         if: ${{ steps.release.outputs.releases_created == 'true' }}
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: "true"
         run: |
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for stable publishing."
+            exit 1
+          fi
+
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
   publish-manual:
@@ -110,15 +116,15 @@ jobs:
 
       - name: Publish selected package(s)
         env:
-          NODE_AUTH_TOKEN: ${{ inputs.channel == 'dev' && secrets.NPM_TOKEN || '' }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_ACCESS: public
           NPM_CONFIG_PROVENANCE: ${{ inputs.channel == 'dev' && 'false' || 'true' }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${{ inputs.channel }}" == "dev" && -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for manual dev-channel publishing."
+          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
+            echo "NPM_TOKEN secret is required for manual publishing."
             exit 1
           fi
 
