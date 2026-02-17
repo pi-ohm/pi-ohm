@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile, cp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+const { spawnSync } = require("node:child_process");
+const { mkdtemp, readFile, rm, writeFile, cp } = require("node:fs/promises");
+const { tmpdir } = require("node:os");
+const path = require("node:path");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS = [

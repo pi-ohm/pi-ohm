@@ -28,8 +28,8 @@
     "tsconfig.json"
   ],
   "scripts": {
-    "release:dev": "node ./scripts/publish-packages.mjs --channel dev",
-    "release:latest": "node ./scripts/publish-packages.mjs --channel latest",
+    "release:dev": "node ./scripts/publish-packages.cjs --channel dev",
+    "release:latest": "node ./scripts/publish-packages.cjs --channel latest",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
     "lint": "yarn oxlint -- .",

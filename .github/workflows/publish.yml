@@ -81,7 +81,7 @@ jobs:
               ;;
           esac
 
-          cmd=(node ./scripts/publish-packages.mjs --channel "${{ inputs.channel }}")
+          cmd=(node ./scripts/publish-packages.cjs --channel "${{ inputs.channel }}")
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
           fi
