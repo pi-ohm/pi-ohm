@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/session-search",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "main": "src/extension.ts",
   "types": "src/extension.ts",
