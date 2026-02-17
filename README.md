@@ -16,11 +16,11 @@ Current features include: modes, subagents (librarian, finder, oracle, painter),
 
 Docs coming soon at [ohm.moe](https://ohm.moe).
 
-#### Highlights
+## Highlights
 
 Coming soon
 
-#### Install options
+## Install options
 
 - Modular installs:
     ```bash
@@ -35,7 +35,7 @@ Coming soon
     pi install npm:pi-ohm
     ```
 
-#### Commands (bundle)
+## Commands (bundle)
 
 - `/ohm-features`
 - `/ohm-config`
@@ -48,9 +48,11 @@ Coming soon
 - `/ohm-session-search`
 - `/ohm-painter`
 
+## Development
+
 <details>
   <summary>
-    <strong>Development</strong>
+    <strong>Info (click to expand)</strong>
     <p>Yarn workspaces, linting, formatting, etc.</p>
   </summary>
 
