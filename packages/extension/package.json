@@ -28,5 +28,10 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/extension"
   }
 }
