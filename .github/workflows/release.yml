@@ -5,6 +5,14 @@ on:
     branches: ["dev"]
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Run mode"
+        required: true
+        default: "publish"
+        type: choice
+        options:
+          - publish
+          - release
       package:
         description: "Package to publish"
         required: true
@@ -58,7 +66,7 @@ jobs:
           node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
 
   release-latest:
-    if: ${{ github.event_name == 'push' && github.ref_name == 'dev' }}
+    if: ${{ github.ref_name == 'dev' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -99,7 +107,7 @@ jobs:
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
   publish-manual:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name == 'dev' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name == 'dev' && inputs.mode == 'publish' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
