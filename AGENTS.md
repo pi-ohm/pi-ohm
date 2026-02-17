@@ -46,6 +46,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 - `painter`
 - `pi-ohm`
 - `ohm`
+- `docs`
 - `repo`
 - `root`
 
@@ -59,6 +60,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 - `painter`: changes in `packages/painter` (image providers, model routing, painter commands).
 - `pi-ohm`: changes in `packages/extension` (bundle wiring/manifest).
 - `ohm`: cross-feature user-facing behavior affecting multiple feature packages.
+- `docs`: documentation-only changes (README, AGENTS, contributing/release docs).
 - `repo`: CI/workflows, release automation, scripts, tooling, non-package infra.
 - `root`: broad repo-level refactors when no better scope fits.
 

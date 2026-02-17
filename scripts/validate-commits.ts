@@ -32,6 +32,7 @@ const ALLOWED_SCOPES = new Set([
   "painter",
   "pi-ohm",
   "ohm",
+  "docs",
   "repo",
   "root",
 ]);
