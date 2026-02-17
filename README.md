@@ -23,6 +23,7 @@ pi-ohm/
 │   └── index.ts                    # local dev entrypoint (registers bundle package)
 ├── packages/
 │   ├── config/                     # @pi-phm/config
+│   ├── modes/                      # pi-ohm-modes
 │   ├── handoff/                    # @pi-phm/handoff (includes visualizer)
 │   ├── subagents/                  # @pi-phm/subagents
 │   ├── session-search/             # @pi-phm/session-search
@@ -37,6 +38,7 @@ pi-ohm/
 Install only what you need:
 
 ```bash
+pi install npm:pi-ohm-modes
 pi install npm:@pi-phm/handoff
 pi install npm:@pi-phm/subagents
 pi install npm:@pi-phm/session-search
@@ -68,6 +70,8 @@ When using `pi-ohm`:
 - `/ohm-features`
 - `/ohm-config`
 - `/ohm-missing`
+- `/ohm-modes`
+- `/ohm-mode <rush|smart|deep>`
 
 Feature-specific commands:
 
@@ -93,7 +97,7 @@ Release workflow uses npm **Trusted Publishing** (GitHub OIDC), so no long-lived
 Publish order (when doing it manually):
 
 1. `@pi-phm/config`
-2. feature packages (`handoff`, `subagents`, `session-search`, `painter`)
+2. feature packages (`modes`, `handoff`, `subagents`, `session-search`, `painter`)
 3. `pi-ohm`
 
 ## Versioning + changelog strategy
@@ -117,7 +121,7 @@ Select the package(s), choose bump type (patch/minor/major), and write release n
 ### Trusted publishing setup (npm)
 
 1. Publish `pi-ohm` once from an owner account to claim the name.
-2. In npm package settings for each published package (`pi-ohm`, `@pi-phm/*`), add a **Trusted Publisher**:
+2. In npm package settings for each published package (`pi-ohm`, `pi-ohm-modes`, `@pi-phm/*`), add a **Trusted Publisher**:
    - Provider: GitHub Actions
    - Repository: this repo
    - Workflow: `.github/workflows/release.yml`

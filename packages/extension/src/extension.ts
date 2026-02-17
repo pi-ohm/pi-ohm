@@ -4,6 +4,7 @@ import registerHandoffExtension from "@pi-phm/handoff";
 import registerSubagentsExtension from "@pi-phm/subagents";
 import registerSessionSearchExtension from "@pi-phm/session-search";
 import registerPainterExtension from "@pi-phm/painter";
+import registerModesExtension from "pi-ohm-modes";
 import { PHM_FEATURE_PACKAGES, PHM_RECOMMENDED_NEXT } from "./manifest";
 
 export default function registerPiPhmExtension(pi: ExtensionAPI): void {
@@ -13,6 +14,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
   registerSubagentsExtension(pi);
   registerSessionSearchExtension(pi);
   registerPainterExtension(pi);
+  registerModesExtension(pi);
 
   pi.registerCommand("ohm-features", {
     description: "Show installed pi-phm feature packages and feature flags",
@@ -24,6 +26,7 @@ export default function registerPiPhmExtension(pi: ExtensionAPI): void {
         `sessionThreadSearch: ${config.features.sessionThreadSearch ? "on" : "off"}`,
         `handoffVisualizer: ${config.features.handoffVisualizer ? "on" : "off"}`,
         `painterImagegen: ${config.features.painterImagegen ? "on" : "off"}`,
+        `defaultMode: ${config.defaultMode}`,
       ];
 
       const text = [

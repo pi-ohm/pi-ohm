@@ -1,5 +1,5 @@
 {
-  "name": "pi-ohm",
+  "name": "pi-ohm-modes",
   "version": "0.2.0",
   "type": "module",
   "main": "src/extension.ts",
@@ -15,12 +15,7 @@
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.52.0",
-    "@pi-phm/config": "workspace:*",
-    "@pi-phm/handoff": "workspace:*",
-    "@pi-phm/painter": "workspace:*",
-    "@pi-phm/session-search": "workspace:*",
-    "@pi-phm/subagents": "workspace:*",
-    "pi-ohm-modes": "workspace:*"
+    "@pi-phm/config": "workspace:*"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"

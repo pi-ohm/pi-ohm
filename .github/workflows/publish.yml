@@ -11,6 +11,7 @@ on:
         options:
           - all
           - config
+          - modes
           - handoff
           - subagents
           - session-search
@@ -73,6 +74,9 @@ jobs:
             config)
               publish_dir "packages/config"
               ;;
+            modes)
+              publish_dir "packages/modes"
+              ;;
             handoff)
               publish_dir "packages/handoff"
               ;;
@@ -90,6 +94,7 @@ jobs:
               ;;
             all)
               publish_dir "packages/config"
+              publish_dir "packages/modes"
               publish_dir "packages/handoff"
               publish_dir "packages/subagents"
               publish_dir "packages/session-search"
