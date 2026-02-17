@@ -1,9 +1,9 @@
-# pi-ohm-modes
+# @pi-ohm/modes
 
 Install only smart/rush/deep mode controls for Pi.
 
 ```bash
-pi install npm:pi-ohm-modes
+pi install npm:@pi-ohm/modes
 ```
 
 Commands:

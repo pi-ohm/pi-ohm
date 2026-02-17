@@ -1,8 +1,8 @@
 ---
-"pi-ohm-modes": minor
+"@pi-ohm/modes": minor
 ---
 
-Add a dedicated `pi-ohm-modes` package that scaffolds rush/smart/deep mode controls.
+Add a dedicated `@pi-ohm/modes` package that scaffolds rush/smart/deep mode controls.
 
 Includes:
 

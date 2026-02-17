@@ -4,7 +4,7 @@ import registerHandoffExtension from "@pi-phm/handoff";
 import registerSubagentsExtension from "@pi-phm/subagents";
 import registerSessionSearchExtension from "@pi-phm/session-search";
 import registerPainterExtension from "@pi-phm/painter";
-import registerModesExtension from "pi-ohm-modes";
+import registerModesExtension from "@pi-ohm/modes";
 import { PHM_FEATURE_PACKAGES, PHM_RECOMMENDED_NEXT } from "./manifest";
 
 export default function registerPiPhmExtension(pi: ExtensionAPI): void {

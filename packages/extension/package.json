@@ -15,12 +15,12 @@
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.52.0",
+    "@pi-ohm/modes": "workspace:*",
     "@pi-phm/config": "workspace:*",
     "@pi-phm/handoff": "workspace:*",
     "@pi-phm/painter": "workspace:*",
     "@pi-phm/session-search": "workspace:*",
-    "@pi-phm/subagents": "workspace:*",
-    "pi-ohm-modes": "workspace:*"
+    "@pi-phm/subagents": "workspace:*"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"

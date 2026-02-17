@@ -1,9 +1,9 @@
 export const PHM_FEATURE_PACKAGES = [
+  "@pi-ohm/modes",
   "@pi-phm/handoff",
   "@pi-phm/subagents",
   "@pi-phm/session-search",
   "@pi-phm/painter",
-  "pi-ohm-modes",
 ] as const;
 
 export const PHM_RECOMMENDED_NEXT = [

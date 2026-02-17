@@ -1547,6 +1547,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@pi-ohm/modes@workspace:*, @pi-ohm/modes@workspace:packages/modes":
+  version: 0.0.0-use.local
+  resolution: "@pi-ohm/modes@workspace:packages/modes"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-phm/config": "workspace:*"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+  languageName: unknown
+  linkType: soft
+
 "@pi-phm/config@workspace:*, @pi-phm/config@workspace:packages/config":
   version: 0.0.0-use.local
   resolution: "@pi-phm/config@workspace:packages/config"
@@ -3898,17 +3909,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pi-ohm-modes@workspace:*, pi-ohm-modes@workspace:packages/modes":
-  version: 0.0.0-use.local
-  resolution: "pi-ohm-modes@workspace:packages/modes"
-  dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@pi-phm/config": "workspace:*"
-  peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-  languageName: unknown
-  linkType: soft
-
 "pi-ohm-monorepo@workspace:.":
   version: 0.0.0-use.local
   resolution: "pi-ohm-monorepo@workspace:."
@@ -3933,12 +3933,12 @@ __metadata:
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
     "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@pi-ohm/modes": "workspace:*"
     "@pi-phm/config": "workspace:*"
     "@pi-phm/handoff": "workspace:*"
     "@pi-phm/painter": "workspace:*"
     "@pi-phm/session-search": "workspace:*"
     "@pi-phm/subagents": "workspace:*"
-    pi-ohm-modes: "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
