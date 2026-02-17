@@ -45,7 +45,7 @@ export default function registerHandoffExtension(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       const loaded = await loadOhmRuntimeConfig(ctx.cwd);
       const text = [
-        "Pi PHM: handoff",
+        "Pi OHM: handoff",
         "",
         `enabled: ${loaded.config.features.handoff ? "yes" : "no"}`,
         `visualizer: ${loaded.config.features.handoffVisualizer ? "yes" : "no"}`,

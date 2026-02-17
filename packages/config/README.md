@@ -1,6 +1,6 @@
 # @pi-ohm/config
 
-Shared runtime configuration package used by Pi PHM feature packages.
+Shared runtime configuration package used by Pi OHM feature packages.
 
 Responsibilities:
 

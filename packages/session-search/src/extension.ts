@@ -17,7 +17,7 @@ export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
     handler: async (_args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const text = [
-        "Pi PHM: session/thread search",
+        "Pi OHM: session/thread search",
         "",
         `enabled: ${config.features.sessionThreadSearch ? "yes" : "no"}`,
         "",

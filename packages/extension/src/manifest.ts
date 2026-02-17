@@ -1,4 +1,4 @@
-export const PHM_FEATURE_PACKAGES = [
+export const OHM_FEATURE_PACKAGES = [
   "@pi-ohm/modes",
   "@pi-ohm/handoff",
   "@pi-ohm/subagents",
@@ -6,7 +6,7 @@ export const PHM_FEATURE_PACKAGES = [
   "@pi-ohm/painter",
 ] as const;
 
-export const PHM_RECOMMENDED_NEXT = [
+export const OHM_RECOMMENDED_NEXT = [
   {
     name: "Permissions policy layer",
     reason: "Protect against unsafe delegated command execution in subagent workflows.",
