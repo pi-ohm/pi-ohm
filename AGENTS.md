@@ -25,23 +25,48 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
 6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
-7. Branch model: `dev` is default integration branch; `prod` is release branch.
+7. Branch model: `dev` is the single integration + release branch.
 8. Versioning/changelog automation is release-please (not changesets).
-9. Use conventional commits for release automation (`feat(subagents):`, `fix:(root,modes)`, `feat(config)!:`, etc.).
+9. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).
 10. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
 
 ## Conventional Commits
 
-- Commits must be scoped to a package.
+- Scope is required for all conventional commits.
+- Multiple scopes are allowed with commas, e.g. `fix(session,subagents): ...`.
 
-**Full list of scopes:**
+**Allowed scopes:**
+
 - `config`
 - `modes`
 - `handoff`
 - `subagents`
-- `session-search` / `session`
+- `session-search`
+- `session` (alias for `session-search`)
 - `painter`
-- `mono` / `monorepo` / `root` / `ohm`
+- `pi-ohm`
+- `ohm`
+- `repo`
+- `root`
+
+### Scope usage guide
+
+- `config`: changes in `packages/config` (settings, config loading, path/env resolution).
+- `modes`: changes in `packages/modes` (rush/smart/deep behavior, mode commands).
+- `handoff`: changes in `packages/handoff` (handoff commands, visualizer logic).
+- `subagents`: changes in `packages/subagents` (catalog, selection, delegation behavior).
+- `session-search` / `session`: changes in `packages/session-search`.
+- `painter`: changes in `packages/painter` (image providers, model routing, painter commands).
+- `pi-ohm`: changes in `packages/extension` (bundle wiring/manifest).
+- `ohm`: cross-feature user-facing behavior affecting multiple feature packages.
+- `repo`: CI/workflows, release automation, scripts, tooling, non-package infra.
+- `root`: broad repo-level refactors when no better scope fits.
+
+### Multi-scope commits
+
+- Use comma-separated scopes for cross-package commits: `fix(session,subagents): ...`.
+- Prefer explicit package scopes over `repo`/`root` when possible.
+- For changelog attribution, commit scope should match touched package paths.
 
 ## Packaging goal
 
