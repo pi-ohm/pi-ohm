@@ -2,17 +2,19 @@
   <img src="./assets/ohm-transparent.png" alt="pi-ohm logo" width="220" />
 </p>
 <p align="center">
-  <h5 align="center">
+  <h4 align="center">
     <a href="ohm.moe">pi-ohm</a>
-  </h5>
+  </h4>
   <a href="https://www.npmjs.com/package/pi-ohm">
     <img src="https://img.shields.io/npm/v/pi-ohm?label=npm%20(pi-ohm)" alt="npm version" />
   </a>
 </p>
 
-Monorepo for modular Pi feature packages under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
+Monorepo for modular, [Amp Code](https://ampcode.com)-inspired Pi workflows. All extensions are packaged under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
 
-pi-ohm provides focused, Amp-inspired workflows for Pi as modular installable packages (modes, handoff, subagents, session search, painter) and as a single bundled extension.
+Current features include: modes, subagents (librarian, finder, oracle, painter), session search, handoff. More on these in their respective package (see highlights below).
+
+Docs coming soon at [ohm.moe](https://ohm.moe).
 
 ## Package manager
 
