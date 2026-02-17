@@ -94,16 +94,19 @@ pi-ohm/
 Flow:
 
 1. Merge feature PRs into `dev`.
-2. Open/merge `dev -> prod` PR.
-3. Push to `prod` runs release automation.
+2. release-please opens/updates a release PR on `dev`.
+3. Merge release PR on `dev` (versions/changelogs updated in `dev`).
+4. Open/merge `dev -> prod` promotion PR.
+5. Push to `prod` publishes stable npm `latest`.
 
 #### Release strategy (release-please)
 
-This repo uses **release-please** for versioning/changelogs and GitHub releases.
+This repo uses **release-please** for versioning/changelogs.
 
 - Conventional commits drive version bumps (`feat:` => minor, `fix:` => patch, `feat!` / `BREAKING CHANGE` => major).
-- release-please opens/updates a release PR on `prod`.
-- Merging that release PR updates versions/changelogs, creates tags/GitHub releases, and publishes npm `latest`.
+- release-please opens/updates a release PR on `dev`.
+- Merging that release PR updates versions/changelogs and tags on `dev`.
+- Stable npm `latest` publish happens when those release commits are promoted to `prod`.
 - Package versions are kept in lockstep (`@pi-ohm/*` + `pi-ohm` all receive the same version per release).
 
 Config files:

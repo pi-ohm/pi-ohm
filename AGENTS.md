@@ -25,7 +25,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
 6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
-7. Branch model: `dev` is the single integration + release branch.
+7. Branch model: `dev` is integration + release-prep; `prod` is promotion/stable publish branch.
 8. Versioning/changelog automation is release-please (not changesets).
 9. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).
 10. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).

@@ -2,7 +2,7 @@ name: Release & Publish
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["dev", "prod"]
   workflow_dispatch:
     inputs:
       mode:
@@ -65,19 +65,17 @@ jobs:
 
           node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
 
-  release-latest:
+  release-dev:
     if: ${{ github.ref_name == 'dev' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run release-please
-        id: release
+      - name: Run release-please against dev
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -85,15 +83,23 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  publish-prod-latest:
+    if: ${{ github.event_name == 'push' && github.ref_name == 'prod' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup Node
-        if: ${{ steps.release.outputs.releases_created == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
       - name: Publish released package versions to npm @latest
-        if: ${{ steps.release.outputs.releases_created == 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_ACCESS: public
@@ -107,7 +113,7 @@ jobs:
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
   publish-manual:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref_name == 'dev' && inputs.mode == 'publish' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'publish' && (github.ref_name == 'dev' || github.ref_name == 'prod') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
