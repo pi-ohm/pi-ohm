@@ -23,6 +23,7 @@ import {
   type TaskRuntimeSnapshot,
   type TaskRuntimeStore,
 } from "../runtime/tasks";
+import { createTaskLiveUiCoordinator, type TaskLiveUiCoordinator } from "../runtime/live-ui";
 import { createTaskRuntimePresentation } from "../runtime/ui";
 import {
   parseTaskToolParameters,
@@ -960,6 +961,18 @@ interface RunTaskToolInput {
   readonly deps: TaskToolDependencies;
 }
 
+type TaskToolUiHandle = NonNullable<RunTaskToolInput["ui"]>;
+const liveUiBySurface = new WeakMap<TaskToolUiHandle, TaskLiveUiCoordinator>();
+
+function getTaskLiveUiCoordinator(ui: TaskToolUiHandle): TaskLiveUiCoordinator {
+  const existing = liveUiBySurface.get(ui);
+  if (existing) return existing;
+
+  const created = createTaskLiveUiCoordinator(ui);
+  liveUiBySurface.set(ui, created);
+  return created;
+}
+
 function emitTaskRuntimeUpdate(input: {
   readonly details: TaskToolResultDetails;
   readonly deps: TaskToolDependencies;
@@ -974,7 +987,7 @@ function emitTaskRuntimeUpdate(input: {
   });
 
   if (input.hasUI && input.ui) {
-    input.ui.setStatus("ohm-subagents", presentation.statusLine);
+    getTaskLiveUiCoordinator(input.ui).publish(presentation);
   }
 
   if (input.onUpdate) {

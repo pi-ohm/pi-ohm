@@ -5,7 +5,14 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 export interface TaskRuntimePresentation {
   readonly statusLine: string;
   readonly widgetLines: readonly string[];
+  readonly compactWidgetLines: readonly string[];
   readonly plainText: string;
+  readonly hasActiveTasks: boolean;
+  readonly runningCount: number;
+  readonly activeToolCalls: number;
+  readonly completedCount: number;
+  readonly failedCount: number;
+  readonly cancelledCount: number;
 }
 
 function truncate(input: string, maxWidth: number): string {
@@ -61,6 +68,21 @@ export function renderTaskSnapshotLines(input: {
   return [line1, line2];
 }
 
+export function renderTaskSnapshotCompactLine(input: {
+  readonly snapshot: TaskRuntimeSnapshot;
+  readonly nowEpochMs: number;
+  readonly maxWidth?: number;
+}): string {
+  const maxWidth = input.maxWidth ?? 100;
+  const marker = markerForTask(input.snapshot, input.nowEpochMs);
+  const elapsed = formatElapsed(elapsedForTask(input.snapshot, input.nowEpochMs));
+
+  return truncate(
+    `${marker} ${input.snapshot.subagentType} · ${input.snapshot.description} · ${elapsed} · tools ${input.snapshot.activeToolCalls}/${input.snapshot.totalToolCalls}`,
+    maxWidth,
+  );
+}
+
 function sortSnapshots(snapshots: readonly TaskRuntimeSnapshot[]): readonly TaskRuntimeSnapshot[] {
   return [...snapshots].sort((left, right) => {
     const leftRunning = left.state === "running" || left.state === "queued";
@@ -98,14 +120,21 @@ export function createTaskRuntimePresentation(input: {
       : `subagents idle · done ${completed} · failed ${failed} · cancelled ${cancelled}`;
 
   const widgetLines: string[] = [];
+  const compactWidgetLines: string[] = [];
   for (const snapshot of visible) {
     const [line1, line2] = renderTaskSnapshotLines({
       snapshot,
       nowEpochMs: input.nowEpochMs,
       maxWidth: input.maxWidth,
     });
+    const compactLine = renderTaskSnapshotCompactLine({
+      snapshot,
+      nowEpochMs: input.nowEpochMs,
+      maxWidth: input.maxWidth,
+    });
 
     widgetLines.push(line1, line2);
+    compactWidgetLines.push(compactLine);
   }
 
   const plainText = widgetLines.length > 0 ? widgetLines.join("\n") : "No task activity";
@@ -113,6 +142,13 @@ export function createTaskRuntimePresentation(input: {
   return {
     statusLine,
     widgetLines,
+    compactWidgetLines,
     plainText,
+    hasActiveTasks: running > 0,
+    runningCount: running,
+    activeToolCalls: activeTools,
+    completedCount: completed,
+    failedCount: failed,
+    cancelledCount: cancelled,
   };
 }

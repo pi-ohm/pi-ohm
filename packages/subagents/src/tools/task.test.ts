@@ -501,7 +501,7 @@ defineTest(
     });
 
     assert.equal(result.details.status, "succeeded");
-    assert.equal(statuses.length >= 2, true);
+    assert.equal(statuses.length >= 1, true);
     assert.match(statuses.join("\n"), /subagents/);
     assert.equal(updates.length >= 2, true);
     for (const update of updates) {
@@ -510,6 +510,47 @@ defineTest(
     }
   },
 );
+
+defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () => {
+  const widgetFrames: (readonly string[] | undefined)[] = [];
+
+  const result = await runTaskToolMvp({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    hasUI: true,
+    ui: {
+      setStatus: () => {},
+      setWidget: (_key, content) => {
+        widgetFrames.push(content);
+      },
+    },
+    deps: makeDeps(),
+  });
+
+  await sleep(220);
+
+  assert.equal(result.details.status, "succeeded");
+  assert.equal(widgetFrames.length > 0, true);
+
+  const nonEmptyFrame = widgetFrames.find(
+    (frame): frame is readonly string[] => Array.isArray(frame) && frame.length > 0,
+  );
+
+  assert.notEqual(nonEmptyFrame, undefined);
+  if (!nonEmptyFrame) {
+    assert.fail("Expected compact widget lines");
+  }
+
+  assert.equal(nonEmptyFrame.length <= 3, true);
+  assert.match(nonEmptyFrame[0] ?? "", /finder/);
+});
 
 defineTest("runTaskToolMvp surfaces multiline output text in tool content", async () => {
   const deps = makeDeps({

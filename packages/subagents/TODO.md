@@ -862,7 +862,7 @@ Interactive sessions show a persistent one-line subagents status + compact widge
     - Runtime UI formatter tests for status count composition.
     - Task tool tests asserting `setStatus` usage and non-spam update body shape.
 
-- [ ] **E5-T2: Compact widget + throttled/deduped live coordinator**
+- [x] **E5-T2: Compact widget + throttled/deduped live coordinator**
   - Requirements:
     - Add a live UI coordinator that applies throttling + text dedupe.
     - Render compact (single-line) widget rows for active tasks below editor.
