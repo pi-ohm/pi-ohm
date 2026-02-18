@@ -345,7 +345,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
 
 ### Tickets
 
-- [ ] **S6-T1: Primary profile discovery + registration rules**
+- [x] **S6-T1: Primary profile discovery + registration rules**
   - Requirements:
     - Profiles marked `primary:true` are registered as direct tools.
   - Acceptance criteria:
@@ -354,7 +354,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Tool registration tests for profile toggle scenarios.
 
-- [ ] **S6-T2: Shared execution contract between direct-tool and Task-tool entrypoints**
+- [x] **S6-T2: Shared execution contract between direct-tool and Task-tool entrypoints**
   - Requirements:
     - Same result envelope semantics for success/failure metadata.
     - Primary profiles remain callable through `task` by `subagent_type` even when direct tool is registered.
@@ -365,7 +365,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Parity tests (task-routed vs direct primary tool) + dual-path accessibility tests.
 
-- [ ] **S6-T3: Naming/collision policy for primary tools**
+- [x] **S6-T3: Naming/collision policy for primary tools**
   - Requirements:
     - Deterministic behavior for name collisions with existing tools.
   - Acceptance criteria:
@@ -374,7 +374,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Collision tests.
 
-- [ ] **S6-T4: Primary profile disable/availability behavior**
+- [x] **S6-T4: Primary profile disable/availability behavior**
   - Requirements:
     - Runtime feature toggles cleanly add/remove primary tools.
   - Acceptance criteria:
@@ -383,7 +383,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Reload + registration/unregistration tests.
 
-- [ ] **S6-T5: Primary tool descriptions from profile definitions**
+- [x] **S6-T5: Primary tool descriptions from profile definitions**
   - Requirements:
     - Generated primary tools must derive description/help text from profile metadata (`summary`, `whenToUse`, prompt summary).
   - Acceptance criteria:
@@ -392,7 +392,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Tool registration snapshot tests asserting metadata mapping from profile definitions.
 
-- [ ] **S6-T6: Primary-tool registration for all active `primary:true` profiles**
+- [x] **S6-T6: Primary-tool registration for all active `primary:true` profiles**
   - Requirements:
     - Active `primary:true` profiles are auto-registered as direct tools at startup/reload.
   - Acceptance criteria:

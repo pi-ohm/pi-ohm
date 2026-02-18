@@ -17,10 +17,14 @@ Scaffolded subagents:
 Profiles can be marked with `primary: true` in config/catalog to indicate direct
 invocation as a top-level tool entrypoint instead of task-tool-only invocation.
 
+Primary profiles are registered as direct tools automatically. Tool names are derived
+from profile IDs with deterministic collision handling.
+
 `primary: true` is additive:
 
 - profile gets a direct top-level tool
 - profile stays available in `task` subagent roster (`subagent_type`)
+- direct-tool execution and task-routed execution share the same runtime/result envelope
 
 The orchestration tool name is **`task`**. Async orchestration lifecycle
 operations (`start/status/wait/send/cancel`) are exposed through this tool.

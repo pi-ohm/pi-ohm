@@ -1213,6 +1213,18 @@ export async function runTaskToolMvp(
     });
   }
 
+  if (!configResult.value.config.features.subagents) {
+    return toAgentToolResult({
+      op: parsed.value.op,
+      status: "failed",
+      summary: "Subagents feature is disabled",
+      backend: input.deps.backend.id,
+      error_code: "subagents_disabled",
+      error_message:
+        "Enable features.subagents to use task orchestration and primary subagent tools",
+    });
+  }
+
   if (parsed.value.op === "start") {
     return runTaskStart(parsed.value, input, configResult.value);
   }

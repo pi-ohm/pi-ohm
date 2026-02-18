@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getSubagentInvocationMode, normalizeCommandArgs } from "./extension";
+import {
+  getSubagentInvocationMode,
+  normalizeCommandArgs,
+  registerSubagentTools,
+} from "./extension";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
@@ -45,4 +49,19 @@ defineTest("getSubagentInvocationMode returns primary-tool for primary profiles"
 defineTest("getSubagentInvocationMode returns task-routed for non-primary profiles", () => {
   assert.equal(getSubagentInvocationMode(false), "task-routed");
   assert.equal(getSubagentInvocationMode(undefined), "task-routed");
+});
+
+defineTest("registerSubagentTools registers task tool + primary tools", () => {
+  const registeredTools: string[] = [];
+
+  registerSubagentTools({
+    registerTool(definition) {
+      registeredTools.push(definition.name);
+    },
+  });
+
+  assert.equal(registeredTools.includes("task"), true);
+  assert.equal(registeredTools.includes("librarian"), true);
+  assert.equal(registeredTools.includes("finder"), false);
+  assert.equal(registeredTools.includes("oracle"), false);
 });

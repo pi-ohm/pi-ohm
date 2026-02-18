@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
-import { registerTaskTool } from "./tools/task";
+import { registerPrimarySubagentTools } from "./tools/primary";
+import { createDefaultTaskToolDependencies, registerTaskTool } from "./tools/task";
 
 interface CommandArgsEnvelope {
   args?: unknown;
@@ -50,16 +51,37 @@ function listSubagentIds(): string {
   return OHM_SUBAGENT_CATALOG.map((agent) => agent.id).join("|");
 }
 
+export function registerSubagentTools(pi: Pick<ExtensionAPI, "registerTool">): {
+  readonly primaryToolCount: number;
+  readonly diagnosticsCount: number;
+} {
+  const taskDeps = createDefaultTaskToolDependencies();
+  registerTaskTool(pi, taskDeps);
+  const primaryToolRegistration = registerPrimarySubagentTools(pi, {
+    taskDeps,
+  });
+
+  return {
+    primaryToolCount: primaryToolRegistration.registeredTools.length,
+    diagnosticsCount: primaryToolRegistration.diagnostics.length,
+  };
+}
+
 export default function registerSubagentsExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
-  registerTaskTool(pi);
+  const toolRegistration = registerSubagentTools(pi);
 
   pi.on("session_start", async (_event, ctx) => {
     const { config } = await loadOhmRuntimeConfig(ctx.cwd);
     if (!ctx.hasUI) return;
 
     const enabled = config.features.subagents ? "on" : "off";
-    ctx.ui.setStatus("ohm-subagents", `subagents:${enabled} · backend:${config.subagentBackend}`);
+    const primaryTools = toolRegistration.primaryToolCount;
+    const diagnostics = toolRegistration.diagnosticsCount;
+    ctx.ui.setStatus(
+      "ohm-subagents",
+      `subagents:${enabled} · backend:${config.subagentBackend} · primary:${primaryTools} · diag:${diagnostics}`,
+    );
   });
 
   pi.registerCommand("ohm-subagents", {
