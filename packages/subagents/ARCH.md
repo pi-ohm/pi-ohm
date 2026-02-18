@@ -13,6 +13,7 @@
 - **No `interactive_shell` dependency** for core behavior.
   - It is third-party and should not be required for default package functionality.
 - Runtime must work in plain Pi extension environments with only core extension APIs.
+- Recoverable errors must use **`better-result`** typed Result flows (no ad-hoc try/catch propagation).
 
 ---
 
@@ -203,6 +204,35 @@ Rule: standardize internal schemas on Zod v4 APIs only.
 
 ---
 
+## Error Handling Strategy (`better-result`)
+
+Core requirement: use `better-result` for recoverable errors across task runtime and tool routing.
+
+Rules:
+
+1. **No thrown recoverable errors across module boundaries**
+   - Runtime modules return `Result<T, E>`.
+   - Recoverable failures are represented as typed errors, not exceptions.
+
+2. **Typed error taxonomy via `TaggedError`**
+   - Define explicit error categories for at least:
+     - validation/config
+     - policy/permissions
+     - runtime/execution
+     - persistence/state
+
+3. **Use boundary wrappers for throw-prone operations**
+   - `Result.try` / `Result.tryPromise` at I/O boundaries (filesystem, provider calls, parsing).
+
+4. **Tool boundary maps Result to stable tool output**
+   - `task` tool responses expose deterministic machine-parseable error codes/details.
+   - Do not hide failures with broad catches or silent fallbacks.
+
+5. **Bug-class failures**
+   - Defects should fail loudly for diagnosis; do not reclassify programming bugs as domain success.
+
+---
+
 ## Parallelization Approach
 
 Core package behavior (required):
@@ -224,6 +254,7 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 ## Suggested Module Layout
 
 - `src/schema.ts` — Zod internal schemas + TypeBox parameter schemas
+- `src/errors.ts` — `better-result` TaggedError definitions + shared error unions
 - `src/runtime/tasks.ts` — task registry + lifecycle state machine
 - `src/runtime/executor.ts` — task execution engine + concurrency control
 - `src/runtime/ui.ts` — status/widget snapshot formatter
@@ -240,3 +271,4 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 - parallel determinism + bounded concurrency tests
 - renderer/status snapshot tests (for visual feedback correctness)
 - regression tests for `primary: true` routing vs task-routed execution
+- `better-result` error-path tests (typed errors + Result mapping at tool boundary)

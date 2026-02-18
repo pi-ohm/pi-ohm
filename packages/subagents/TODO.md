@@ -10,6 +10,7 @@ This backlog is organized into demoable sprints with **atomic, commit-ready task
 4. Internal validation/state schemas must use **Zod v4**.
 5. Every ticket must ship with automated tests for its acceptance criteria.
 6. Live subagent visual feedback must use `@mariozechner/pi-tui` (with plain-text fallback when UI is unavailable).
+7. Recoverable errors must be modeled with **`better-result`** (`Result<T, E>` + `TaggedError`), not ad-hoc try/catch throws.
 
 ---
 
@@ -80,6 +81,16 @@ Establish the canonical Task tool contract and schema validation foundation.
     - Subagents package declares and documents expected pi-tui integration contract for consumers.
   - Test evidence:
     - Package metadata validation/typecheck passes.
+
+- [ ] **S1-T7: better-result baseline contract for subagents runtime**
+  - Requirements:
+    - Define package-level error handling contract using `Result<T, E>` for recoverable failures.
+    - Define initial `TaggedError` categories for validation/config, policy, runtime, persistence.
+  - Acceptance criteria:
+    - Architecture and code-facing contracts explicitly require typed Result error flows.
+    - No new runtime module in this package returns thrown recoverable errors as its public behavior.
+  - Test evidence:
+    - Type-level and runtime tests for Result error unions and error-tag mapping.
 
 ---
 
@@ -469,10 +480,12 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
 - [ ] **S8-T4: Error taxonomy and stable error surface**
   - Requirements:
     - Runtime emits stable error codes/categories for validation, policy, runtime, persistence failures.
+    - Categories are implemented as `better-result` `TaggedError` variants and surfaced through `Result` mapping.
   - Acceptance criteria:
     - Errors are machine-parseable and human-readable.
+    - Tool boundary error payloads map deterministically from TaggedError tags.
   - Test evidence:
-    - Error contract tests.
+    - Error contract tests + TaggedError-to-tool-payload mapping tests.
 
 - [ ] **S8-T5: Backward compatibility and migration notes**
   - Requirements:
@@ -539,3 +552,4 @@ A ticket is complete only if all are true:
 3. Automated tests for the ticket are added/updated and passing.
 4. Docs are updated for any user-facing behavior changes.
 5. The change is small enough to be reviewed and merged as one atomic commit or a tightly scoped commit set.
+6. Recoverable error paths use `better-result` Result/TaggedError flows (no hidden try/catch swallowing).

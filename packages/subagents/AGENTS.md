@@ -39,6 +39,12 @@ Task orchestration UX baseline:
   - line 1: `⠋ [finder] Auth flow scan`
   - line 2: `  Tools 3/3 · Elapsed 00:18`
 
+Error handling baseline:
+
+- use `better-result` for recoverable errors (`Result<T, E>`)
+- model error categories with `TaggedError`
+- avoid ad-hoc thrown recoverable exceptions and broad try/catch propagation
+
 We want to mirror "anomalyco/opencode" implementation of subagents/agents
 
 For instance, the full schema for an opencode style agent is:

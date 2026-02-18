@@ -48,6 +48,14 @@ Terminal examples:
   Tools 2/3 · Elapsed 00:11
 ```
 
+## Error handling
+
+`@pi-ohm/subagents` uses `better-result` for recoverable errors:
+
+- runtime and orchestration paths should return `Result<T, E>`
+- typed error categories should use `TaggedError`
+- avoid broad try/catch error propagation for recoverable failures
+
 Commands:
 
 - `/ohm-subagents`
