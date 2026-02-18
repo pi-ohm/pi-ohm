@@ -2,7 +2,16 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
 
-function normalizeCommandArgs(args: unknown): string[] {
+interface CommandArgsEnvelope {
+  args?: unknown;
+  raw?: unknown;
+}
+
+function isCommandArgsEnvelope(value: unknown): value is CommandArgsEnvelope {
+  return typeof value === "object" && value !== null;
+}
+
+export function normalizeCommandArgs(args: unknown): string[] {
   if (Array.isArray(args)) {
     return args.filter((value): value is string => typeof value === "string");
   }
@@ -14,15 +23,13 @@ function normalizeCommandArgs(args: unknown): string[] {
       .filter((part) => part.length > 0);
   }
 
-  if (args && typeof args === "object") {
-    const asRecord = args as { args?: unknown; raw?: unknown };
-
-    if (Array.isArray(asRecord.args)) {
-      return asRecord.args.filter((value): value is string => typeof value === "string");
+  if (isCommandArgsEnvelope(args)) {
+    if (Array.isArray(args.args)) {
+      return args.args.filter((value): value is string => typeof value === "string");
     }
 
-    if (typeof asRecord.raw === "string") {
-      return asRecord.raw
+    if (typeof args.raw === "string") {
+      return args.raw
         .split(/\s+/)
         .map((part) => part.trim())
         .filter((part) => part.length > 0);
@@ -30,6 +37,16 @@ function normalizeCommandArgs(args: unknown): string[] {
   }
 
   return [];
+}
+
+export type SubagentInvocationMode = "primary-tool" | "task-routed";
+
+export function getSubagentInvocationMode(primary: boolean | undefined): SubagentInvocationMode {
+  return primary ? "primary-tool" : "task-routed";
+}
+
+function listSubagentIds(): string {
+  return OHM_SUBAGENT_CATALOG.map((agent) => agent.id).join("|");
 }
 
 export default function registerSubagentsExtension(pi: ExtensionAPI): void {
@@ -52,7 +69,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         const needsPainterPackage = agent.id === "painter";
         const available = !needsPainterPackage || config.features.painterImagegen;
         const availability = available ? "available" : "requires painter feature/package";
-        const invocation = agent.primary ? "primary-tool" : "delegated";
+        const invocation = getSubagentInvocationMode(agent.primary);
         return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability} · ${invocation}]`;
       });
 
@@ -79,7 +96,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("ohm-subagent", {
-    description: "Inspect one subagent scaffold (librarian|oracle|finder|task|painter)",
+    description: `Inspect one subagent scaffold (${listSubagentIds()})`,
     handler: async (args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const [requested = ""] = normalizeCommandArgs(args);
@@ -107,7 +124,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         `Subagent: ${match.name}`,
         `id: ${match.id}`,
         `available: ${isAvailable ? "yes" : "no"}`,
-        `invocation: ${match.primary ? "primary-tool" : "delegated"}`,
+        `invocation: ${getSubagentInvocationMode(match.primary)}`,
         match.requiresPackage
           ? `requiresPackage: ${match.requiresPackage}`
           : "requiresPackage: none",

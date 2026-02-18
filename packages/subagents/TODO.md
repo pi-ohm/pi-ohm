@@ -26,7 +26,7 @@ Establish the canonical Task tool contract and schema validation foundation.
 
 ### Tickets
 
-- [ ] **S1-T1: Canonical terminology alignment (`task`) across package docs**
+- [x] **S1-T1: Canonical terminology alignment (`task`) across package docs**
   - Requirements:
     - Remove “delegate tool” naming from package docs.
     - Use “Task tool” for orchestration API references.
@@ -36,7 +36,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Doc lint/check command passes.
 
-- [ ] **S1-T2: Define Task operation contract (op union)**
+- [x] **S1-T2: Define Task operation contract (op union)**
   - Requirements:
     - Formalize supported ops: `start`, `status`, `wait`, `send`, `cancel`.
     - Define required/optional fields per op.
@@ -46,7 +46,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Unit tests for valid/invalid op payload matrices.
 
-- [ ] **S1-T3: Add TypeBox parameter schemas for Task tool boundary**
+- [x] **S1-T3: Add TypeBox parameter schemas for Task tool boundary**
   - Requirements:
     - Boundary schema supports all Task ops.
     - Error messaging is deterministic and user-readable.
@@ -56,7 +56,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Parameter schema tests including malformed arrays, missing required keys, wrong types.
 
-- [ ] **S1-T4: Add Zod v4 internal schemas for task records + config fragments**
+- [x] **S1-T4: Add Zod v4 internal schemas for task records + config fragments**
   - Requirements:
     - Internal task state model uses Zod v4.
     - Subagent runtime config fragments use Zod v4 for normalization.
@@ -66,7 +66,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Zod parse/transform tests for happy + failure paths.
 
-- [ ] **S1-T5: Add schema-version guardrails**
+- [x] **S1-T5: Add schema-version guardrails**
   - Requirements:
     - Document and enforce Zod v4-only usage in this package.
   - Acceptance criteria:
@@ -74,7 +74,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Typecheck/lint checks in CI pipeline pass.
 
-- [ ] **S1-T6: Package metadata alignment for pi-tui usage**
+- [x] **S1-T6: Package metadata alignment for pi-tui usage**
   - Requirements:
     - Document dependency policy for `@mariozechner/pi-tui` in package metadata/docs according to Pi package guidance.
   - Acceptance criteria:
@@ -82,7 +82,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Test evidence:
     - Package metadata validation/typecheck passes.
 
-- [ ] **S1-T7: better-result baseline contract for subagents runtime**
+- [x] **S1-T7: better-result baseline contract for subagents runtime**
   - Requirements:
     - Define package-level error handling contract using `Result<T, E>` for recoverable failures.
     - Define initial `TaggedError` categories for validation/config, policy, runtime, persistence.
