@@ -22,6 +22,7 @@ import {
   type TaskRuntimeSnapshot,
   type TaskRuntimeStore,
 } from "../runtime/tasks";
+import { createTaskRuntimePresentation, renderTaskSnapshotLines } from "../runtime/ui";
 import {
   parseTaskToolParameters,
   TaskToolRegistrationParametersSchema,
@@ -371,6 +372,8 @@ async function runTaskExecutionLifecycle(input: {
   readonly config: OhmRuntimeConfig;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+  readonly hasUI: boolean;
+  readonly ui: RunTaskToolInput["ui"];
   readonly deps: TaskToolDependencies;
 }): Promise<TaskRuntimeSnapshot> {
   const running = input.deps.taskStore.markRunning(
@@ -379,7 +382,7 @@ async function runTaskExecutionLifecycle(input: {
   );
 
   if (Result.isError(running)) {
-    return {
+    const failedSnapshot: TaskRuntimeSnapshot = {
       id: input.taskId,
       state: "failed",
       subagentType: input.subagent.id,
@@ -397,16 +400,28 @@ async function runTaskExecutionLifecycle(input: {
       errorCode: running.error.code,
       errorMessage: running.error.message,
     };
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("start", failedSnapshot),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return failedSnapshot;
   }
 
-  input.onUpdate?.({
-    content: [
-      {
-        type: "text",
-        text: detailsToText(snapshotToTaskResultDetails("start", running.value), false),
-      },
-    ],
-    details: snapshotToTaskResultDetails("start", running.value),
+  const runningDetails = snapshotToTaskResultDetails("start", running.value);
+  emitTaskRuntimeUpdate({
+    details: {
+      ...runningDetails,
+      summary: `${runningDetails.summary}\n${createTaskProgressText(running.value)}`,
+    },
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
   });
 
   const execution = await input.deps.backend.executeStart({
@@ -421,6 +436,14 @@ async function runTaskExecutionLifecycle(input: {
 
   const latest = input.deps.taskStore.getTask(input.taskId);
   if (latest && isTerminalState(latest.state)) {
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("start", latest, latest.output),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
     return latest;
   }
 
@@ -430,7 +453,17 @@ async function runTaskExecutionLifecycle(input: {
         input.taskId,
         `Cancelled ${input.subagent.name}: ${input.description}`,
       );
-      if (Result.isOk(cancelled)) return cancelled.value;
+      if (Result.isOk(cancelled)) {
+        emitTaskRuntimeUpdate({
+          details: snapshotToTaskResultDetails("start", cancelled.value),
+          deps: input.deps,
+          hasUI: input.hasUI,
+          ui: input.ui,
+          onUpdate: input.onUpdate,
+        });
+
+        return cancelled.value;
+      }
     }
 
     const failed = input.deps.taskStore.markFailed(
@@ -440,9 +473,19 @@ async function runTaskExecutionLifecycle(input: {
       execution.error.message,
     );
 
-    if (Result.isOk(failed)) return failed.value;
+    if (Result.isOk(failed)) {
+      emitTaskRuntimeUpdate({
+        details: snapshotToTaskResultDetails("start", failed.value, failed.value.output),
+        deps: input.deps,
+        hasUI: input.hasUI,
+        ui: input.ui,
+        onUpdate: input.onUpdate,
+      });
 
-    return {
+      return failed.value;
+    }
+
+    const fallback: TaskRuntimeSnapshot = {
       ...running.value,
       state: "failed",
       summary: failed.error.message,
@@ -452,6 +495,16 @@ async function runTaskExecutionLifecycle(input: {
       endedAtEpochMs: Date.now(),
       updatedAtEpochMs: Date.now(),
     };
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("start", fallback, fallback.output),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return fallback;
   }
 
   const succeeded = input.deps.taskStore.markSucceeded(
@@ -461,7 +514,7 @@ async function runTaskExecutionLifecycle(input: {
   );
 
   if (Result.isError(succeeded)) {
-    return {
+    const fallback: TaskRuntimeSnapshot = {
       ...running.value,
       state: "failed",
       summary: succeeded.error.message,
@@ -471,7 +524,25 @@ async function runTaskExecutionLifecycle(input: {
       endedAtEpochMs: Date.now(),
       updatedAtEpochMs: Date.now(),
     };
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("start", fallback, fallback.output),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return fallback;
   }
+
+  emitTaskRuntimeUpdate({
+    details: snapshotToTaskResultDetails("start", succeeded.value, succeeded.value.output),
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
+  });
 
   return succeeded.value;
 }
@@ -481,7 +552,59 @@ interface RunTaskToolInput {
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+  readonly hasUI: boolean;
+  readonly ui:
+    | {
+        setStatus(key: string, text: string | undefined): void;
+        setWidget(
+          key: string,
+          content: string[] | undefined,
+          options?: { readonly placement?: "aboveEditor" | "belowEditor" },
+        ): void;
+      }
+    | undefined;
   readonly deps: TaskToolDependencies;
+}
+
+function createTaskProgressText(snapshot: TaskRuntimeSnapshot): string {
+  const [line1, line2] = renderTaskSnapshotLines({
+    snapshot,
+    nowEpochMs: Date.now(),
+  });
+
+  return `${line1}\n${line2}`;
+}
+
+function emitTaskRuntimeUpdate(input: {
+  readonly details: TaskToolResultDetails;
+  readonly deps: TaskToolDependencies;
+  readonly hasUI: boolean;
+  readonly ui: RunTaskToolInput["ui"];
+  readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+}): void {
+  const presentation = createTaskRuntimePresentation({
+    snapshots: input.deps.taskStore.listTasks(),
+    nowEpochMs: Date.now(),
+    maxItems: 5,
+  });
+
+  if (input.hasUI && input.ui) {
+    input.ui.setStatus("ohm-subagents", presentation.statusLine);
+    input.ui.setWidget("ohm-subagents", [...presentation.widgetLines], {
+      placement: "belowEditor",
+    });
+  }
+
+  if (input.onUpdate) {
+    const body = input.hasUI
+      ? detailsToText(input.details, false)
+      : `${detailsToText(input.details, false)}\n\n${presentation.plainText}`;
+
+    input.onUpdate({
+      content: [{ type: "text", text: body }],
+      details: input.details,
+    });
+  }
 }
 
 function buildCollectionResult(
@@ -625,6 +748,8 @@ function prepareTaskExecution(input: {
   readonly config: OhmRuntimeConfig;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+  readonly hasUI: boolean;
+  readonly ui: RunTaskToolInput["ui"];
   readonly deps: TaskToolDependencies;
 }): Result<PreparedTaskExecution, TaskToolItemDetails> {
   const created = input.deps.taskStore.createTask({
@@ -677,6 +802,8 @@ function prepareTaskExecution(input: {
       config: input.config,
       signal: controller.signal,
       onUpdate: input.onUpdate,
+      hasUI: input.hasUI,
+      ui: input.ui,
       deps: input.deps,
     }).finally(() => {
       detachAbortLink();
@@ -829,6 +956,8 @@ async function runTaskStartBatch(
       config: config.config,
       signal: input.signal,
       onUpdate: input.onUpdate,
+      hasUI: input.hasUI,
+      ui: input.ui,
       deps: input.deps,
     });
 
@@ -942,6 +1071,8 @@ async function runTaskStartSingle(
     config: config.config,
     signal: input.signal,
     onUpdate: input.onUpdate,
+    hasUI: input.hasUI,
+    ui: input.ui,
     deps: input.deps,
   });
 
@@ -998,7 +1129,16 @@ async function runTaskStatus(
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
   const lookups = input.deps.taskStore.getTasks(params.ids);
   const items = lookups.map((lookup) => lookupToItem(lookup));
-  return buildCollectionResult("status", items, input.deps.backend.id, false);
+  const result = buildCollectionResult("status", items, input.deps.backend.id, false);
+  emitTaskRuntimeUpdate({
+    details: result.details,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: undefined,
+  });
+
+  return result;
 }
 
 async function runTaskWait(
@@ -1013,7 +1153,16 @@ async function runTaskWait(
   });
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
-  return buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
+  const result = buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
+  emitTaskRuntimeUpdate({
+    details: result.details,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: undefined,
+  });
+
+  return result;
 }
 
 async function runTaskSend(
@@ -1089,6 +1238,14 @@ async function runTaskSend(
     });
   }
 
+  emitTaskRuntimeUpdate({
+    details: snapshotToTaskResultDetails("send", interaction.value),
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
+  });
+
   const sendResult = await input.deps.backend.executeSend({
     taskId: interaction.value.id,
     subagent,
@@ -1110,7 +1267,7 @@ async function runTaskSend(
     );
 
     if (Result.isError(failed)) {
-      return toAgentToolResult({
+      const result = toAgentToolResult({
         op: "send",
         status: "failed",
         task_id: interaction.value.id,
@@ -1119,11 +1276,31 @@ async function runTaskSend(
         error_code: failed.error.code,
         error_message: failed.error.message,
       });
+
+      emitTaskRuntimeUpdate({
+        details: result.details,
+        deps: input.deps,
+        hasUI: input.hasUI,
+        ui: input.ui,
+        onUpdate: input.onUpdate,
+      });
+
+      return result;
     }
 
-    return toAgentToolResult(
+    const result = toAgentToolResult(
       snapshotToTaskResultDetails("send", failed.value, failed.value.output),
     );
+
+    emitTaskRuntimeUpdate({
+      details: result.details,
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return result;
   }
 
   const completed = input.deps.taskStore.markInteractionComplete(
@@ -1133,7 +1310,7 @@ async function runTaskSend(
   );
 
   if (Result.isError(completed)) {
-    return toAgentToolResult({
+    const result = toAgentToolResult({
       op: "send",
       status: "failed",
       task_id: interaction.value.id,
@@ -1142,11 +1319,31 @@ async function runTaskSend(
       error_code: completed.error.code,
       error_message: completed.error.message,
     });
+
+    emitTaskRuntimeUpdate({
+      details: result.details,
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return result;
   }
 
-  return toAgentToolResult(
+  const result = toAgentToolResult(
     snapshotToTaskResultDetails("send", completed.value, sendResult.value.output),
   );
+
+  emitTaskRuntimeUpdate({
+    details: result.details,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
+  });
+
+  return result;
 }
 
 async function runTaskCancel(
@@ -1163,7 +1360,7 @@ async function runTaskCancel(
   );
 
   if (Result.isError(cancelled)) {
-    return toAgentToolResult({
+    const result = toAgentToolResult({
       op: "cancel",
       status: "failed",
       summary: cancelled.error.message,
@@ -1172,9 +1369,29 @@ async function runTaskCancel(
       error_code: cancelled.error.code,
       error_message: cancelled.error.message,
     });
+
+    emitTaskRuntimeUpdate({
+      details: result.details,
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return result;
   }
 
-  return toAgentToolResult(snapshotToTaskResultDetails("cancel", cancelled.value));
+  const result = toAgentToolResult(snapshotToTaskResultDetails("cancel", cancelled.value));
+
+  emitTaskRuntimeUpdate({
+    details: result.details,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
+  });
+
+  return result;
 }
 
 export async function runTaskToolMvp(
@@ -1266,6 +1483,8 @@ export function registerTaskTool(
         cwd: ctx.cwd,
         signal,
         onUpdate,
+        hasUI: ctx.hasUI,
+        ui: ctx.hasUI ? ctx.ui : undefined,
         deps,
       });
     },

@@ -125,6 +125,8 @@ defineTest("runPrimarySubagentTool routes through task runtime start semantics",
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
     deps,
   });
 
@@ -148,6 +150,8 @@ defineTest("runPrimarySubagentTool defaults description when omitted", async () 
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
     deps,
   });
 
@@ -166,6 +170,8 @@ defineTest("runPrimarySubagentTool keeps result contract parity with task tool p
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
     deps,
   });
 
@@ -179,6 +185,8 @@ defineTest("runPrimarySubagentTool keeps result contract parity with task tool p
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
     deps,
   });
 
@@ -212,6 +220,8 @@ defineTest("runPrimarySubagentTool fails when subagents feature is disabled", as
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
     deps,
   });
 

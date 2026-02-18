@@ -248,6 +248,16 @@ function makeDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDepend
   };
 }
 
+async function runTask(
+  input: Omit<Parameters<typeof runTaskToolMvp>[0], "hasUI" | "ui">,
+): Promise<Awaited<ReturnType<typeof runTaskToolMvp>>> {
+  return runTaskToolMvp({
+    ...input,
+    hasUI: false,
+    ui: undefined,
+  });
+}
+
 defineTest("createTaskId creates deterministic prefixed IDs", () => {
   const taskId = createTaskId(1700000000000);
   assert.match(taskId, /^task_1700000000000_\d{4}$/);
@@ -334,7 +344,7 @@ defineTest("formatTaskToolResult renders collection items", () => {
 });
 
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: { op: "start", prompt: "missing fields" },
     cwd: "/tmp/project",
     signal: undefined,
@@ -349,7 +359,7 @@ defineTest("runTaskToolMvp returns validation failure for malformed payload", as
 defineTest("runTaskToolMvp handles sync start success", async () => {
   const updates: string[] = [];
 
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "start",
       subagent_type: "finder",
@@ -364,7 +374,7 @@ defineTest("runTaskToolMvp handles sync start success", async () => {
     deps: makeDeps(),
   });
 
-  assert.deepEqual(updates, ["running"]);
+  assert.deepEqual(updates, ["running", "succeeded"]);
   assert.equal(result.details.status, "succeeded");
   assert.equal(result.details.task_id, "task_test_0001");
   assert.equal(result.details.subagent_type, "finder");
@@ -376,7 +386,7 @@ defineTest("runTaskToolMvp handles async start and status lifecycle", async () =
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
 
-  const started = await runTaskToolMvp({
+  const started = await runTask({
     params: {
       op: "start",
       async: true,
@@ -394,7 +404,7 @@ defineTest("runTaskToolMvp handles async start and status lifecycle", async () =
   assert.equal(started.details.task_id, "task_test_0001");
   assert.equal(backend.calls.length, 1);
 
-  const statusBefore = await runTaskToolMvp({
+  const statusBefore = await runTask({
     params: {
       op: "status",
       ids: ["task_test_0001"],
@@ -413,7 +423,7 @@ defineTest("runTaskToolMvp handles async start and status lifecycle", async () =
   await Promise.resolve();
   await Promise.resolve();
 
-  const statusAfter = await runTaskToolMvp({
+  const statusAfter = await runTask({
     params: {
       op: "status",
       ids: ["task_test_0001"],
@@ -432,7 +442,7 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
 
-  const started = await runTaskToolMvp({
+  const started = await runTask({
     params: {
       op: "start",
       async: true,
@@ -448,7 +458,7 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
 
   assert.equal(started.details.status, "running");
 
-  const waited = await runTaskToolMvp({
+  const waited = await runTask({
     params: {
       op: "wait",
       ids: ["task_test_0001"],
@@ -468,7 +478,7 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   await Promise.resolve();
   await Promise.resolve();
 
-  const waitedAfter = await runTaskToolMvp({
+  const waitedAfter = await runTask({
     params: {
       op: "wait",
       ids: ["task_test_0001"],
@@ -488,7 +498,7 @@ defineTest("runTaskToolMvp send resumes running task", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
 
-  const started = await runTaskToolMvp({
+  const started = await runTask({
     params: {
       op: "start",
       async: true,
@@ -504,7 +514,7 @@ defineTest("runTaskToolMvp send resumes running task", async () => {
 
   assert.equal(started.details.status, "running");
 
-  const send = await runTaskToolMvp({
+  const send = await runTask({
     params: {
       op: "send",
       id: "task_test_0001",
@@ -530,7 +540,7 @@ defineTest("runTaskToolMvp send resumes running task", async () => {
 defineTest("runTaskToolMvp send rejects terminal task", async () => {
   const deps = makeDeps();
 
-  const started = await runTaskToolMvp({
+  const started = await runTask({
     params: {
       op: "start",
       subagent_type: "finder",
@@ -545,7 +555,7 @@ defineTest("runTaskToolMvp send rejects terminal task", async () => {
 
   assert.equal(started.details.status, "succeeded");
 
-  const send = await runTaskToolMvp({
+  const send = await runTask({
     params: {
       op: "send",
       id: "task_test_0001",
@@ -565,7 +575,7 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
 
-  const started = await runTaskToolMvp({
+  const started = await runTask({
     params: {
       op: "start",
       async: true,
@@ -581,7 +591,7 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
 
   assert.equal(started.details.status, "running");
 
-  const cancelled = await runTaskToolMvp({
+  const cancelled = await runTask({
     params: {
       op: "cancel",
       id: "task_test_0001",
@@ -599,7 +609,7 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
   assert.notEqual(signal, undefined);
   assert.equal(signal?.aborted, true);
 
-  const cancelledAgain = await runTaskToolMvp({
+  const cancelledAgain = await runTask({
     params: {
       op: "cancel",
       id: "task_test_0001",
@@ -614,7 +624,7 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
 });
 
 defineTest("runTaskToolMvp returns per-id errors on status for unknown IDs", async () => {
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "status",
       ids: ["does-not-exist"],
@@ -631,7 +641,7 @@ defineTest("runTaskToolMvp returns per-id errors on status for unknown IDs", asy
 });
 
 defineTest("runTaskToolMvp maps backend failures to failed task state", async () => {
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "start",
       subagent_type: "finder",
@@ -652,7 +662,7 @@ defineTest("runTaskToolMvp maps backend failures to failed task state", async ()
 });
 
 defineTest("runTaskToolMvp maps config load failures", async () => {
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "start",
       subagent_type: "finder",
@@ -677,7 +687,7 @@ defineTest("runTaskToolMvp supports batch start with deterministic item ordering
   const backend = new CountingBackend();
   const deps = makeDeps({ backend });
 
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "start",
       parallel: true,
@@ -722,7 +732,7 @@ defineTest("runTaskToolMvp batch start isolates failures", async () => {
   const backend = new CountingBackend();
   const deps = makeDeps({ backend });
 
-  const result = await runTaskToolMvp({
+  const result = await runTask({
     params: {
       op: "start",
       parallel: true,
@@ -764,7 +774,7 @@ defineTest(
     const backend = new CountingBackend();
     const deps = makeDeps({ backend });
 
-    const started = await runTaskToolMvp({
+    const started = await runTask({
       params: {
         op: "start",
         async: true,
@@ -802,7 +812,7 @@ defineTest(
 
     assert.equal(ids.length, 4);
 
-    const waited = await runTaskToolMvp({
+    const waited = await runTask({
       params: {
         op: "wait",
         ids,

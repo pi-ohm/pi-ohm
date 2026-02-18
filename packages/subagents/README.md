@@ -75,6 +75,12 @@ Baseline running-task display includes:
 - in-flight tool call count
 - elapsed time (`mm:ss`)
 
+Runtime UI surfaces are synchronized from one task snapshot model:
+
+- footer status (`setStatus`) with running/active counters
+- widget task list (`setWidget`) using two-line per-task renderer
+- headless fallback `onUpdate` text with equivalent description/tool-count/elapsed info
+
 Example running block:
 
 ```bash

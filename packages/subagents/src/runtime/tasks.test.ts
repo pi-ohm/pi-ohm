@@ -294,6 +294,36 @@ defineTest("getTasks returns mixed found/unknown lookup entries", () => {
   assert.equal(unknown.errorCode, "unknown_task_id");
 });
 
+defineTest("listTasks returns all active snapshots", () => {
+  const { store } = makeStoreWithClock();
+
+  const first = store.createTask({
+    taskId: "task_1",
+    subagent: finderSubagent,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+  const second = store.createTask({
+    taskId: "task_2",
+    subagent: finderSubagent,
+    description: "Search token refresh",
+    prompt: "Trace refresh flow",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+
+  assert.equal(Result.isOk(first), true);
+  assert.equal(Result.isOk(second), true);
+
+  const snapshots = store.listTasks();
+  assert.equal(snapshots.length, 2);
+
+  const ids = snapshots.map((snapshot) => snapshot.id).sort();
+  assert.deepEqual(ids, ["task_1", "task_2"]);
+});
+
 defineTest("setExecutionPromise and getExecutionPromise round-trip", async () => {
   const { store } = makeStoreWithClock();
 

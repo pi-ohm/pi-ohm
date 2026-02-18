@@ -421,7 +421,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
 
 ### Tickets
 
-- [ ] **S7-T1: Define TUI task snapshot contract**
+- [x] **S7-T1: Define TUI task snapshot contract**
   - Requirements:
     - Canonical snapshot fields include `task_id`, `subagent_type`, `description`, `state`, `active_tool_calls`, `started_at`, `ended_at`, `elapsed_ms`.
   - Acceptance criteria:
@@ -430,7 +430,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Snapshot schema/formatter contract tests.
 
-- [ ] **S7-T2: Spinner and terminal marker policy**
+- [x] **S7-T2: Spinner and terminal marker policy**
   - Requirements:
     - Running states render spinner frames; terminal states render deterministic success/failure/cancel markers.
   - Acceptance criteria:
@@ -439,7 +439,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - State-to-marker mapping tests.
 
-- [ ] **S7-T3: Description propagation to TUI**
+- [x] **S7-T3: Description propagation to TUI**
   - Requirements:
     - TUI line description must be sourced from `task start` request payload.
     - Missing description falls back to deterministic placeholder.
@@ -449,7 +449,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Description propagation tests.
 
-- [ ] **S7-T4: In-flight tool-call counter integration**
+- [x] **S7-T4: In-flight tool-call counter integration**
   - Requirements:
     - Per-task active tool-call count is updated from lifecycle events/runtime tracker.
   - Acceptance criteria:
@@ -458,7 +458,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Concurrent counter correctness tests.
 
-- [ ] **S7-T5: Elapsed time semantics and formatting**
+- [x] **S7-T5: Elapsed time semantics and formatting**
   - Requirements:
     - Elapsed time starts when task is accepted and stops at terminal state.
     - Display format is `mm:ss` for UI lines.
@@ -468,7 +468,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Time progression/freeze tests with controlled clock.
 
-- [ ] **S7-T6: Basic pi-tui line renderer for task list**
+- [x] **S7-T6: Basic pi-tui line renderer for task list**
   - Requirements:
     - Render baseline two-line format:
       - line 1: `spinner/marker + [subagent_type] + description`
@@ -480,7 +480,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Renderer snapshot tests across widths.
 
-- [ ] **S7-T7: Footer and widget synchronization**
+- [x] **S7-T7: Footer and widget synchronization**
   - Requirements:
     - Footer summary and widget/task lines reflect the same underlying task snapshot state.
   - Acceptance criteria:
@@ -489,7 +489,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Integration tests validating synchronized UI snapshots.
 
-- [ ] **S7-T8: Non-UI fallback parity**
+- [x] **S7-T8: Non-UI fallback parity**
   - Requirements:
     - When TUI is unavailable, `onUpdate` plain text must include description, tool count, and elapsed time.
   - Acceptance criteria:

@@ -116,6 +116,17 @@ export async function runPrimarySubagentTool(input: {
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+  readonly hasUI: boolean;
+  readonly ui:
+    | {
+        setStatus(key: string, text: string | undefined): void;
+        setWidget(
+          key: string,
+          content: string[] | undefined,
+          options?: { readonly placement?: "aboveEditor" | "belowEditor" },
+        ): void;
+      }
+    | undefined;
   readonly deps: TaskToolDependencies;
 }): Promise<AgentToolResult<TaskToolResultDetails>> {
   const normalized = normalizePrimaryPrompt(input.params, input.subagent);
@@ -131,6 +142,8 @@ export async function runPrimarySubagentTool(input: {
     cwd: input.cwd,
     signal: input.signal,
     onUpdate: input.onUpdate,
+    hasUI: input.hasUI,
+    ui: input.ui,
     deps: input.deps,
   });
 }
@@ -176,6 +189,8 @@ export function registerPrimarySubagentTools(
           cwd: ctx.cwd,
           signal,
           onUpdate,
+          hasUI: ctx.hasUI,
+          ui: ctx.hasUI ? ctx.ui : undefined,
           deps,
         });
       },

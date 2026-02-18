@@ -108,6 +108,7 @@ export interface TaskRuntimeStore {
     summary: string,
   ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError>;
   getTask(taskId: string): TaskRuntimeSnapshot | undefined;
+  listTasks(): readonly TaskRuntimeSnapshot[];
   getTasks(ids: readonly string[]): readonly TaskRuntimeLookup[];
   setAbortController(
     taskId: string,
@@ -704,6 +705,11 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     const task = this.tasks.get(taskId);
     if (!task) return undefined;
     return toTaskRuntimeSnapshot(task);
+  }
+
+  listTasks(): readonly TaskRuntimeSnapshot[] {
+    this.pruneExpiredTerminalTasks();
+    return [...this.tasks.values()].map((entry) => toTaskRuntimeSnapshot(entry));
   }
 
   getTasks(ids: readonly string[]): readonly TaskRuntimeLookup[] {
