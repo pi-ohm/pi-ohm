@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "./catalog";
 import { SubagentPolicyError } from "./errors";
 
-export type TaskPermissionDecision = "allow" | "ask" | "deny";
+export type TaskPermissionDecision = "allow" | "deny";
 
 export interface TaskPermissionPolicySnapshot {
   readonly defaultDecision: TaskPermissionDecision;
@@ -12,7 +12,11 @@ export interface TaskPermissionPolicySnapshot {
 }
 
 function normalizeDecision(value: unknown): TaskPermissionDecision | undefined {
-  if (value === "allow" || value === "ask" || value === "deny") return value;
+  if (value === "allow" || value === "deny") return value;
+
+  // Legacy compatibility: treat deprecated "ask" policy as deny-safe behavior.
+  if (value === "ask") return "deny";
+
   return undefined;
 }
 
@@ -95,20 +99,6 @@ export function evaluateTaskPermission(
   const decision = getTaskPermissionDecision(subagent, config);
 
   if (decision === "allow") return Result.ok(true);
-
-  if (decision === "ask") {
-    return Result.err(
-      new SubagentPolicyError({
-        code: "task_permission_ask_required",
-        action: "task.invoke",
-        message: `Subagent '${subagent.id}' requires explicit approval before execution`,
-        meta: {
-          subagentId: subagent.id,
-          decision,
-        },
-      }),
-    );
-  }
 
   return Result.err(
     new SubagentPolicyError({

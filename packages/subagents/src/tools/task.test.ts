@@ -685,9 +685,9 @@ defineTest("runTaskToolMvp enforces deny policy decisions", async () => {
   assert.equal(result.details.error_category, "policy");
 });
 
-defineTest("runTaskToolMvp enforces ask policy on send", async () => {
+defineTest("runTaskToolMvp enforces deny policy on send", async () => {
   const backend = new DeferredBackend();
-  let decision: "allow" | "ask" | "deny" = "allow";
+  let decision: "allow" | "deny" = "allow";
 
   const deps = makeDeps({
     backend,
@@ -723,7 +723,7 @@ defineTest("runTaskToolMvp enforces ask policy on send", async () => {
 
   assert.equal(started.details.status, "running");
 
-  decision = "ask";
+  decision = "deny";
   const send = await runTask({
     params: {
       op: "send",
@@ -737,7 +737,7 @@ defineTest("runTaskToolMvp enforces ask policy on send", async () => {
   });
 
   assert.equal(send.details.status, "failed");
-  assert.equal(send.details.error_code, "task_permission_ask_required");
+  assert.equal(send.details.error_code, "task_permission_denied");
   assert.equal(send.details.error_category, "policy");
 
   backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");

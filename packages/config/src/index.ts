@@ -42,8 +42,8 @@ export interface OhmSubagentRuntimeConfig {
   taskMaxConcurrency: number;
   taskRetentionMs: number;
   permissions: {
-    default: "allow" | "ask" | "deny";
-    subagents: Record<string, "allow" | "ask" | "deny">;
+    default: "allow" | "deny";
+    subagents: Record<string, "allow" | "deny">;
     allowInternalRouting: boolean;
   };
 }
@@ -182,23 +182,24 @@ function normalizePositiveInteger(value: unknown, fallback: number): number {
   return value;
 }
 
-function normalizePermissionDecision(
-  value: unknown,
-  fallback: "allow" | "ask" | "deny",
-): "allow" | "ask" | "deny" {
-  if (value === "allow" || value === "ask" || value === "deny") return value;
+function normalizePermissionDecision(value: unknown, fallback: "allow" | "deny"): "allow" | "deny" {
+  if (value === "allow" || value === "deny") return value;
+
+  // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
+  if (value === "ask") return "deny";
+
   return fallback;
 }
 
 function normalizePermissionDecisionMap(
   value: unknown,
-  fallback: Record<string, "allow" | "ask" | "deny">,
-): Record<string, "allow" | "ask" | "deny"> {
+  fallback: Record<string, "allow" | "deny">,
+): Record<string, "allow" | "deny"> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return fallback;
   }
 
-  const normalized: Record<string, "allow" | "ask" | "deny"> = {};
+  const normalized: Record<string, "allow" | "deny"> = {};
   for (const [key, decision] of Object.entries(value)) {
     const trimmedKey = key.trim().toLowerCase();
     if (trimmedKey.length === 0) continue;

@@ -63,7 +63,6 @@ Batch execution notes:
 Task orchestration enforces policy decisions from runtime config:
 
 - `allow` — task execution proceeds
-- `ask` — execution is blocked with `task_permission_ask_required`
 - `deny` — execution is blocked with `task_permission_denied`
 
 Config shape:

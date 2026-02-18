@@ -514,7 +514,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
 
 - [x] **S8-T1: Task permission policy requirements**
   - Requirements:
-    - Support allow/ask/deny semantics for subagent invocation scope.
+    - Support allow/deny semantics for subagent invocation scope.
   - Acceptance criteria:
     - Denied subagents cannot be invoked through task orchestration.
   - Test evidence:

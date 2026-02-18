@@ -79,7 +79,7 @@ defineTest("getTaskPermissionDecision resolves explicit override first", () => {
     subagents: {
       ...baseSubagentRuntimeConfig,
       permissions: {
-        default: "ask",
+        default: "allow",
         subagents: {
           finder: "deny",
         },
@@ -91,7 +91,7 @@ defineTest("getTaskPermissionDecision resolves explicit override first", () => {
   assert.equal(getTaskPermissionDecision(finder, config), "deny");
 });
 
-defineTest("evaluateTaskPermission returns deny and ask policy errors", () => {
+defineTest("evaluateTaskPermission returns deny policy errors", () => {
   const denyConfig: OhmRuntimeConfig = {
     ...baseConfig,
     subagents: {
@@ -110,25 +110,31 @@ defineTest("evaluateTaskPermission returns deny and ask policy errors", () => {
     assert.fail("Expected denied policy error");
   }
   assert.equal(denied.error.code, "task_permission_denied");
+});
 
-  const askConfig: OhmRuntimeConfig = {
+defineTest("deprecated ask policy is treated as deny-safe behavior", () => {
+  const legacyAskConfig: OhmRuntimeConfig = {
     ...baseConfig,
     subagents: {
       ...baseSubagentRuntimeConfig,
       permissions: {
-        default: "ask",
+        default: "allow",
         subagents: {},
-        allowInternalRouting: true,
+        allowInternalRouting: false,
       },
     },
   };
 
-  const ask = evaluateTaskPermission(finder, askConfig);
-  assert.equal(Result.isError(ask), true);
-  if (Result.isOk(ask)) {
-    assert.fail("Expected ask policy error");
+  if (!legacyAskConfig.subagents) {
+    assert.fail("Expected subagent config");
   }
-  assert.equal(ask.error.code, "task_permission_ask_required");
+
+  void Reflect.set(legacyAskConfig.subagents.permissions, "default", "ask");
+  void Reflect.set(legacyAskConfig.subagents.permissions.subagents, "finder", "ask");
+
+  const normalized = getTaskPermissionPolicy(legacyAskConfig);
+  assert.equal(normalized.defaultDecision, "deny");
+  assert.equal(normalized.perSubagent.finder, "deny");
 });
 
 defineTest(

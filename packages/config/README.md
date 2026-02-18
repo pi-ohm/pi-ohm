@@ -16,6 +16,6 @@ Subagents runtime config highlights:
 
 - `subagents.taskMaxConcurrency`
 - `subagents.taskRetentionMs`
-- `subagents.permissions.default` (`allow|ask|deny`)
+- `subagents.permissions.default` (`allow|deny`)
 - `subagents.permissions.subagents` (per-subagent overrides)
 - `subagents.permissions.allowInternalRouting`
