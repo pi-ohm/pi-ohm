@@ -3,7 +3,6 @@
   "version": "0.2.0",
   "private": true,
   "description": "Pi Ohm monorepo: focused Amp-inspired workflows for Pi",
-  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev#readme",
   "keywords": [
     "handoff",
     "imagegen",
@@ -15,6 +14,7 @@
     "subagents",
     "thread-search"
   ],
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev#readme",
   "license": "MIT",
   "workspaces": [
     "packages/*"

@@ -3,8 +3,7 @@ import { TaggedError, type Result } from "better-result";
 export type CoreErrorMeta = Record<string, unknown>;
 
 function messageFromCause(cause: unknown): string {
-  if (cause instanceof Error && cause.message.trim().length > 0)
-    return cause.message;
+  if (cause instanceof Error && cause.message.trim().length > 0) return cause.message;
   if (typeof cause === "string" && cause.trim().length > 0) return cause;
   return String(cause);
 }

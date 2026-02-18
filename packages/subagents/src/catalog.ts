@@ -1,9 +1,4 @@
-export type OhmSubagentId =
-  | "librarian"
-  | "oracle"
-  | "finder"
-  | "task"
-  | "painter";
+export type OhmSubagentId = "librarian" | "oracle" | "finder" | "task" | "painter";
 
 export interface OhmSubagentDefinition {
   id: OhmSubagentId;

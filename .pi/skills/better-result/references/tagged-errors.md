@@ -50,8 +50,7 @@ class DatabaseError extends TaggedError("DatabaseError")<{
   cause: unknown;
 }>() {
   constructor(args: { operation: string; cause: unknown }) {
-    const msg =
-      args.cause instanceof Error ? args.cause.message : String(args.cause);
+    const msg = args.cause instanceof Error ? args.cause.message : String(args.cause);
     super({ ...args, message: `DB ${args.operation} failed: ${msg}` });
   }
 }

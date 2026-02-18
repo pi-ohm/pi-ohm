@@ -132,18 +132,14 @@ function validateHeader(header: string, commitRef: string): ValidationIssue[] {
   return issues;
 }
 
-function getCommitHeadersFromRange(
-  range: string,
-): Array<{ hash: string; header: string }> {
+function getCommitHeadersFromRange(range: string): Array<{ hash: string; header: string }> {
   const result = spawnSync("git", ["log", "--format=%H%x09%s", range], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
 
   if (result.status !== 0) {
-    throw new Error(
-      `Failed to read commits for range '${range}': ${result.stderr.trim()}`,
-    );
+    throw new Error(`Failed to read commits for range '${range}': ${result.stderr.trim()}`);
   }
 
   const lines = result.stdout
