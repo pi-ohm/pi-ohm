@@ -611,6 +611,85 @@ Ship production-ready package quality with clear operational documentation and c
 
 ---
 
+## Epic 2 — Bug Fixes (interactive-shell runtime + result contract)
+
+### Epic goal
+
+Fix correctness/usability issues found in live testing of task orchestration with `subagentBackend=interactive-shell`.
+
+### Demo outcome
+
+Task lifecycle calls return consistent, machine-parseable payloads with full subagent outputs preserved (including multiline text), stable backend identity, and documented invocation behavior.
+
+### Tickets
+
+- [ ] **E2-T1: Async batch output retrieval contract**
+  - Requirements:
+    - `start` with `async:true` + batch must expose a deterministic path to retrieve final subagent outputs.
+    - `status`/`wait` responses must include output availability semantics per task item.
+  - Acceptance criteria:
+    - No “state-only” dead-end where output cannot be retrieved after async completion.
+    - Async + batch flow has explicit documented retrieval examples.
+  - Test evidence:
+    - Integration tests for async batch (`start` -> `wait` -> output retrieval).
+    - Required interactive smoke run showing async batch outputs surfaced without sync rerun.
+
+- [ ] **E2-T2: Preserve multiline output fidelity**
+  - Requirements:
+    - Task result payload must preserve newline content from backend responses.
+    - Renderer may collapse visually, but canonical `details.output` must remain full multiline text.
+  - Acceptance criteria:
+    - Multi-line responses are not reduced to first line in returned payload.
+  - Test evidence:
+    - Unit/integration test with known multiline fixture response.
+    - Smoke run with multiline prompt (e.g., poem/list) validating full output in details.
+
+- [ ] **E2-T3: Truncation policy hardening and disclosure**
+  - Requirements:
+    - Define/implement explicit truncation behavior for long single-line outputs.
+    - Include deterministic truncation metadata in result details when truncation occurs.
+  - Acceptance criteria:
+    - No silent ellipsis-only shortening in canonical result payload.
+    - Consumers can detect truncation programmatically.
+  - Test evidence:
+    - Tests covering long-output truncation boundary and metadata flags.
+    - Doc update for truncation limits and retrieval strategy.
+
+- [ ] **E2-T4: Backend identity normalization**
+  - Requirements:
+    - Standardize backend identity fields across task summary/details and nested subagent output metadata.
+    - Eliminate ambiguous/mixed backend labels for a single task execution.
+  - Acceptance criteria:
+    - One stable backend identity model is used across all task lifecycle responses.
+    - Model/provider identifiers are present or explicitly marked unavailable by contract.
+  - Test evidence:
+    - Tests asserting backend identity consistency in `start/status/wait/send`.
+    - Smoke run confirming no mixed backend labels for one task.
+
+- [ ] **E2-T5: Stable machine payload contract for task results**
+  - Requirements:
+    - Define canonical structured fields for downstream parsing (beyond human-formatted text blocks).
+    - Ensure lifecycle ops expose stable task/item fields for automation.
+  - Acceptance criteria:
+    - Consumers can parse task outcomes without scraping formatted text.
+    - Contract documented in README/ARCH with examples.
+  - Test evidence:
+    - Contract tests asserting field presence/types for each op.
+    - Regression tests for backward-compatible text output.
+
+- [ ] **E2-T6: Invocation mode behavior docs + parity checks**
+  - Requirements:
+    - Document expected differences between `task-routed` and `primary-tool` invocation paths.
+    - Validate parity expectations for shared result envelope fields.
+  - Acceptance criteria:
+    - `librarian` vs `finder/oracle` invocation-mode behavior is explicitly documented.
+    - Divergences are intentional, tested, and user-visible in docs.
+  - Test evidence:
+    - Parity tests comparing key fields across invocation modes.
+    - README/ARCH examples for both invocation paths.
+
+---
+
 ## Definition of Done (per ticket)
 
 A ticket is complete only if all are true:
