@@ -286,7 +286,7 @@ Support robust batched parallel execution through Task tool while preserving det
 
 ### Tickets
 
-- [ ] **S5-T1: Add batched `start` contract for `tasks[]`**
+- [x] **S5-T1: Add batched `start` contract for `tasks[]`**
   - Requirements:
     - Validate each task item independently.
   - Acceptance criteria:
@@ -295,7 +295,7 @@ Support robust batched parallel execution through Task tool while preserving det
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Batch validation tests (all valid, mixed invalid, all invalid).
 
-- [ ] **S5-T2: Add bounded concurrency requirement + config key**
+- [x] **S5-T2: Add bounded concurrency requirement + config key**
   - Requirements:
     - Global/default max concurrency must be enforced.
   - Acceptance criteria:
@@ -304,7 +304,7 @@ Support robust batched parallel execution through Task tool while preserving det
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Concurrency cap tests with instrumentation counters.
 
-- [ ] **S5-T3: Deterministic aggregate ordering**
+- [x] **S5-T3: Deterministic aggregate ordering**
   - Requirements:
     - Batch result ordering must be deterministic (input order unless otherwise documented).
   - Acceptance criteria:
@@ -313,7 +313,7 @@ Support robust batched parallel execution through Task tool while preserving det
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Determinism tests with randomized completion timing.
 
-- [ ] **S5-T4: Batch wait/status coverage**
+- [x] **S5-T4: Batch wait/status coverage**
   - Requirements:
     - `status` and `wait` support parallel batch IDs naturally.
   - Acceptance criteria:
@@ -322,7 +322,7 @@ Support robust batched parallel execution through Task tool while preserving det
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Batch status/wait tests.
 
-- [ ] **S5-T5: Failure isolation in parallel mode**
+- [x] **S5-T5: Failure isolation in parallel mode**
   - Requirements:
     - One task failure must not abort sibling tasks unless explicitly configured.
   - Acceptance criteria:

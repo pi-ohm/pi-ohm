@@ -137,17 +137,6 @@ function operationNotSupportedDetails(op: TaskToolParameters["op"]): TaskToolRes
   };
 }
 
-function batchNotSupportedDetails(): TaskToolResultDetails {
-  return {
-    op: "start",
-    status: "failed",
-    summary: "Batch start is not available yet",
-    backend: "task",
-    error_code: "task_batch_not_supported",
-    error_message: "Use a single start payload with subagent_type, description, and prompt.",
-  };
-}
-
 function lookupNotFoundDetails(
   op: TaskToolParameters["op"],
   taskId: string,
@@ -560,15 +549,361 @@ function resolveSingleLookup(
   return lookup.snapshot;
 }
 
-async function runTaskStart(
-  params: Extract<TaskToolParameters, { op: "start" }>,
+type TaskStartSingleParameters = Extract<
+  TaskToolParameters,
+  { op: "start"; subagent_type: string }
+>;
+type TaskStartBatchParameters = {
+  readonly op: "start";
+  readonly tasks: readonly {
+    readonly subagent_type: string;
+    readonly description: string;
+    readonly prompt: string;
+    readonly async?: boolean;
+  }[];
+  readonly parallel?: boolean;
+  readonly async?: boolean;
+};
+
+interface PreparedTaskExecution {
+  readonly index: number;
+  readonly taskId: string;
+  readonly createdSnapshot: TaskRuntimeSnapshot;
+  run(): Promise<TaskRuntimeSnapshot>;
+}
+
+function resolveBatchMaxConcurrency(config: OhmRuntimeConfig): number {
+  const configured = config.subagents?.taskMaxConcurrency;
+  if (configured === undefined) return 3;
+  if (!Number.isInteger(configured) || configured <= 0) return 3;
+  return configured;
+}
+
+function toTaskItemFailure(input: {
+  readonly id: string;
+  readonly summary: string;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+  readonly subagentType?: string;
+  readonly description?: string;
+}): TaskToolItemDetails {
+  return {
+    id: input.id,
+    found: false,
+    summary: input.summary,
+    subagent_type: input.subagentType,
+    description: input.description,
+    error_code: input.errorCode,
+    error_message: input.errorMessage,
+  };
+}
+
+function fallbackFailedSnapshot(input: {
+  readonly created: TaskRuntimeSnapshot;
+  readonly errorCode: string;
+  readonly errorMessage: string;
+}): TaskRuntimeSnapshot {
+  return {
+    ...input.created,
+    state: "failed",
+    summary: input.errorMessage,
+    errorCode: input.errorCode,
+    errorMessage: input.errorMessage,
+    activeToolCalls: 0,
+    endedAtEpochMs: Date.now(),
+    updatedAtEpochMs: Date.now(),
+  };
+}
+
+function prepareTaskExecution(input: {
+  readonly index: number;
+  readonly taskId: string;
+  readonly subagent: OhmSubagentDefinition;
+  readonly description: string;
+  readonly prompt: string;
+  readonly cwd: string;
+  readonly config: OhmRuntimeConfig;
+  readonly signal: AbortSignal | undefined;
+  readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+  readonly deps: TaskToolDependencies;
+}): Result<PreparedTaskExecution, TaskToolItemDetails> {
+  const created = input.deps.taskStore.createTask({
+    taskId: input.taskId,
+    subagent: input.subagent,
+    description: input.description,
+    prompt: input.prompt,
+    backend: input.deps.backend.id,
+    invocation: getSubagentInvocationMode(input.subagent.primary),
+  });
+
+  if (Result.isError(created)) {
+    return Result.err(
+      toTaskItemFailure({
+        id: input.taskId,
+        summary: created.error.message,
+        errorCode: created.error.code,
+        errorMessage: created.error.message,
+        subagentType: input.subagent.id,
+        description: input.description,
+      }),
+    );
+  }
+
+  const controller = new AbortController();
+  const detachAbortLink = attachAbortSignal(input.signal, controller);
+  const bindController = input.deps.taskStore.setAbortController(input.taskId, controller);
+
+  if (Result.isError(bindController)) {
+    detachAbortLink();
+    return Result.err(
+      toTaskItemFailure({
+        id: input.taskId,
+        summary: bindController.error.message,
+        errorCode: bindController.error.code,
+        errorMessage: bindController.error.message,
+        subagentType: input.subagent.id,
+        description: input.description,
+      }),
+    );
+  }
+
+  const run = async (): Promise<TaskRuntimeSnapshot> => {
+    const lifecyclePromise = runTaskExecutionLifecycle({
+      taskId: input.taskId,
+      subagent: input.subagent,
+      description: input.description,
+      prompt: input.prompt,
+      cwd: input.cwd,
+      config: input.config,
+      signal: controller.signal,
+      onUpdate: input.onUpdate,
+      deps: input.deps,
+    }).finally(() => {
+      detachAbortLink();
+    });
+
+    const trackedLifecycle = lifecyclePromise.then(() => undefined);
+    const attachPromise = input.deps.taskStore.setExecutionPromise(input.taskId, trackedLifecycle);
+
+    if (Result.isError(attachPromise)) {
+      controller.abort();
+      const failed = input.deps.taskStore.markFailed(
+        input.taskId,
+        attachPromise.error.message,
+        attachPromise.error.code,
+        attachPromise.error.message,
+      );
+
+      if (Result.isError(failed)) {
+        return fallbackFailedSnapshot({
+          created: created.value,
+          errorCode: failed.error.code,
+          errorMessage: failed.error.message,
+        });
+      }
+
+      return failed.value;
+    }
+
+    return lifecyclePromise;
+  };
+
+  return Result.ok({
+    index: input.index,
+    taskId: input.taskId,
+    createdSnapshot: created.value,
+    run,
+  });
+}
+
+async function runPreparedTaskExecutions(
+  prepared: readonly PreparedTaskExecution[],
+  concurrency: number,
+): Promise<readonly TaskRuntimeSnapshot[]> {
+  const workerCount = Math.min(Math.max(concurrency, 1), prepared.length);
+  const results: Array<TaskRuntimeSnapshot | undefined> = Array.from(
+    { length: prepared.length },
+    () => undefined,
+  );
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex;
+      if (index >= prepared.length) return;
+      nextIndex += 1;
+
+      const execution = prepared[index];
+      if (!execution) return;
+
+      const completed = await execution.run();
+      results[index] = completed;
+    }
+  };
+
+  const workers: Promise<void>[] = [];
+  for (let index = 0; index < workerCount; index += 1) {
+    workers.push(worker());
+  }
+
+  await Promise.all(workers);
+
+  return prepared.map((execution, index) => {
+    const completed = results[index];
+    if (completed) return completed;
+
+    return execution.createdSnapshot;
+  });
+}
+
+function summarizeBatchStart(items: readonly TaskToolItemDetails[], asyncMode: boolean): string {
+  const total = items.length;
+  const failed = items.filter((item) => !item.found || item.status === "failed").length;
+  const active = total - failed;
+
+  if (asyncMode) {
+    return `Started batch tasks: ${active}/${total} accepted`;
+  }
+
+  const succeeded = items.filter((item) => item.status === "succeeded").length;
+  return `Completed batch tasks: ${succeeded}/${total} succeeded`;
+}
+
+async function runTaskStartBatch(
+  params: TaskStartBatchParameters,
   input: RunTaskToolInput,
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
-  if ("tasks" in params) {
-    return toAgentToolResult(batchNotSupportedDetails());
+  const items: Array<TaskToolItemDetails | undefined> = Array.from(
+    { length: params.tasks.length },
+    () => undefined,
+  );
+  const prepared: PreparedTaskExecution[] = [];
+
+  for (let index = 0; index < params.tasks.length; index += 1) {
+    const task = params.tasks[index];
+    if (!task) {
+      items[index] = toTaskItemFailure({
+        id: `task_batch_${index + 1}`,
+        summary: "Missing batch task item",
+        errorCode: "task_batch_item_missing",
+        errorMessage: "Missing batch task item",
+      });
+      continue;
+    }
+
+    const subagent = input.deps.findSubagentById(task.subagent_type);
+    if (!subagent) {
+      items[index] = toTaskItemFailure({
+        id: `task_batch_${index + 1}`,
+        summary: `Unknown subagent_type '${task.subagent_type}'`,
+        errorCode: "unknown_subagent_type",
+        errorMessage: `No subagent profile found for '${task.subagent_type}'.`,
+        subagentType: task.subagent_type,
+        description: task.description,
+      });
+      continue;
+    }
+
+    const availability = isSubagentAvailable(subagent, config.config);
+    if (Result.isError(availability)) {
+      items[index] = toTaskItemFailure({
+        id: `task_batch_${index + 1}`,
+        summary: availability.error.message,
+        errorCode: availability.error.code,
+        errorMessage: availability.error.message,
+        subagentType: subagent.id,
+        description: task.description,
+      });
+      continue;
+    }
+
+    const taskId = input.deps.createTaskId();
+    const preparedTask = prepareTaskExecution({
+      index,
+      taskId,
+      subagent,
+      description: task.description,
+      prompt: task.prompt,
+      cwd: input.cwd,
+      config: config.config,
+      signal: input.signal,
+      onUpdate: input.onUpdate,
+      deps: input.deps,
+    });
+
+    if (Result.isError(preparedTask)) {
+      items[index] = preparedTask.error;
+      continue;
+    }
+
+    prepared.push(preparedTask.value);
+    items[index] = snapshotToItem(preparedTask.value.createdSnapshot);
   }
 
+  const concurrency = params.parallel ? resolveBatchMaxConcurrency(config.config) : 1;
+
+  if (params.async) {
+    void runPreparedTaskExecutions(prepared, concurrency).catch(() => undefined);
+
+    for (const execution of prepared) {
+      const current = input.deps.taskStore.getTask(execution.taskId) ?? execution.createdSnapshot;
+      items[execution.index] = snapshotToItem(current);
+    }
+
+    const normalizedItems = items.map((item, index) => {
+      if (item) return item;
+      return toTaskItemFailure({
+        id: `task_batch_${index + 1}`,
+        summary: "Batch task result unavailable",
+        errorCode: "task_batch_result_unavailable",
+        errorMessage: "Batch task result unavailable",
+      });
+    });
+
+    const status = aggregateStatus(normalizedItems);
+    return toAgentToolResult({
+      op: "start",
+      status,
+      summary: summarizeBatchStart(normalizedItems, true),
+      backend: input.deps.backend.id,
+      items: normalizedItems,
+    });
+  }
+
+  const completed = await runPreparedTaskExecutions(prepared, concurrency);
+  for (let index = 0; index < prepared.length; index += 1) {
+    const execution = prepared[index];
+    const snapshot = completed[index];
+    if (!execution || !snapshot) continue;
+    items[execution.index] = snapshotToItem(snapshot);
+  }
+
+  const normalizedItems = items.map((item, index) => {
+    if (item) return item;
+    return toTaskItemFailure({
+      id: `task_batch_${index + 1}`,
+      summary: "Batch task result unavailable",
+      errorCode: "task_batch_result_unavailable",
+      errorMessage: "Batch task result unavailable",
+    });
+  });
+
+  const status = aggregateStatus(normalizedItems);
+  return toAgentToolResult({
+    op: "start",
+    status,
+    summary: summarizeBatchStart(normalizedItems, false),
+    backend: input.deps.backend.id,
+    items: normalizedItems,
+  });
+}
+
+async function runTaskStartSingle(
+  params: TaskStartSingleParameters,
+  input: RunTaskToolInput,
+  config: LoadedOhmRuntimeConfig,
+): Promise<AgentToolResult<TaskToolResultDetails>> {
   const subagent = input.deps.findSubagentById(params.subagent_type);
   if (!subagent) {
     return toAgentToolResult({
@@ -597,87 +932,64 @@ async function runTaskStart(
   }
 
   const taskId = input.deps.createTaskId();
-  const created = input.deps.taskStore.createTask({
-    taskId,
-    subagent,
-    description: params.description,
-    prompt: params.prompt,
-    backend: input.deps.backend.id,
-    invocation: getSubagentInvocationMode(subagent.primary),
-  });
-
-  if (Result.isError(created)) {
-    return toAgentToolResult({
-      op: "start",
-      status: "failed",
-      summary: created.error.message,
-      backend: input.deps.backend.id,
-      error_code: created.error.code,
-      error_message: created.error.message,
-    });
-  }
-
-  const controller = new AbortController();
-  const detachAbortLink = attachAbortSignal(input.signal, controller);
-  const bindController = input.deps.taskStore.setAbortController(taskId, controller);
-
-  if (Result.isError(bindController)) {
-    detachAbortLink();
-    return toAgentToolResult({
-      op: "start",
-      status: "failed",
-      summary: bindController.error.message,
-      backend: input.deps.backend.id,
-      task_id: taskId,
-      error_code: bindController.error.code,
-      error_message: bindController.error.message,
-    });
-  }
-
-  const lifecyclePromise = runTaskExecutionLifecycle({
+  const prepared = prepareTaskExecution({
+    index: 0,
     taskId,
     subagent,
     description: params.description,
     prompt: params.prompt,
     cwd: input.cwd,
     config: config.config,
-    signal: controller.signal,
+    signal: input.signal,
     onUpdate: input.onUpdate,
     deps: input.deps,
-  }).finally(() => {
-    detachAbortLink();
   });
 
-  const trackedLifecycle = lifecyclePromise.then(() => undefined);
-  const attachPromise = input.deps.taskStore.setExecutionPromise(taskId, trackedLifecycle);
-  if (Result.isError(attachPromise)) {
-    controller.abort();
+  if (Result.isError(prepared)) {
     return toAgentToolResult({
       op: "start",
       status: "failed",
-      summary: attachPromise.error.message,
-      backend: input.deps.backend.id,
       task_id: taskId,
-      error_code: attachPromise.error.code,
-      error_message: attachPromise.error.message,
+      subagent_type: subagent.id,
+      description: params.description,
+      summary: prepared.error.summary,
+      backend: input.deps.backend.id,
+      error_code: prepared.error.error_code,
+      error_message: prepared.error.error_message,
     });
   }
 
   if (params.async) {
+    void prepared.value.run().catch(() => undefined);
+    const current = input.deps.taskStore.getTask(taskId) ?? prepared.value.createdSnapshot;
     return toAgentToolResult({
       op: "start",
-      status: "running",
-      task_id: taskId,
-      subagent_type: subagent.id,
-      description: params.description,
+      status: current.state,
+      task_id: current.id,
+      subagent_type: current.subagentType,
+      description: current.description,
       summary: `Started async ${subagent.name}: ${params.description}`,
-      backend: input.deps.backend.id,
-      invocation: getSubagentInvocationMode(subagent.primary),
+      backend: current.backend,
+      invocation: current.invocation,
+      error_code: current.errorCode,
+      error_message: current.errorMessage,
     });
   }
 
-  const completed = await lifecyclePromise;
+  const completed = await prepared.value.run();
   return toAgentToolResult(snapshotToTaskResultDetails("start", completed, completed.output));
+}
+
+async function runTaskStart(
+  params: Extract<TaskToolParameters, { op: "start" }>,
+  input: RunTaskToolInput,
+  config: LoadedOhmRuntimeConfig,
+): Promise<AgentToolResult<TaskToolResultDetails>> {
+  if ("tasks" in params) {
+    return runTaskStartBatch(params, input, config);
+  }
+
+  return runTaskStartSingle(params, input, config);
 }
 
 async function runTaskStatus(

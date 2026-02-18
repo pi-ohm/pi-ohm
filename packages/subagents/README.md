@@ -30,6 +30,7 @@ operations (`start/status/wait/send/cancel`) are exposed through this tool.
 Current behavior:
 
 - supports `op: "start"` for a single task payload (sync + `async:true`)
+- supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - returns `task_id`, status, and deterministic task details
 - persists task registry snapshots to disk for resume/reload behavior
@@ -47,9 +48,11 @@ Example payload:
 }
 ```
 
-Not shipped yet:
+Batch execution notes:
 
-- batched `start` (`tasks[]`)
+- aggregate item order is deterministic (input order)
+- bounded parallelism is enforced by `subagents.taskMaxConcurrency` (default `3`)
+- task failures are isolated; one failed batch item does not abort siblings
 
 Persistence details:
 

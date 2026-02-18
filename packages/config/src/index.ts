@@ -38,11 +38,17 @@ export interface OhmPainterProviders {
   };
 }
 
+export interface OhmSubagentRuntimeConfig {
+  taskMaxConcurrency: number;
+  taskRetentionMs: number;
+}
+
 export interface OhmRuntimeConfig {
   defaultMode: OhmMode;
   subagentBackend: OhmSubagentBackend;
   features: OhmFeatureFlags;
   painter: OhmPainterProviders;
+  subagents?: OhmSubagentRuntimeConfig;
 }
 
 export interface OhmConfigPaths {
@@ -83,6 +89,10 @@ const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
       endpoint: "",
       apiVersion: "2025-04-01-preview",
     },
+  },
+  subagents: {
+    taskMaxConcurrency: 3,
+    taskRetentionMs: 1000 * 60 * 60 * 24,
   },
 };
 
@@ -154,6 +164,12 @@ function normalizeSubagentBackend(
 function normalizeString(value: unknown, fallback: string): string {
   if (typeof value === "string") return value;
   return fallback;
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  if (typeof value !== "number") return fallback;
+  if (!Number.isInteger(value) || value <= 0) return fallback;
+  return value;
 }
 
 function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
@@ -231,6 +247,33 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     azurePatch.apiVersion,
     next.painter.azureOpenai.apiVersion,
   );
+
+  const subagentPatch =
+    patch.subagents && typeof patch.subagents === "object"
+      ? (patch.subagents as JsonMap)
+      : undefined;
+
+  const subagentDefaults =
+    next.subagents ??
+    ({
+      taskMaxConcurrency: DEFAULT_OHM_CONFIG.subagents?.taskMaxConcurrency ?? 3,
+      taskRetentionMs: DEFAULT_OHM_CONFIG.subagents?.taskRetentionMs ?? 1000 * 60 * 60 * 24,
+    } satisfies OhmSubagentRuntimeConfig);
+
+  const taskMaxConcurrency = normalizePositiveInteger(
+    subagentPatch?.taskMaxConcurrency,
+    subagentDefaults.taskMaxConcurrency,
+  );
+
+  const taskRetentionMs = normalizePositiveInteger(
+    subagentPatch?.taskRetentionMs,
+    subagentDefaults.taskRetentionMs,
+  );
+
+  next.subagents = {
+    taskMaxConcurrency,
+    taskRetentionMs,
+  };
 
   return next;
 }

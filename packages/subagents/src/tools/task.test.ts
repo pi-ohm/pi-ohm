@@ -50,6 +50,10 @@ const runtimeConfigFixture: OhmRuntimeConfig = {
       apiVersion: "",
     },
   },
+  subagents: {
+    taskMaxConcurrency: 2,
+    taskRetentionMs: 1000 * 60 * 60,
+  },
 };
 
 const loadedConfigFixture: LoadedOhmRuntimeConfig = {
@@ -180,12 +184,65 @@ class DeferredBackend implements TaskExecutionBackend {
   }
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+class CountingBackend implements TaskExecutionBackend {
+  readonly id = "counting-backend";
+  inFlight = 0;
+  maxInFlight = 0;
+
+  async executeStart(input: TaskBackendStartInput) {
+    this.inFlight += 1;
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
+
+    const delay = input.description.includes("slow")
+      ? 35
+      : input.description.includes("medium")
+        ? 20
+        : 8;
+
+    await sleep(delay);
+    this.inFlight -= 1;
+
+    if (input.description.includes("fail")) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "backend_failed",
+          stage: "execute_start",
+          message: `forced failure for ${input.description}`,
+        }),
+      );
+    }
+
+    return Result.ok({
+      summary: `Finder: ${input.description}`,
+      output: `output for ${input.description}`,
+    });
+  }
+
+  async executeSend(input: TaskBackendSendInput) {
+    return Result.ok({
+      summary: `Finder follow-up: ${input.prompt}`,
+      output: `follow-up output for ${input.prompt}`,
+    });
+  }
+}
+
 function makeDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDependencies {
+  let sequence = 0;
+
   return {
     loadConfig: async () => loadedConfigFixture,
     backend: new SuccessfulBackend(),
     findSubagentById: (id) => (id === "finder" ? finderSubagentFixture : undefined),
-    createTaskId: () => "task_test_0001",
+    createTaskId: () => {
+      sequence += 1;
+      return `task_test_${String(sequence).padStart(4, "0")}`;
+    },
     taskStore: createInMemoryTaskRuntimeStore(),
     ...overrides,
   };
@@ -616,28 +673,155 @@ defineTest("runTaskToolMvp maps config load failures", async () => {
   assert.equal(result.details.error_code, "task_config_load_failed");
 });
 
-defineTest("runTaskToolMvp rejects batch start for now", async () => {
+defineTest("runTaskToolMvp supports batch start with deterministic item ordering", async () => {
+  const backend = new CountingBackend();
+  const deps = makeDeps({ backend });
+
   const result = await runTaskToolMvp({
     params: {
       op: "start",
+      parallel: true,
       tasks: [
         {
           subagent_type: "finder",
-          description: "scan",
-          prompt: "trace",
+          description: "slow-first",
+          prompt: "trace slow-first",
+        },
+        {
+          subagent_type: "finder",
+          description: "fast-second",
+          prompt: "trace fast-second",
+        },
+        {
+          subagent_type: "finder",
+          description: "medium-third",
+          prompt: "trace medium-third",
         },
       ],
-      parallel: true,
     },
     cwd: "/tmp/project",
     signal: undefined,
     onUpdate: undefined,
-    deps: makeDeps(),
+    deps,
+  });
+
+  assert.equal(result.details.op, "start");
+  assert.equal(result.details.status, "succeeded");
+
+  const items = result.details.items ?? [];
+  assert.equal(items.length, 3);
+  assert.equal(items[0]?.description, "slow-first");
+  assert.equal(items[1]?.description, "fast-second");
+  assert.equal(items[2]?.description, "medium-third");
+  assert.equal(items[0]?.status, "succeeded");
+  assert.equal(items[1]?.status, "succeeded");
+  assert.equal(items[2]?.status, "succeeded");
+});
+
+defineTest("runTaskToolMvp batch start isolates failures", async () => {
+  const backend = new CountingBackend();
+  const deps = makeDeps({ backend });
+
+  const result = await runTaskToolMvp({
+    params: {
+      op: "start",
+      parallel: true,
+      tasks: [
+        {
+          subagent_type: "finder",
+          description: "fast-pass",
+          prompt: "trace pass",
+        },
+        {
+          subagent_type: "finder",
+          description: "medium-fail",
+          prompt: "trace fail",
+        },
+        {
+          subagent_type: "finder",
+          description: "slow-pass",
+          prompt: "trace pass again",
+        },
+      ],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
   });
 
   assert.equal(result.details.status, "failed");
-  assert.equal(result.details.error_code, "task_batch_not_supported");
+  const items = result.details.items ?? [];
+  assert.equal(items.length, 3);
+  assert.equal(items[0]?.status, "succeeded");
+  assert.equal(items[1]?.status, "failed");
+  assert.equal(items[2]?.status, "succeeded");
 });
+
+defineTest(
+  "runTaskToolMvp batch async honors configured concurrency and wait coverage",
+  async () => {
+    const backend = new CountingBackend();
+    const deps = makeDeps({ backend });
+
+    const started = await runTaskToolMvp({
+      params: {
+        op: "start",
+        async: true,
+        parallel: true,
+        tasks: [
+          {
+            subagent_type: "finder",
+            description: "slow-1",
+            prompt: "trace slow-1",
+          },
+          {
+            subagent_type: "finder",
+            description: "slow-2",
+            prompt: "trace slow-2",
+          },
+          {
+            subagent_type: "finder",
+            description: "slow-3",
+            prompt: "trace slow-3",
+          },
+          {
+            subagent_type: "finder",
+            description: "slow-4",
+            prompt: "trace slow-4",
+          },
+        ],
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    const ids = (started.details.items ?? []).filter((item) => item.found).map((item) => item.id);
+
+    assert.equal(ids.length, 4);
+
+    const waited = await runTaskToolMvp({
+      params: {
+        op: "wait",
+        ids,
+        timeout_ms: 300,
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    assert.equal(waited.details.status, "succeeded");
+    assert.equal(
+      waited.details.items?.every((item) => item.status === "succeeded"),
+      true,
+    );
+    assert.equal(backend.maxInFlight, 2);
+  },
+);
 
 defineTest("registerTaskTool registers task tool definition", () => {
   const registeredNames: string[] = [];
