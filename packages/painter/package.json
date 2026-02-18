@@ -1,7 +1,7 @@
 {
   "name": "@pi-ohm/painter",
   "version": "0.6.2",
-  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/prod/packages/painter#readme",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/painter#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pi-ohm/pi-ohm.git",

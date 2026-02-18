@@ -1,6 +1,7 @@
 {
   "name": "@pi-ohm/handoff",
   "version": "0.6.2",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/handoff#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pi-ohm/pi-ohm.git",
