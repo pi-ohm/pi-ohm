@@ -89,6 +89,17 @@ OpenCode-style payload + Codex-style async lifecycle.
 { "op": "cancel", "id": "task_1" }
 ```
 
+Compatibility behavior:
+
+- `status`/`wait` normalize either `id` or `ids`
+- `op:"result"` normalizes to `status`
+
+Backend selection behavior:
+
+- `subagentBackend:"interactive-shell"` runs nested `pi` execution
+- `subagentBackend:"none"` uses deterministic scaffold backend
+- `subagentBackend:"custom-plugin"` is currently surfaced as unsupported
+
 ### Task tool discovery payload requirements
 
 The `task` tool description/instructions presented to the model should include an

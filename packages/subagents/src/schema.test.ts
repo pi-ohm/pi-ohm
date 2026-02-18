@@ -68,7 +68,7 @@ defineTest("TaskToolParametersSchema accepts valid single start payload", () => 
   assert.equal(parsed.value.description, "Auth flow scan");
 });
 
-defineTest("TaskToolParametersSchema rejects start payload with mixed single+batch fields", () => {
+defineTest("TaskToolParametersSchema normalizes mixed single+batch start payload to batch", () => {
   const mixedPayload = {
     ...validSingleStartPayload,
     tasks: [
@@ -81,12 +81,16 @@ defineTest("TaskToolParametersSchema rejects start payload with mixed single+bat
   };
 
   const parsed = parseTaskToolParameters(mixedPayload);
-  assert.equal(Result.isError(parsed), true);
-  if (Result.isOk(parsed)) {
-    assert.fail("Expected mixed single+batch payload to fail");
+  assert.equal(Result.isOk(parsed), true);
+  if (Result.isError(parsed)) {
+    assert.fail("Expected mixed single+batch payload to normalize");
   }
 
-  assert.equal(parsed.error.code, "invalid_task_tool_payload");
+  if (parsed.value.op !== "start" || !("tasks" in parsed.value)) {
+    assert.fail("Expected normalized batch payload");
+  }
+
+  assert.equal(parsed.value.tasks.length, 1);
 });
 
 defineTest("TaskToolParametersSchema accepts valid batch start payload", () => {
@@ -134,6 +138,24 @@ defineTest("TaskToolParametersSchema validates status operation", () => {
   assert.equal(parsed.value.op, "status");
 });
 
+defineTest("TaskToolParametersSchema normalizes status id alias", () => {
+  const parsed = parseTaskToolParameters({
+    op: "status",
+    id: "task_1",
+  });
+
+  assert.equal(Result.isOk(parsed), true);
+  if (Result.isError(parsed)) {
+    assert.fail("Expected status id alias to parse");
+  }
+
+  if (parsed.value.op !== "status") {
+    assert.fail("Expected status payload");
+  }
+
+  assert.deepEqual(parsed.value.ids, ["task_1"]);
+});
+
 defineTest("TaskToolParametersSchema validates wait operation with timeout", () => {
   const parsed = parseTaskToolParameters({
     op: "wait",
@@ -147,6 +169,26 @@ defineTest("TaskToolParametersSchema validates wait operation with timeout", () 
   }
 
   assert.equal(parsed.value.op, "wait");
+});
+
+defineTest("TaskToolParametersSchema normalizes wait id alias and ignores unrelated fields", () => {
+  const parsed = parseTaskToolParameters({
+    op: "wait",
+    id: "task_1",
+    subagent_type: "finder",
+    description: "should be ignored",
+  });
+
+  assert.equal(Result.isOk(parsed), true);
+  if (Result.isError(parsed)) {
+    assert.fail("Expected wait id alias to parse");
+  }
+
+  if (parsed.value.op !== "wait") {
+    assert.fail("Expected wait payload");
+  }
+
+  assert.deepEqual(parsed.value.ids, ["task_1"]);
 });
 
 defineTest("TaskToolParametersSchema rejects wait operation with non-positive timeout", () => {
@@ -192,6 +234,24 @@ defineTest("TaskToolParametersSchema rejects unknown operation names", () => {
   }
 
   assert.equal(parsed.error.code, "invalid_task_tool_payload");
+});
+
+defineTest("TaskToolParametersSchema maps result op alias to status", () => {
+  const parsed = parseTaskToolParameters({
+    op: "result",
+    id: "task_1",
+  });
+
+  assert.equal(Result.isOk(parsed), true);
+  if (Result.isError(parsed)) {
+    assert.fail("Expected result op alias to parse");
+  }
+
+  if (parsed.value.op !== "status") {
+    assert.fail("Expected status payload");
+  }
+
+  assert.deepEqual(parsed.value.ids, ["task_1"]);
 });
 
 defineTest("TaskToolParametersSchema exposes failing path for invalid nested task field", () => {

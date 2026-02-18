@@ -160,6 +160,115 @@ function normalizeTypeBoxPath(path: string | undefined): string | undefined {
   return normalizedPath;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function toStringList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((entry) => toTrimmedString(entry))
+      .filter((entry): entry is string => typeof entry === "string");
+
+    if (normalized.length === 0) return undefined;
+    return normalized;
+  }
+
+  const single = toTrimmedString(value);
+  if (!single) return undefined;
+  return [single];
+}
+
+function toBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  return undefined;
+}
+
+function toInteger(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isInteger(value)) return undefined;
+  return value;
+}
+
+function normalizeTaskStartItem(entry: unknown): unknown {
+  if (!isObjectRecord(entry)) return entry;
+
+  return {
+    subagent_type: Reflect.get(entry, "subagent_type"),
+    description: Reflect.get(entry, "description"),
+    prompt: Reflect.get(entry, "prompt"),
+    async: toBoolean(Reflect.get(entry, "async")),
+  };
+}
+
+function normalizeTaskToolPayload(input: unknown): unknown {
+  if (!isObjectRecord(input)) return input;
+
+  const rawOp = toTrimmedString(Reflect.get(input, "op"));
+  if (!rawOp) return input;
+
+  const op = rawOp === "result" ? "status" : rawOp;
+
+  if (op === "start") {
+    const rawTasks = Reflect.get(input, "tasks");
+    if (Array.isArray(rawTasks)) {
+      return {
+        op: "start",
+        tasks: rawTasks.map((entry) => normalizeTaskStartItem(entry)),
+        parallel: toBoolean(Reflect.get(input, "parallel")),
+        async: toBoolean(Reflect.get(input, "async")),
+      };
+    }
+
+    return {
+      op: "start",
+      subagent_type: Reflect.get(input, "subagent_type"),
+      description: Reflect.get(input, "description"),
+      prompt: Reflect.get(input, "prompt"),
+      async: toBoolean(Reflect.get(input, "async")),
+    };
+  }
+
+  if (op === "status") {
+    return {
+      op: "status",
+      ids: toStringList(Reflect.get(input, "ids") ?? Reflect.get(input, "id")),
+    };
+  }
+
+  if (op === "wait") {
+    return {
+      op: "wait",
+      ids: toStringList(Reflect.get(input, "ids") ?? Reflect.get(input, "id")),
+      timeout_ms: toInteger(Reflect.get(input, "timeout_ms")),
+    };
+  }
+
+  if (op === "send") {
+    return {
+      op: "send",
+      id: Reflect.get(input, "id"),
+      prompt: Reflect.get(input, "prompt"),
+    };
+  }
+
+  if (op === "cancel") {
+    return {
+      op: "cancel",
+      id: Reflect.get(input, "id"),
+    };
+  }
+
+  return input;
+}
+
 function firstTypeBoxPathOrUndefined(input: unknown): string | undefined {
   const firstError = Value.Errors(TaskToolParametersSchema, input).First();
   const directPath = normalizeTypeBoxPath(firstError?.path);
@@ -186,8 +295,10 @@ function firstTypeBoxPathOrUndefined(input: unknown): string | undefined {
 export function parseTaskToolParameters(
   input: unknown,
 ): SubagentResult<TaskToolParameters, SubagentValidationError> {
-  if (!Value.Check(TaskToolParametersSchema, input)) {
-    const path = firstTypeBoxPathOrUndefined(input);
+  const normalizedInput = normalizeTaskToolPayload(input);
+
+  if (!Value.Check(TaskToolParametersSchema, normalizedInput)) {
+    const path = firstTypeBoxPathOrUndefined(normalizedInput);
     return Result.err(
       new SubagentValidationError({
         code: "invalid_task_tool_payload",
@@ -199,7 +310,7 @@ export function parseTaskToolParameters(
     );
   }
 
-  return Result.ok(Value.Decode(TaskToolParametersSchema, input));
+  return Result.ok(Value.Decode(TaskToolParametersSchema, normalizedInput));
 }
 
 const BaseTaskRecordSchema = z.strictObject({

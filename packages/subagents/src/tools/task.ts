@@ -75,6 +75,37 @@ export interface TaskToolDependencies {
   readonly taskStore: TaskRuntimeStore;
 }
 
+function resolveBackendId(
+  backend: TaskExecutionBackend,
+  config: OhmRuntimeConfig | undefined,
+): string {
+  if (!config) return backend.id;
+  if (!backend.resolveBackendId) return backend.id;
+  return backend.resolveBackendId(config);
+}
+
+function inferRequestedOp(params: unknown): TaskToolParameters["op"] {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return "start";
+  }
+
+  const op = Reflect.get(params, "op");
+  if (op === "start" || op === "status" || op === "wait" || op === "send" || op === "cancel") {
+    return op;
+  }
+
+  if (op === "result") return "status";
+  return "start";
+}
+
+function isHelpOperation(params: unknown): boolean {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    return false;
+  }
+
+  return Reflect.get(params, "op") === "help";
+}
+
 function parsePositiveIntegerEnv(name: string): number | undefined {
   const raw = process.env[name];
   if (!raw) return undefined;
@@ -119,18 +150,32 @@ export function createDefaultTaskToolDependencies(): TaskToolDependencies {
 }
 
 function validationErrorDetails(
+  op: TaskToolParameters["op"],
   message: string,
   code: string,
   path?: string,
 ): TaskToolResultDetails {
   return {
-    op: "start",
+    op,
     status: "failed",
     summary: message,
     backend: "task",
     error_code: code,
     error_message: path ? `${message} (path: ${path})` : message,
   };
+}
+
+function resolveCollectionBackend(items: readonly TaskToolItemDetails[], fallback: string): string {
+  const candidates = items
+    .map((item) => item.backend)
+    .filter((backend): backend is string => typeof backend === "string" && backend.length > 0);
+
+  const [first] = candidates;
+  if (!first) return fallback;
+
+  const hasMismatch = candidates.some((candidate) => candidate !== first);
+  if (hasMismatch) return fallback;
+  return first;
 }
 
 function operationNotSupportedDetails(op: TaskToolParameters["op"]): TaskToolResultDetails {
@@ -251,6 +296,7 @@ function applyErrorCategoryToItem(item: TaskToolItemDetails): TaskToolItemDetail
 function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): string {
   const lines: string[] = [
     "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
+    "Compatibility: status/wait accept either id or ids. op=result is treated as status.",
     "",
     "Active subagent roster:",
   ];
@@ -482,7 +528,7 @@ async function runTaskExecutionLifecycle(input: {
       prompt: input.prompt,
       followUpPrompts: [],
       summary: running.error.message,
-      backend: input.deps.backend.id,
+      backend: resolveBackendId(input.deps.backend, input.config),
       invocation: getSubagentInvocationMode(input.subagent.primary),
       totalToolCalls: 0,
       activeToolCalls: 0,
@@ -837,7 +883,7 @@ function prepareTaskExecution(input: {
     subagent: input.subagent,
     description: input.description,
     prompt: input.prompt,
-    backend: input.deps.backend.id,
+    backend: resolveBackendId(input.deps.backend, input.config),
     invocation: getSubagentInvocationMode(input.subagent.primary),
   });
 
@@ -981,6 +1027,7 @@ async function runTaskStartBatch(
   input: RunTaskToolInput,
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
+  const backendId = resolveBackendId(input.deps.backend, config.config);
   const items: Array<TaskToolItemDetails | undefined> = Array.from(
     { length: params.tasks.length },
     () => undefined,
@@ -1088,7 +1135,7 @@ async function runTaskStartBatch(
       op: "start",
       status,
       summary: summarizeBatchStart(normalizedItems, true),
-      backend: input.deps.backend.id,
+      backend: backendId,
       items: normalizedItems,
     });
   }
@@ -1116,7 +1163,7 @@ async function runTaskStartBatch(
     op: "start",
     status,
     summary: summarizeBatchStart(normalizedItems, false),
-    backend: input.deps.backend.id,
+    backend: backendId,
     items: normalizedItems,
   });
 }
@@ -1126,13 +1173,14 @@ async function runTaskStartSingle(
   input: RunTaskToolInput,
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
+  const backendId = resolveBackendId(input.deps.backend, config.config);
   const subagent = input.deps.findSubagentById(params.subagent_type);
   if (!subagent) {
     return toAgentToolResult({
       op: "start",
       status: "failed",
       summary: `Unknown subagent_type '${params.subagent_type}'`,
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: "unknown_subagent_type",
       error_message: `No subagent profile found for '${params.subagent_type}'.`,
     });
@@ -1144,7 +1192,7 @@ async function runTaskStartSingle(
       op: "start",
       status: "failed",
       summary: availability.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       subagent_type: subagent.id,
       description: params.description,
       invocation: getSubagentInvocationMode(subagent.primary),
@@ -1159,7 +1207,7 @@ async function runTaskStartSingle(
       op: "start",
       status: "failed",
       summary: permission.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       subagent_type: subagent.id,
       description: params.description,
       invocation: getSubagentInvocationMode(subagent.primary),
@@ -1192,7 +1240,7 @@ async function runTaskStartSingle(
       subagent_type: subagent.id,
       description: params.description,
       summary: prepared.error.summary,
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: prepared.error.error_code,
       error_message: prepared.error.error_message,
     });
@@ -1237,7 +1285,8 @@ async function runTaskStatus(
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
   const lookups = input.deps.taskStore.getTasks(params.ids);
   const items = lookups.map((lookup) => lookupToItem(lookup));
-  const result = buildCollectionResult("status", items, input.deps.backend.id, false);
+  const backend = resolveCollectionBackend(items, input.deps.backend.id);
+  const result = buildCollectionResult("status", items, backend, false);
   emitTaskRuntimeUpdate({
     details: result.details,
     deps: input.deps,
@@ -1261,7 +1310,8 @@ async function runTaskWait(
   });
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
-  const baseResult = buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
+  const backend = resolveCollectionBackend(items, input.deps.backend.id);
+  const baseResult = buildCollectionResult("wait", items, backend, waited.timedOut);
   const result =
     waited.timeoutReason === "timeout"
       ? toAgentToolResult({
@@ -1293,6 +1343,7 @@ async function runTaskSend(
   input: RunTaskToolInput,
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
+  const backendId = resolveBackendId(input.deps.backend, config.config);
   const lookup = input.deps.taskStore.getTasks([params.id])[0];
   const resolved = resolveSingleLookup("send", lookup);
   if ("content" in resolved) return resolved;
@@ -1321,7 +1372,7 @@ async function runTaskSend(
       subagent_type: resolved.subagentType,
       description: resolved.description,
       summary: `Unknown subagent_type '${resolved.subagentType}'`,
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: "unknown_subagent_type",
       error_message: `No subagent profile found for '${resolved.subagentType}'.`,
     });
@@ -1336,7 +1387,7 @@ async function runTaskSend(
       subagent_type: resolved.subagentType,
       description: resolved.description,
       summary: availability.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       invocation: resolved.invocation,
       error_code: availability.error.code,
       error_message: availability.error.message,
@@ -1352,7 +1403,7 @@ async function runTaskSend(
       subagent_type: resolved.subagentType,
       description: resolved.description,
       summary: permission.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       invocation: resolved.invocation,
       error_code: permission.error.code,
       error_message: permission.error.message,
@@ -1371,7 +1422,7 @@ async function runTaskSend(
       status: "failed",
       task_id: params.id,
       summary: interaction.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: interaction.error.code,
       error_message: interaction.error.message,
     });
@@ -1411,7 +1462,7 @@ async function runTaskSend(
         status: "failed",
         task_id: interaction.value.id,
         summary: failed.error.message,
-        backend: input.deps.backend.id,
+        backend: backendId,
         error_code: failed.error.code,
         error_message: failed.error.message,
       });
@@ -1454,7 +1505,7 @@ async function runTaskSend(
       status: "failed",
       task_id: interaction.value.id,
       summary: completed.error.message,
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: completed.error.code,
       error_message: completed.error.message,
     });
@@ -1503,7 +1554,7 @@ async function runTaskCancel(
       op: "cancel",
       status: "failed",
       summary: cancelled.error.message,
-      backend: input.deps.backend.id,
+      backend: resolved.backend,
       task_id: params.id,
       error_code: cancelled.error.code,
       error_message: cancelled.error.message,
@@ -1536,10 +1587,24 @@ async function runTaskCancel(
 export async function runTaskToolMvp(
   input: RunTaskToolInput,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
+  if (isHelpOperation(input.params)) {
+    return toAgentToolResult({
+      op: "status",
+      status: "failed",
+      summary: "Unsupported op 'help'. Use start, status, wait, send, or cancel.",
+      backend: input.deps.backend.id,
+      error_code: "task_operation_not_supported",
+      error_message:
+        "task tool supports op=start|status|wait|send|cancel (status/wait accept id or ids; result aliases status)",
+    });
+  }
+
   const parsed = parseTaskToolParameters(input.params);
   if (Result.isError(parsed)) {
+    const requestedOp = inferRequestedOp(input.params);
     return toAgentToolResult(
       validationErrorDetails(
+        requestedOp,
         parsed.error.message,
         parsed.error.code,
         typeof parsed.error.path === "string" ? parsed.error.path : undefined,
@@ -1570,11 +1635,12 @@ export async function runTaskToolMvp(
   }
 
   if (!configResult.value.config.features.subagents) {
+    const backendId = resolveBackendId(input.deps.backend, configResult.value.config);
     return toAgentToolResult({
       op: parsed.value.op,
       status: "failed",
       summary: "Subagents feature is disabled",
-      backend: input.deps.backend.id,
+      backend: backendId,
       error_code: "subagents_disabled",
       error_message:
         "Enable features.subagents to use task orchestration and primary subagent tools",

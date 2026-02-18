@@ -36,10 +36,22 @@ Current behavior:
 - supports `op: "start"` for a single task payload (sync + `async:true`)
 - supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
+- compatibility aliases: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
 - returns `task_id`, status, and deterministic task details
 - persists task registry snapshots to disk for resume/reload behavior
 - enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
+
+## Subagent backend behavior
+
+Runtime backend is selected from `subagentBackend` config:
+
+- `interactive-shell` (default): executes a real nested `pi` run for subagent prompts
+  using built-in tools (`read,bash,edit,write,grep,find,ls`)
+- `none`: uses deterministic scaffold backend (echo-style debug output)
+- `custom-plugin`: currently returns `unsupported_subagent_backend`
+
+If output appears like prompt regurgitation, verify `subagentBackend` is not set to `none`.
 
 Example payload:
 
@@ -96,7 +108,8 @@ Persistence details:
 
 ## Migration notes
 
-Behavior has moved from scaffold-only single start calls to a lifecycle runtime:
+Behavior has moved from scaffold-only single start calls to a lifecycle runtime,
+with real backend execution as the default:
 
 - orchestration now supports `start/status/wait/send/cancel`
 - batched `start` supports deterministic ordering and bounded concurrency

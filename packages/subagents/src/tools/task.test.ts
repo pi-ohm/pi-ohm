@@ -365,6 +365,58 @@ defineTest("runTaskToolMvp returns validation failure for malformed payload", as
   assert.equal(result.details.error_category, "validation");
 });
 
+defineTest("runTaskToolMvp normalizes wait id alias + extra fields", async () => {
+  const waited = await runTask({
+    params: {
+      op: "wait",
+      id: "task_missing_1",
+      subagent_type: "finder",
+      description: "ignored",
+      timeout_ms: 50,
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps: makeDeps(),
+  });
+
+  assert.equal(waited.details.op, "wait");
+  assert.equal(waited.details.status, "failed");
+  assert.equal(waited.details.items?.[0]?.error_code, "unknown_task_id");
+  assert.equal(waited.details.items?.[0]?.error_category, "runtime");
+});
+
+defineTest("runTaskToolMvp maps result op alias to status", async () => {
+  const status = await runTask({
+    params: {
+      op: "result",
+      id: "task_missing_2",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps: makeDeps(),
+  });
+
+  assert.equal(status.details.op, "status");
+  assert.equal(status.details.status, "failed");
+  assert.equal(status.details.items?.[0]?.error_code, "unknown_task_id");
+});
+
+defineTest("runTaskToolMvp returns explicit unsupported-op response for help", async () => {
+  const result = await runTask({
+    params: { op: "help" },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps: makeDeps(),
+  });
+
+  assert.equal(result.details.status, "failed");
+  assert.equal(result.details.error_code, "task_operation_not_supported");
+  assert.equal(result.details.error_category, "runtime");
+});
+
 defineTest("runTaskToolMvp handles sync start success", async () => {
   const updates: string[] = [];
 
