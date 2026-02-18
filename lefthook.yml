@@ -17,7 +17,7 @@ pre-commit:
       stage_fixed: true
 
 pre-push:
-  parallel: false
+  parallel: true
   commands:
     oxfmt-check:
       run: yarn format:check
