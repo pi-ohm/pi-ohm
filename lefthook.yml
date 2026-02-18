@@ -3,8 +3,21 @@ commit-msg:
     validate:
       run: node --experimental-strip-types ./scripts/validate-commits.ts --message-file {1}
 
-pre-push:
+pre-commit:
   parallel: false
+  commands:
+    oxfmt-write:
+      glob: "*.{js,jsx,ts,tsx,cjs,mjs,json,yml,yaml,md}"
+      run: yarn oxfmt {staged_files}
+      stage_fixed: true
+
+    oxlint-fix:
+      glob: "*.{js,jsx,ts,tsx,cjs,mjs}"
+      run: yarn oxlint -- --fix {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
   commands:
     oxfmt-check:
       run: yarn format:check
@@ -18,8 +31,5 @@ pre-push:
 pre-merge-commit:
   parallel: false
   commands:
-    oxfmt-check:
-      run: yarn format:check
-
     oxlint:
       run: yarn lint

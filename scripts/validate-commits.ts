@@ -38,6 +38,8 @@ const ALLOWED_SCOPES = new Set([
   "release",
   "repo",
   "root",
+  "mono",
+  "core",
 ]);
 
 const HEADER_PATTERN =

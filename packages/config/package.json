@@ -1,6 +1,7 @@
 {
   "name": "@pi-ohm/config",
-  "version": "0.6.2",
+  "version": "0.6.3",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/config#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pi-ohm/pi-ohm.git",
@@ -22,8 +23,8 @@
   },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
-    "@mariozechner/pi-coding-agent": "^0.52.0",
-    "@mariozechner/pi-tui": "^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi",
+    "@mariozechner/pi-tui": "catalog:pi"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",

@@ -14,6 +14,7 @@
     "subagents",
     "thread-search"
   ],
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev#readme",
   "license": "MIT",
   "workspaces": [
     "packages/*"
@@ -31,7 +32,7 @@
   "scripts": {
     "release:dev": "node --experimental-strip-types ./scripts/publish-packages.ts --channel dev",
     "release:latest": "node --experimental-strip-types ./scripts/publish-packages.ts --channel latest",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
     "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
     "lint": "yarn oxlint -- .",
     "lint:fix": "yarn oxlint -- --fix .",
@@ -43,12 +44,13 @@
   },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
-    "zod": "^4"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "^0.52.0",
-    "@mariozechner/pi-tui": "^0.52.0",
+    "@mariozechner/pi-coding-agent": "catalog:pi",
+    "@mariozechner/pi-tui": "catalog:pi",
     "@types/node": "^24.3.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
     "oxfmt": "^0.33.0",
     "oxlint": "^1.48.0",

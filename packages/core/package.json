@@ -1,0 +1,23 @@
+{
+  "name": "@pi-ohm/core",
+  "version": "0.6.2",
+  "private": true,
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/core#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./errors": "./src/errors.ts"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
+  }
+}

@@ -683,6 +683,27 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@clack/core@npm:0.5.0":
+  version: 0.5.0
+  resolution: "@clack/core@npm:0.5.0"
+  dependencies:
+    picocolors: "npm:^1.0.0"
+    sisteransi: "npm:^1.0.5"
+  checksum: 10c0/ef55dce4b0a4802171b71fe595865a6452c7cf823d162df7fa9afe2ea5a594b9d97e0b8e2880c2a805f2ce1d2f782cb1637d9f8d2ab8b99010af3a20816fae5a
+  languageName: node
+  linkType: hard
+
+"@clack/prompts@npm:^0.11.0":
+  version: 0.11.0
+  resolution: "@clack/prompts@npm:0.11.0"
+  dependencies:
+    "@clack/core": "npm:0.5.0"
+    picocolors: "npm:^1.0.0"
+    sisteransi: "npm:^1.0.5"
+  checksum: 10c0/4c573f2adec3b9109fe861e36312be8ae7cc6e80a5128aa784b9aeafeda5001b23f66c08eca50f4491119b435d9587ec9862956be8c5be472ec3373275003ba8
+  languageName: node
+  linkType: hard
+
 "@google/genai@npm:^1.40.0":
   version: 1.41.0
   resolution: "@google/genai@npm:1.41.0"
@@ -1250,11 +1271,19 @@ __metadata:
   resolution: "@pi-ohm/config@workspace:packages/config"
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@mariozechner/pi-tui": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
     "@mariozechner/pi-tui": "*"
+  languageName: unknown
+  linkType: soft
+
+"@pi-ohm/core@workspace:packages/core":
+  version: 0.0.0-use.local
+  resolution: "@pi-ohm/core@workspace:packages/core"
+  dependencies:
+    better-result: "catalog:"
   languageName: unknown
   linkType: soft
 
@@ -1262,7 +1291,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/handoff@workspace:packages/handoff"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1273,7 +1302,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/modes@workspace:packages/modes"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1284,7 +1313,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/painter@workspace:packages/painter"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1295,7 +1325,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/session-search@workspace:packages/session-search"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1306,7 +1336,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/subagents@workspace:packages/subagents"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -2000,6 +2030,87 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@typescript/native-preview-darwin-arm64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-darwin-arm64@npm:7.0.0-dev.20260217.1"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-darwin-x64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-darwin-x64@npm:7.0.0-dev.20260217.1"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-linux-arm64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-linux-arm64@npm:7.0.0-dev.20260217.1"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-linux-arm@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-linux-arm@npm:7.0.0-dev.20260217.1"
+  conditions: os=linux & cpu=arm
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-linux-x64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-linux-x64@npm:7.0.0-dev.20260217.1"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-win32-arm64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-win32-arm64@npm:7.0.0-dev.20260217.1"
+  conditions: os=win32 & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview-win32-x64@npm:7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview-win32-x64@npm:7.0.0-dev.20260217.1"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@typescript/native-preview@npm:^7.0.0-dev.20260217.1":
+  version: 7.0.0-dev.20260217.1
+  resolution: "@typescript/native-preview@npm:7.0.0-dev.20260217.1"
+  dependencies:
+    "@typescript/native-preview-darwin-arm64": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-darwin-x64": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-linux-arm": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-linux-arm64": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-linux-x64": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-win32-arm64": "npm:7.0.0-dev.20260217.1"
+    "@typescript/native-preview-win32-x64": "npm:7.0.0-dev.20260217.1"
+  dependenciesMeta:
+    "@typescript/native-preview-darwin-arm64":
+      optional: true
+    "@typescript/native-preview-darwin-x64":
+      optional: true
+    "@typescript/native-preview-linux-arm":
+      optional: true
+    "@typescript/native-preview-linux-arm64":
+      optional: true
+    "@typescript/native-preview-linux-x64":
+      optional: true
+    "@typescript/native-preview-win32-arm64":
+      optional: true
+    "@typescript/native-preview-win32-x64":
+      optional: true
+  bin:
+    tsgo: bin/tsgo.js
+  checksum: 10c0/894bcdef98b8eb44a9b349a854b80c12d4260582cc258c31f249ca1acb97c909705f79ff26248b76573a751ecdddb452985faf0fa1e665d4a50783a59a1a768e
+  languageName: node
+  linkType: hard
+
 "agent-base@npm:^7.1.0, agent-base@npm:^7.1.2":
   version: 7.1.4
   resolution: "agent-base@npm:7.1.4"
@@ -2106,6 +2217,17 @@ __metadata:
   version: 5.1.0
   resolution: "basic-ftp@npm:5.1.0"
   checksum: 10c0/397d5ed490f4d3b8b2dcd7afdf8e9fcf714a7d1c394a6c66b31704baf49c9fc250f1742f6189136a76b983675edf3d986b7ed93d253dc6477e65a567cf1e04c0
+  languageName: node
+  linkType: hard
+
+"better-result@npm:^2.6.0":
+  version: 2.7.0
+  resolution: "better-result@npm:2.7.0"
+  dependencies:
+    "@clack/prompts": "npm:^0.11.0"
+  bin:
+    better-result: bin/cli.mjs
+  checksum: 10c0/562451ab02d707aa2c8e3871236ba713dcff3a634040befbdb4088a6365caa34f1c43c198e57f56c30b45417a39edbf5d25cd5821c163ef2db33ef787e9e72cd
   languageName: node
   linkType: hard
 
@@ -3214,15 +3336,16 @@ __metadata:
   resolution: "pi-ohm-monorepo@workspace:."
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@mariozechner/pi-tui": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
     "@types/node": "npm:^24.3.1"
+    "@typescript/native-preview": "npm:^7.0.0-dev.20260217.1"
     lefthook: "npm:^2.1.1"
     oxfmt: "npm:^0.33.0"
     oxlint: "npm:^1.48.0"
     oxlint-tsgolint: "npm:^0.14.0"
     typescript: "npm:^5.9.3"
-    zod: "npm:^4"
+    zod: "catalog:"
   languageName: unknown
   linkType: soft
 
@@ -3230,7 +3353,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
     "@pi-ohm/handoff": "workspace:*"
     "@pi-ohm/modes": "workspace:*"
@@ -3241,6 +3364,13 @@ __metadata:
     "@mariozechner/pi-coding-agent": "*"
   languageName: unknown
   linkType: soft
+
+"picocolors@npm:^1.0.0":
+  version: 1.1.1
+  resolution: "picocolors@npm:1.1.1"
+  checksum: 10c0/e2e3e8170ab9d7c7421969adaa7e1b31434f789afb9b3f115f6b96d91945041ac3ceb02e9ec6fe6510ff036bcc0bf91e69a1772edc0b707e12b19c0f2d6bcf58
+  languageName: node
+  linkType: hard
 
 "proper-lockfile@npm:^4.1.2":
   version: 4.1.2
@@ -3362,6 +3492,13 @@ __metadata:
   version: 4.1.0
   resolution: "signal-exit@npm:4.1.0"
   checksum: 10c0/41602dce540e46d599edba9d9860193398d135f7ff72cab629db5171516cfae628d21e7bfccde1bbfdf11c48726bc2a6d1a8fb8701125852fbfda7cf19c6aa83
+  languageName: node
+  linkType: hard
+
+"sisteransi@npm:^1.0.5":
+  version: 1.0.5
+  resolution: "sisteransi@npm:1.0.5"
+  checksum: 10c0/230ac975cca485b7f6fe2b96a711aa62a6a26ead3e6fb8ba17c5a00d61b8bed0d7adc21f5626b70d7c33c62ff4e63933017a6462942c719d1980bb0b1207ad46
   languageName: node
   linkType: hard
 

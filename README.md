@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="./assets/ohm-transparent.png" alt="pi-ohm logo" width="220" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/ohm-transparent-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/ohm-transparent-light.png">
+    <img src="./assets/ohm-transparent.png" alt="pi-ohm logo" width="220" />
+  </picture>
 </p>
 <p align="center">
   <h4 align="center">

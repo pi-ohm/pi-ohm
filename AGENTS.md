@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## General guidelines
+
+- Be concise, sacrificing grammar for brevity.
+- Write high-coverage tests. You don't need to write a million tests. Always begin with failing tests or tests that reproduce a bug.
+- Lint and check with `yarn lint` and `yarn typecheck`
+
 ## Repo shape
 
 This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
@@ -73,3 +79,21 @@ Each feature package should be installable by itself through npm:
 Full bundle package:
 
 - `pi-ohm`
+
+## Testing Framework
+
+You should often write failing tests for implementations prior to actually implementing them.
+
+If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
+
+## TODO.md & ARCH.md
+
+These two files serve as a strong human-agent plane for planning and implementing features.
+
+Generally, you want to treat them as if you were working in an agile team.
+
+You want to break task down into "sprints". Some questions to consider: how would you do it (timeline doesnt matter) - every task/ticket should be an atomic, commitable piece of work that is testable. Every sprint should be a demoable piece of software that can be run, tested, and build on top of previous work/sprints. Be exhaustive. Be clear. Be technical - but technical in requirements - not implementation details per se. It should read like it's gone through a single back and forth with a technical product manager. Always focus on small atomic tasks that compose a clear goal for each sprint.
+
+## Error Handling
+
+- All errors should be handled via `better-result` package: https://github.com/dmmulroy/better-result. You should use the better-result skill for more information.

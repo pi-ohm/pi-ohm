@@ -24,7 +24,10 @@ const SOURCES: ChangelogSource[] = [
   { label: "@pi-ohm/modes", path: "packages/modes/CHANGELOG.md" },
   { label: "@pi-ohm/handoff", path: "packages/handoff/CHANGELOG.md" },
   { label: "@pi-ohm/subagents", path: "packages/subagents/CHANGELOG.md" },
-  { label: "@pi-ohm/session-search", path: "packages/session-search/CHANGELOG.md" },
+  {
+    label: "@pi-ohm/session-search",
+    path: "packages/session-search/CHANGELOG.md",
+  },
   { label: "@pi-ohm/painter", path: "packages/painter/CHANGELOG.md" },
   { label: "pi-ohm", path: "packages/extension/CHANGELOG.md" },
 ];
