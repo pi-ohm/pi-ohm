@@ -1250,8 +1250,8 @@ __metadata:
   resolution: "@pi-ohm/config@workspace:packages/config"
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@mariozechner/pi-tui": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
     "@mariozechner/pi-tui": "*"
@@ -1262,7 +1262,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/handoff@workspace:packages/handoff"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1273,7 +1273,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/modes@workspace:packages/modes"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1284,7 +1284,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/painter@workspace:packages/painter"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1295,7 +1296,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/session-search@workspace:packages/session-search"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -1306,7 +1307,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/subagents@workspace:packages/subagents"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
@@ -3214,15 +3215,15 @@ __metadata:
   resolution: "pi-ohm-monorepo@workspace:."
   dependencies:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
-    "@mariozechner/pi-tui": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
     "@types/node": "npm:^24.3.1"
     lefthook: "npm:^2.1.1"
     oxfmt: "npm:^0.33.0"
     oxlint: "npm:^1.48.0"
     oxlint-tsgolint: "npm:^0.14.0"
     typescript: "npm:^5.9.3"
-    zod: "npm:^4"
+    zod: "catalog:"
   languageName: unknown
   linkType: soft
 
@@ -3230,7 +3231,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
-    "@mariozechner/pi-coding-agent": "npm:^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
     "@pi-ohm/handoff": "workspace:*"
     "@pi-ohm/modes": "workspace:*"

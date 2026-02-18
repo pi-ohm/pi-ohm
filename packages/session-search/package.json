@@ -18,7 +18,7 @@
     "provenance": true
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.52.0",
+    "@mariozechner/pi-coding-agent": "catalog:pi",
     "@pi-ohm/config": "workspace:*"
   },
   "peerDependencies": {

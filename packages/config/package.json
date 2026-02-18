@@ -22,8 +22,8 @@
   },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
-    "@mariozechner/pi-coding-agent": "^0.52.0",
-    "@mariozechner/pi-tui": "^0.52.0"
+    "@mariozechner/pi-coding-agent": "catalog:pi",
+    "@mariozechner/pi-tui": "catalog:pi"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
