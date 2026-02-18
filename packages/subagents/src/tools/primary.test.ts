@@ -46,6 +46,11 @@ const runtimeConfigFixture: OhmRuntimeConfig = {
   subagents: {
     taskMaxConcurrency: 2,
     taskRetentionMs: 1000 * 60,
+    permissions: {
+      default: "allow",
+      subagents: {},
+      allowInternalRouting: false,
+    },
   },
 };
 
@@ -102,6 +107,7 @@ function makeTaskDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDe
       if (id === "finder") return finderFixture;
       return undefined;
     },
+    subagents: [librarianFixture, finderFixture],
     createTaskId: () => {
       sequence += 1;
       return `task_primary_${String(sequence).padStart(4, "0")}`;

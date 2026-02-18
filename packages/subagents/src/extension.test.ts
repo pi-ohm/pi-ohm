@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import { getSubagentById } from "./catalog";
 import {
+  buildSubagentDetailText,
+  buildSubagentsOverviewText,
   getSubagentInvocationMode,
   normalizeCommandArgs,
   registerSubagentTools,
@@ -9,6 +13,43 @@ import {
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
+
+const configFixture: OhmRuntimeConfig = {
+  defaultMode: "smart",
+  subagentBackend: "none",
+  features: {
+    handoff: true,
+    subagents: true,
+    sessionThreadSearch: true,
+    handoffVisualizer: true,
+    painterImagegen: false,
+  },
+  painter: {
+    googleNanoBanana: {
+      enabled: false,
+      model: "",
+    },
+    openai: {
+      enabled: false,
+      model: "",
+    },
+    azureOpenai: {
+      enabled: false,
+      deployment: "",
+      endpoint: "",
+      apiVersion: "",
+    },
+  },
+  subagents: {
+    taskMaxConcurrency: 2,
+    taskRetentionMs: 1000,
+    permissions: {
+      default: "allow",
+      subagents: {},
+      allowInternalRouting: false,
+    },
+  },
+};
 
 defineTest("normalizeCommandArgs supports array input", () => {
   const parsed = normalizeCommandArgs(["finder", 42, "oracle", null]);
@@ -64,4 +105,33 @@ defineTest("registerSubagentTools registers task tool + primary tools", () => {
   assert.equal(registeredTools.includes("librarian"), true);
   assert.equal(registeredTools.includes("finder"), false);
   assert.equal(registeredTools.includes("oracle"), false);
+});
+
+defineTest("buildSubagentsOverviewText preserves command compatibility output", () => {
+  const text = buildSubagentsOverviewText({
+    config: configFixture,
+    loadedFrom: ["/tmp/global/ohm.json"],
+  });
+
+  assert.match(text, /Pi OHM: subagents/);
+  assert.match(text, /Scaffolded subagents:/);
+  assert.match(text, /Use \/ohm-subagent <id> to inspect one profile\./);
+  assert.match(text, /loadedFrom: \/tmp\/global\/ohm.json/);
+});
+
+defineTest("buildSubagentDetailText preserves detailed subagent view", () => {
+  const librarian = getSubagentById("librarian");
+  assert.notEqual(librarian, undefined);
+  if (!librarian) {
+    assert.fail("Expected librarian profile");
+  }
+
+  const text = buildSubagentDetailText({
+    config: configFixture,
+    subagent: librarian,
+  });
+
+  assert.match(text, /Subagent: Librarian/);
+  assert.match(text, /When to use:/);
+  assert.match(text, /Scaffold prompt:/);
 });

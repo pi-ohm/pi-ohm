@@ -10,9 +10,10 @@ import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { loadOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition, OhmSubagentId } from "../catalog";
-import { getSubagentById } from "../catalog";
+import { getSubagentById, OHM_SUBAGENT_CATALOG } from "../catalog";
 import { getSubagentInvocationMode, type SubagentInvocationMode } from "../extension";
 import { SubagentRuntimeError } from "../errors";
+import { evaluateTaskPermission } from "../policy";
 import { createDefaultTaskExecutionBackend, type TaskExecutionBackend } from "../runtime/backend";
 import {
   createInMemoryTaskRuntimeStore,
@@ -30,6 +31,7 @@ import {
 } from "../schema";
 
 export type TaskToolStatus = TaskLifecycleState;
+export type TaskErrorCategory = "validation" | "policy" | "runtime" | "persistence";
 
 export interface TaskToolItemDetails {
   readonly id: string;
@@ -43,6 +45,7 @@ export interface TaskToolItemDetails {
   readonly updated_at_epoch_ms?: number;
   readonly ended_at_epoch_ms?: number;
   readonly error_code?: string;
+  readonly error_category?: TaskErrorCategory;
   readonly error_message?: string;
 }
 
@@ -57,6 +60,7 @@ export interface TaskToolResultDetails {
   readonly backend: string;
   readonly invocation?: SubagentInvocationMode;
   readonly error_code?: string;
+  readonly error_category?: TaskErrorCategory;
   readonly error_message?: string;
   readonly items?: readonly TaskToolItemDetails[];
   readonly timed_out?: boolean;
@@ -66,6 +70,7 @@ export interface TaskToolDependencies {
   readonly loadConfig: (cwd: string) => Promise<LoadedOhmRuntimeConfig>;
   readonly backend: TaskExecutionBackend;
   readonly findSubagentById: (id: string) => OhmSubagentDefinition | undefined;
+  readonly subagents: readonly OhmSubagentDefinition[];
   readonly createTaskId: () => string;
   readonly taskStore: TaskRuntimeStore;
 }
@@ -107,6 +112,7 @@ export function createDefaultTaskToolDependencies(): TaskToolDependencies {
     loadConfig: loadOhmRuntimeConfig,
     backend: createDefaultTaskExecutionBackend(),
     findSubagentById: getSubagentById,
+    subagents: OHM_SUBAGENT_CATALOG,
     createTaskId,
     taskStore: DEFAULT_TASK_STORE,
   };
@@ -177,11 +183,89 @@ function isSubagentAvailable(
   );
 }
 
+function isSubagentPermitted(
+  subagent: OhmSubagentDefinition,
+  config: OhmRuntimeConfig,
+): Result<true, { readonly code: string; readonly message: string }> {
+  const policy = evaluateTaskPermission(subagent, config);
+  if (Result.isOk(policy)) return Result.ok(true);
+
+  return Result.err({
+    code: policy.error.code,
+    message: policy.error.message,
+  });
+}
+
 function getFeatureGateForSubagent(
   subagentId: OhmSubagentId,
 ): keyof OhmRuntimeConfig["features"] | undefined {
   if (subagentId === "painter") return "painterImagegen";
   return undefined;
+}
+
+function categorizeErrorCode(code: string): TaskErrorCategory {
+  if (
+    code.startsWith("invalid_") ||
+    code.includes("validation") ||
+    code.includes("payload") ||
+    code.includes("unknown_operation")
+  ) {
+    return "validation";
+  }
+
+  if (
+    code.includes("permission") ||
+    code.includes("policy") ||
+    code.includes("internal_subagent")
+  ) {
+    return "policy";
+  }
+
+  if (code.includes("persistence") || code.includes("corrupt") || code.includes("retention")) {
+    return "persistence";
+  }
+
+  return "runtime";
+}
+
+function applyErrorCategory(details: TaskToolResultDetails): TaskToolResultDetails {
+  if (!details.error_code) return details;
+  if (details.error_category) return details;
+
+  return {
+    ...details,
+    error_category: categorizeErrorCode(details.error_code),
+  };
+}
+
+function applyErrorCategoryToItem(item: TaskToolItemDetails): TaskToolItemDetails {
+  if (!item.error_code) return item;
+  if (item.error_category) return item;
+
+  return {
+    ...item,
+    error_category: categorizeErrorCode(item.error_code),
+  };
+}
+
+function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): string {
+  const lines: string[] = [
+    "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
+    "",
+    "Active subagent roster:",
+  ];
+
+  for (const subagent of subagents) {
+    if (subagent.internal) continue;
+    const invocation = getSubagentInvocationMode(subagent.primary);
+    lines.push(`- ${subagent.id} (${invocation}): ${subagent.summary}`);
+    lines.push("  whenToUse:");
+    for (const guidance of subagent.whenToUse) {
+      lines.push(`  - ${guidance}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function detailsToText(details: TaskToolResultDetails, expanded: boolean): string {
@@ -194,6 +278,7 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
   lines.push(`backend: ${details.backend}`);
   if (details.invocation) lines.push(`invocation: ${details.invocation}`);
   if (details.error_code) lines.push(`error_code: ${details.error_code}`);
+  if (details.error_category) lines.push(`error_category: ${details.error_category}`);
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
   if (details.timed_out) lines.push("timed_out: true");
 
@@ -217,6 +302,7 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
       if (expanded) {
         lines.push(`  summary: ${item.summary}`);
         if (item.error_code) lines.push(`  error_code: ${item.error_code}`);
+        if (item.error_category) lines.push(`  error_category: ${item.error_category}`);
         if (item.error_message) lines.push(`  error_message: ${item.error_message}`);
       }
     }
@@ -243,9 +329,15 @@ export function formatTaskToolResult(details: TaskToolResultDetails, expanded: b
 }
 
 function toAgentToolResult(details: TaskToolResultDetails): AgentToolResult<TaskToolResultDetails> {
+  const normalizedItems = details.items?.map((item) => applyErrorCategoryToItem(item));
+  const normalizedDetails = applyErrorCategory({
+    ...details,
+    items: normalizedItems,
+  });
+
   return {
-    content: [{ type: "text", text: detailsToText(details, false) }],
-    details,
+    content: [{ type: "text", text: detailsToText(normalizedDetails, false) }],
+    details: normalizedDetails,
   };
 }
 
@@ -616,7 +708,11 @@ async function waitForTasks(input: {
   readonly timeoutMs: number | undefined;
   readonly signal: AbortSignal | undefined;
   readonly deps: TaskToolDependencies;
-}): Promise<{ readonly lookups: readonly TaskRuntimeLookup[]; readonly timedOut: boolean }> {
+}): Promise<{
+  readonly lookups: readonly TaskRuntimeLookup[];
+  readonly timedOut: boolean;
+  readonly timeoutReason: "timeout" | "aborted" | undefined;
+}> {
   const started = Date.now();
 
   while (true) {
@@ -627,15 +723,15 @@ async function waitForTasks(input: {
     });
 
     if (allResolved) {
-      return { lookups, timedOut: false };
+      return { lookups, timedOut: false, timeoutReason: undefined };
     }
 
     if (input.timeoutMs !== undefined && Date.now() - started >= input.timeoutMs) {
-      return { lookups, timedOut: true };
+      return { lookups, timedOut: true, timeoutReason: "timeout" };
     }
 
     if (input.signal?.aborted) {
-      return { lookups, timedOut: true };
+      return { lookups, timedOut: true, timeoutReason: "aborted" };
     }
 
     await sleep(25);
@@ -929,6 +1025,19 @@ async function runTaskStartBatch(
       continue;
     }
 
+    const permission = isSubagentPermitted(subagent, config.config);
+    if (Result.isError(permission)) {
+      items[index] = toTaskItemFailure({
+        id: `task_batch_${index + 1}`,
+        summary: permission.error.message,
+        errorCode: permission.error.code,
+        errorMessage: permission.error.message,
+        subagentType: subagent.id,
+        description: task.description,
+      });
+      continue;
+    }
+
     const taskId = input.deps.createTaskId();
     const preparedTask = prepareTaskExecution({
       index,
@@ -1044,6 +1153,21 @@ async function runTaskStartSingle(
     });
   }
 
+  const permission = isSubagentPermitted(subagent, config.config);
+  if (Result.isError(permission)) {
+    return toAgentToolResult({
+      op: "start",
+      status: "failed",
+      summary: permission.error.message,
+      backend: input.deps.backend.id,
+      subagent_type: subagent.id,
+      description: params.description,
+      invocation: getSubagentInvocationMode(subagent.primary),
+      error_code: permission.error.code,
+      error_message: permission.error.message,
+    });
+  }
+
   const taskId = input.deps.createTaskId();
   const prepared = prepareTaskExecution({
     index: 0,
@@ -1137,7 +1261,22 @@ async function runTaskWait(
   });
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
-  const result = buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
+  const baseResult = buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
+  const result =
+    waited.timeoutReason === "timeout"
+      ? toAgentToolResult({
+          ...baseResult.details,
+          error_code: "task_wait_timeout",
+          error_message: "Wait operation timed out before all tasks reached a terminal state",
+        })
+      : waited.timeoutReason === "aborted"
+        ? toAgentToolResult({
+            ...baseResult.details,
+            error_code: "task_wait_aborted",
+            error_message: "Wait operation aborted before all tasks reached a terminal state",
+          })
+        : baseResult;
+
   emitTaskRuntimeUpdate({
     details: result.details,
     deps: input.deps,
@@ -1201,6 +1340,22 @@ async function runTaskSend(
       invocation: resolved.invocation,
       error_code: availability.error.code,
       error_message: availability.error.message,
+    });
+  }
+
+  const permission = isSubagentPermitted(subagent, config.config);
+  if (Result.isError(permission)) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: resolved.id,
+      subagent_type: resolved.subagentType,
+      description: resolved.description,
+      summary: permission.error.message,
+      backend: input.deps.backend.id,
+      invocation: resolved.invocation,
+      error_code: permission.error.code,
+      error_message: permission.error.message,
     });
   }
 
@@ -1458,8 +1613,7 @@ export function registerTaskTool(
   pi.registerTool({
     name: "task",
     label: "Task",
-    description:
-      "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
+    description: buildTaskToolDescription(deps.subagents),
     parameters: TaskToolRegistrationParametersSchema,
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
       return runTaskToolMvp({

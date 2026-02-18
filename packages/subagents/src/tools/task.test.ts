@@ -24,6 +24,16 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
+const runtimeSubagentsFixture = {
+  taskMaxConcurrency: 2,
+  taskRetentionMs: 1000 * 60 * 60,
+  permissions: {
+    default: "allow",
+    subagents: {},
+    allowInternalRouting: false,
+  },
+} as const;
+
 const runtimeConfigFixture: OhmRuntimeConfig = {
   defaultMode: "smart",
   subagentBackend: "none",
@@ -50,10 +60,7 @@ const runtimeConfigFixture: OhmRuntimeConfig = {
       apiVersion: "",
     },
   },
-  subagents: {
-    taskMaxConcurrency: 2,
-    taskRetentionMs: 1000 * 60 * 60,
-  },
+  subagents: runtimeSubagentsFixture,
 };
 
 const loadedConfigFixture: LoadedOhmRuntimeConfig = {
@@ -239,6 +246,7 @@ function makeDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDepend
     loadConfig: async () => loadedConfigFixture,
     backend: new SuccessfulBackend(),
     findSubagentById: (id) => (id === "finder" ? finderSubagentFixture : undefined),
+    subagents: [finderSubagentFixture],
     createTaskId: () => {
       sequence += 1;
       return `task_test_${String(sequence).padStart(4, "0")}`;
@@ -354,6 +362,7 @@ defineTest("runTaskToolMvp returns validation failure for malformed payload", as
 
   assert.equal(result.details.status, "failed");
   assert.equal(result.details.error_code, "invalid_task_tool_payload");
+  assert.equal(result.details.error_category, "validation");
 });
 
 defineTest("runTaskToolMvp handles sync start success", async () => {
@@ -473,6 +482,8 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waited.details.op, "wait");
   assert.equal(waited.details.timed_out, true);
   assert.equal(waited.details.status, "running");
+  assert.equal(waited.details.error_code, "task_wait_timeout");
+  assert.equal(waited.details.error_category, "runtime");
 
   backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
   await Promise.resolve();
@@ -640,6 +651,150 @@ defineTest("runTaskToolMvp returns per-id errors on status for unknown IDs", asy
   assert.equal(result.details.items?.[0]?.error_code, "unknown_task_id");
 });
 
+defineTest("runTaskToolMvp enforces deny policy decisions", async () => {
+  const result = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps: makeDeps({
+      loadConfig: async () => ({
+        ...loadedConfigFixture,
+        config: {
+          ...loadedConfigFixture.config,
+          subagents: {
+            ...runtimeSubagentsFixture,
+            permissions: {
+              default: "deny",
+              subagents: {},
+              allowInternalRouting: false,
+            },
+          },
+        },
+      }),
+    }),
+  });
+
+  assert.equal(result.details.status, "failed");
+  assert.equal(result.details.error_code, "task_permission_denied");
+  assert.equal(result.details.error_category, "policy");
+});
+
+defineTest("runTaskToolMvp enforces ask policy on send", async () => {
+  const backend = new DeferredBackend();
+  let decision: "allow" | "ask" | "deny" = "allow";
+
+  const deps = makeDeps({
+    backend,
+    loadConfig: async () => ({
+      ...loadedConfigFixture,
+      config: {
+        ...loadedConfigFixture.config,
+        subagents: {
+          ...runtimeSubagentsFixture,
+          permissions: {
+            default: decision,
+            subagents: {},
+            allowInternalRouting: false,
+          },
+        },
+      },
+    }),
+  });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  decision = "ask";
+  const send = await runTask({
+    params: {
+      op: "send",
+      id: "task_test_0001",
+      prompt: "Now include tests",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(send.details.status, "failed");
+  assert.equal(send.details.error_code, "task_permission_ask_required");
+  assert.equal(send.details.error_category, "policy");
+
+  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
+  await Promise.resolve();
+  await Promise.resolve();
+});
+
+defineTest("runTaskToolMvp wait reports cancelled terminal state after cancel", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  const cancelled = await runTask({
+    params: {
+      op: "cancel",
+      id: "task_test_0001",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(cancelled.details.status, "cancelled");
+
+  const waited = await runTask({
+    params: {
+      op: "wait",
+      ids: ["task_test_0001"],
+      timeout_ms: 100,
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(waited.details.status, "cancelled");
+  assert.equal(waited.details.timed_out, false);
+  assert.equal(waited.details.items?.[0]?.status, "cancelled");
+});
+
 defineTest("runTaskToolMvp maps backend failures to failed task state", async () => {
   const result = await runTask({
     params: {
@@ -681,6 +836,7 @@ defineTest("runTaskToolMvp maps config load failures", async () => {
 
   assert.equal(result.details.status, "failed");
   assert.equal(result.details.error_code, "task_config_load_failed");
+  assert.equal(result.details.error_category, "runtime");
 });
 
 defineTest("runTaskToolMvp supports batch start with deterministic item ordering", async () => {
@@ -852,4 +1008,42 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.equal(registeredNames[0], "task");
   assert.equal(registeredLabels[0], "Task");
   assert.match(registeredDescriptions[0], /start\/status\/wait\/send\/cancel/);
+  assert.match(registeredDescriptions[0], /Active subagent roster:/);
+  assert.match(registeredDescriptions[0], /whenToUse:/);
+  assert.match(registeredDescriptions[0], /search/);
+});
+
+defineTest("registerTaskTool hides internal profiles from model-visible roster description", () => {
+  const registeredDescriptions: string[] = [];
+
+  const internalProfile: OhmSubagentDefinition = {
+    id: "oracle",
+    name: "Oracle Internal",
+    summary: "Internal advisory profile",
+    internal: true,
+    whenToUse: ["Internal debugging"],
+    scaffoldPrompt: "Internal prompt",
+  };
+
+  const extensionApi: Pick<ExtensionAPI, "registerTool"> = {
+    registerTool(definition) {
+      registeredDescriptions.push(definition.description);
+    },
+  };
+
+  registerTaskTool(
+    extensionApi,
+    makeDeps({
+      subagents: [finderSubagentFixture, internalProfile],
+      findSubagentById: (id) => {
+        if (id === "finder") return finderSubagentFixture;
+        if (id === "oracle") return internalProfile;
+        return undefined;
+      },
+    }),
+  );
+
+  const description = registeredDescriptions[0] ?? "";
+  assert.match(description, /finder/);
+  assert.doesNotMatch(description, /oracle/);
 });

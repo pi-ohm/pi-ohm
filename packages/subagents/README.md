@@ -58,11 +58,56 @@ Batch execution notes:
 - bounded parallelism is enforced by `subagents.taskMaxConcurrency` (default `3`)
 - task failures are isolated; one failed batch item does not abort siblings
 
+## Task permission policy
+
+Task orchestration enforces policy decisions from runtime config:
+
+- `allow` — task execution proceeds
+- `ask` — execution is blocked with `task_permission_ask_required`
+- `deny` — execution is blocked with `task_permission_denied`
+
+Config shape:
+
+```jsonc
+{
+  "subagents": {
+    "permissions": {
+      "default": "allow",
+      "subagents": {
+        "finder": "deny",
+      },
+      "allowInternalRouting": false,
+    },
+  },
+}
+```
+
+Additional hardening behaviors:
+
+- internal profiles (`internal:true`) are hidden from task roster exposure unless
+  `allowInternalRouting` is enabled
+- wait timeout/abort are explicit (`task_wait_timeout`, `task_wait_aborted`)
+- tool error payloads include stable `error_category`
+
 Persistence details:
 
 - default snapshot path: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.subagents.tasks.json`
 - retention window is configurable via `OHM_SUBAGENTS_TASK_RETENTION_MS` (positive integer ms)
 - corrupt snapshot files are auto-recovered to `*.corrupt-<epoch>` and runtime falls back to empty state
+
+## Migration notes
+
+Behavior has moved from scaffold-only single start calls to a lifecycle runtime:
+
+- orchestration now supports `start/status/wait/send/cancel`
+- batched `start` supports deterministic ordering and bounded concurrency
+- primary tools and task-routed calls share one execution/runtime contract
+- policy-denied calls now fail deterministically instead of silently proceeding
+
+Existing slash commands remain unchanged:
+
+- `/ohm-subagents`
+- `/ohm-subagent <id>`
 
 ## Live TUI feedback
 

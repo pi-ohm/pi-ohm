@@ -41,6 +41,11 @@ export interface OhmPainterProviders {
 export interface OhmSubagentRuntimeConfig {
   taskMaxConcurrency: number;
   taskRetentionMs: number;
+  permissions: {
+    default: "allow" | "ask" | "deny";
+    subagents: Record<string, "allow" | "ask" | "deny">;
+    allowInternalRouting: boolean;
+  };
 }
 
 export interface OhmRuntimeConfig {
@@ -93,6 +98,11 @@ const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
   subagents: {
     taskMaxConcurrency: 3,
     taskRetentionMs: 1000 * 60 * 60 * 24,
+    permissions: {
+      default: "allow",
+      subagents: {},
+      allowInternalRouting: false,
+    },
   },
 };
 
@@ -170,6 +180,34 @@ function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number") return fallback;
   if (!Number.isInteger(value) || value <= 0) return fallback;
   return value;
+}
+
+function normalizePermissionDecision(
+  value: unknown,
+  fallback: "allow" | "ask" | "deny",
+): "allow" | "ask" | "deny" {
+  if (value === "allow" || value === "ask" || value === "deny") return value;
+  return fallback;
+}
+
+function normalizePermissionDecisionMap(
+  value: unknown,
+  fallback: Record<string, "allow" | "ask" | "deny">,
+): Record<string, "allow" | "ask" | "deny"> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return fallback;
+  }
+
+  const normalized: Record<string, "allow" | "ask" | "deny"> = {};
+  for (const [key, decision] of Object.entries(value)) {
+    const trimmedKey = key.trim().toLowerCase();
+    if (trimmedKey.length === 0) continue;
+
+    const normalizedDecision = normalizePermissionDecision(decision, "allow");
+    normalized[trimmedKey] = normalizedDecision;
+  }
+
+  return normalized;
 }
 
 function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
@@ -258,6 +296,12 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     ({
       taskMaxConcurrency: DEFAULT_OHM_CONFIG.subagents?.taskMaxConcurrency ?? 3,
       taskRetentionMs: DEFAULT_OHM_CONFIG.subagents?.taskRetentionMs ?? 1000 * 60 * 60 * 24,
+      permissions: {
+        default: DEFAULT_OHM_CONFIG.subagents?.permissions.default ?? "allow",
+        subagents: DEFAULT_OHM_CONFIG.subagents?.permissions.subagents ?? {},
+        allowInternalRouting:
+          DEFAULT_OHM_CONFIG.subagents?.permissions.allowInternalRouting ?? false,
+      },
     } satisfies OhmSubagentRuntimeConfig);
 
   const taskMaxConcurrency = normalizePositiveInteger(
@@ -270,9 +314,34 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     subagentDefaults.taskRetentionMs,
   );
 
+  const permissionsPatch =
+    subagentPatch?.permissions && typeof subagentPatch.permissions === "object"
+      ? (subagentPatch.permissions as JsonMap)
+      : undefined;
+
+  const permissionsDefault = normalizePermissionDecision(
+    permissionsPatch?.default,
+    subagentDefaults.permissions.default,
+  );
+
+  const permissionsSubagents = normalizePermissionDecisionMap(
+    permissionsPatch?.subagents,
+    subagentDefaults.permissions.subagents,
+  );
+
+  const allowInternalRouting = normalizeBoolean(
+    permissionsPatch?.allowInternalRouting,
+    subagentDefaults.permissions.allowInternalRouting,
+  );
+
   next.subagents = {
     taskMaxConcurrency,
     taskRetentionMs,
+    permissions: {
+      default: permissionsDefault,
+      subagents: permissionsSubagents,
+      allowInternalRouting,
+    },
   };
 
   return next;

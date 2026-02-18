@@ -512,7 +512,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
 
 ### Tickets
 
-- [ ] **S8-T1: Task permission policy requirements**
+- [x] **S8-T1: Task permission policy requirements**
   - Requirements:
     - Support allow/ask/deny semantics for subagent invocation scope.
   - Acceptance criteria:
@@ -521,7 +521,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Policy evaluation tests.
 
-- [ ] **S8-T2: Hidden/internal profile behavior in Task tool exposure**
+- [x] **S8-T2: Hidden/internal profile behavior in Task tool exposure**
   - Requirements:
     - Internal/hidden profiles are not surfaced in user-facing suggestions unless policy allows internal routing.
   - Acceptance criteria:
@@ -530,7 +530,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Visibility and listing tests.
 
-- [ ] **S8-T3: Cancellation and timeout hardening**
+- [x] **S8-T3: Cancellation and timeout hardening**
   - Requirements:
     - Cancellation and timeout states are explicit and non-ambiguous.
   - Acceptance criteria:
@@ -539,7 +539,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Stress tests for rapid cancel/timeout sequences.
 
-- [ ] **S8-T4: Error taxonomy and stable error surface**
+- [x] **S8-T4: Error taxonomy and stable error surface**
   - Requirements:
     - Runtime emits stable error codes/categories for validation, policy, runtime, persistence failures.
     - Categories are implemented as `better-result` `TaggedError` variants and surfaced through `Result` mapping.
@@ -550,7 +550,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Error contract tests + TaggedError-to-tool-payload mapping tests.
 
-- [ ] **S8-T5: Backward compatibility and migration notes**
+- [x] **S8-T5: Backward compatibility and migration notes**
   - Requirements:
     - Document and test migration from scaffold-only behavior to full task lifecycle behavior.
   - Acceptance criteria:

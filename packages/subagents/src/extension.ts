@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings, type OhmRuntimeConfig } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
+import { isSubagentVisibleInTaskRoster } from "./policy";
 import { registerPrimarySubagentTools } from "./tools/primary";
 import { createDefaultTaskToolDependencies, registerTaskTool } from "./tools/task";
 
@@ -51,6 +52,61 @@ function listSubagentIds(): string {
   return OHM_SUBAGENT_CATALOG.map((agent) => agent.id).join("|");
 }
 
+function getVisibleSubagents(config: OhmRuntimeConfig) {
+  return OHM_SUBAGENT_CATALOG.filter((agent) => isSubagentVisibleInTaskRoster(agent, config));
+}
+
+export function buildSubagentsOverviewText(input: {
+  readonly config: OhmRuntimeConfig;
+  readonly loadedFrom: readonly string[];
+}): string {
+  const visibleSubagents = getVisibleSubagents(input.config);
+
+  const lines = visibleSubagents.map((agent) => {
+    const needsPainterPackage = agent.id === "painter";
+    const available = !needsPainterPackage || input.config.features.painterImagegen;
+    const availability = available ? "available" : "requires painter feature/package";
+    const invocation = getSubagentInvocationMode(agent.primary);
+    return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability} · ${invocation}]`;
+  });
+
+  return [
+    "Pi OHM: subagents",
+    "",
+    `enabled: ${input.config.features.subagents ? "yes" : "no"}`,
+    `backend: ${input.config.subagentBackend}`,
+    "",
+    "Scaffolded subagents:",
+    ...lines,
+    "",
+    "Use /ohm-subagent <id> to inspect one profile.",
+    `loadedFrom: ${input.loadedFrom.length > 0 ? input.loadedFrom.join(", ") : "defaults + extension settings"}`,
+  ].join("\n");
+}
+
+export function buildSubagentDetailText(input: {
+  readonly config: OhmRuntimeConfig;
+  readonly subagent: (typeof OHM_SUBAGENT_CATALOG)[number];
+}): string {
+  const isAvailable = input.subagent.id !== "painter" || input.config.features.painterImagegen;
+
+  return [
+    `Subagent: ${input.subagent.name}`,
+    `id: ${input.subagent.id}`,
+    `available: ${isAvailable ? "yes" : "no"}`,
+    `invocation: ${getSubagentInvocationMode(input.subagent.primary)}`,
+    input.subagent.requiresPackage
+      ? `requiresPackage: ${input.subagent.requiresPackage}`
+      : "requiresPackage: none",
+    "",
+    "When to use:",
+    ...input.subagent.whenToUse.map((line) => `- ${line}`),
+    "",
+    "Scaffold prompt:",
+    input.subagent.scaffoldPrompt,
+  ].join("\n");
+}
+
 export function registerSubagentTools(pi: Pick<ExtensionAPI, "registerTool">): {
   readonly primaryToolCount: number;
   readonly diagnosticsCount: number;
@@ -88,27 +144,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
     description: "Show scaffolded subagents and backend status",
     handler: async (_args, ctx) => {
       const { config, loadedFrom } = await loadOhmRuntimeConfig(ctx.cwd);
-
-      const lines = OHM_SUBAGENT_CATALOG.map((agent) => {
-        const needsPainterPackage = agent.id === "painter";
-        const available = !needsPainterPackage || config.features.painterImagegen;
-        const availability = available ? "available" : "requires painter feature/package";
-        const invocation = getSubagentInvocationMode(agent.primary);
-        return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability} · ${invocation}]`;
-      });
-
-      const text = [
-        "Pi OHM: subagents",
-        "",
-        `enabled: ${config.features.subagents ? "yes" : "no"}`,
-        `backend: ${config.subagentBackend}`,
-        "",
-        "Scaffolded subagents:",
-        ...lines,
-        "",
-        "Use /ohm-subagent <id> to inspect one profile.",
-        `loadedFrom: ${loadedFrom.length > 0 ? loadedFrom.join(", ") : "defaults + extension settings"}`,
-      ].join("\n");
+      const text = buildSubagentsOverviewText({ config, loadedFrom });
 
       if (!ctx.hasUI) {
         console.log(text);
@@ -126,12 +162,13 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
       const [requested = ""] = normalizeCommandArgs(args);
       const match = getSubagentById(requested);
 
-      if (!match) {
-        const usage = [
-          "Usage: /ohm-subagent <id>",
-          "",
-          `Valid ids: ${OHM_SUBAGENT_CATALOG.map((agent) => agent.id).join(", ")}`,
-        ].join("\n");
+      const visibleSubagents = getVisibleSubagents(config);
+      const visibleIds = visibleSubagents.map((agent) => agent.id);
+
+      if (!match || !visibleIds.includes(match.id)) {
+        const usage = ["Usage: /ohm-subagent <id>", "", `Valid ids: ${visibleIds.join(", ")}`].join(
+          "\n",
+        );
 
         if (!ctx.hasUI) {
           console.log(usage);
@@ -142,23 +179,7 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      const isAvailable = match.id !== "painter" || config.features.painterImagegen;
-
-      const text = [
-        `Subagent: ${match.name}`,
-        `id: ${match.id}`,
-        `available: ${isAvailable ? "yes" : "no"}`,
-        `invocation: ${getSubagentInvocationMode(match.primary)}`,
-        match.requiresPackage
-          ? `requiresPackage: ${match.requiresPackage}`
-          : "requiresPackage: none",
-        "",
-        "When to use:",
-        ...match.whenToUse.map((line) => `- ${line}`),
-        "",
-        "Scaffold prompt:",
-        match.scaffoldPrompt,
-      ].join("\n");
+      const text = buildSubagentDetailText({ config, subagent: match });
 
       if (!ctx.hasUI) {
         console.log(text);
