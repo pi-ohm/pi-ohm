@@ -20,6 +20,34 @@ invocation as a top-level tool entrypoint instead of task-tool-only invocation.
 The orchestration tool name is **`task`**. Async orchestration lifecycle
 operations (`start/status/wait/send/cancel`) are exposed through this tool.
 
+## Live TUI feedback
+
+`@pi-ohm/subagents` uses `@mariozechner/pi-tui` for task runtime visuals.
+
+Baseline running-task display includes:
+
+- spinner
+- task description (from original `task` start payload)
+- in-flight tool call count
+- elapsed time (`mm:ss`)
+
+Example running block:
+
+```bash
+⠋ [finder] Auth flow scan
+  Tools 3/3 · Elapsed 00:18
+```
+
+Terminal examples:
+
+```bash
+✓ [finder] Auth flow scan
+  Tools 5/5 · Elapsed 00:42
+
+✕ [finder] Auth flow scan
+  Tools 2/3 · Elapsed 00:11
+```
+
 Commands:
 
 - `/ohm-subagents`

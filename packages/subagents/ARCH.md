@@ -5,6 +5,7 @@
 - Mirror OpenCode-style subagents with a **Task tool** async lifecycle.
 - Support a `primary: true` option so selected agents are exposed as direct top-level tools.
 - Provide strong live UX feedback while tasks are running.
+- Use `@mariozechner/pi-tui` as the standard UI layer for subagent task visuals.
 - Keep default runtime self-contained (no third-party extension dependency).
 
 ## Constraints
@@ -87,6 +88,7 @@ Inspected references:
 
 - `node_modules/@mariozechner/pi-coding-agent/examples/extensions/subagent/index.ts`
 - `node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
+- `node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
 - `node_modules/@mariozechner/pi-coding-agent/examples/extensions/status-line.ts`
 - `node_modules/@mariozechner/pi-coding-agent/examples/extensions/plan-mode/index.ts`
 
@@ -110,6 +112,10 @@ Useful patterns:
 5. **Tool lifecycle events**
    - Use `tool_execution_start/update/end` where available to track in-flight tool calls.
 
+6. **`@mariozechner/pi-tui` components for consistent rendering**
+   - Use pi-tui primitives/components for spinner-like activity indicators and stable text layout.
+   - Keep status output simple and deterministic so model/user can read progress at a glance.
+
 ---
 
 ## Visual Feedback Requirements (must-have)
@@ -119,20 +125,57 @@ While task orchestration is running, show:
 - number of task-tool jobs running/completed/failed
 - **live number of tool calls currently in-flight**
 - short task descriptors (`description`, `subagent_type`, status icon)
+- elapsed time for each running task (or orchestration group)
 
 Planned surfaces:
 
 1. **Footer status (`setStatus`)**
-   - Example: `subagents 2 running · tools 5 active · done 7`
+   - Example: `subagents 1 running · tools 3 active · elapsed 00:18`
 
 2. **Widget (`setWidget`)**
-   - Top N running tasks with spinner/check/error indicators and descriptions.
+   - Top N running tasks with spinner/check/error indicators, descriptions, tool counts, and elapsed time.
+   - Each task entry renders as a compact two-line block.
 
 3. **Tool renderer (`renderCall` / `renderResult`)**
    - Collapsed summary by default, expanded drilldown for details.
 
 4. **Streaming text updates (`onUpdate`)**
    - Emit deterministic periodic snapshots during execution.
+
+---
+
+## TUI Runtime Requirements (`@mariozechner/pi-tui`)
+
+Required baseline for every running task surfaced in UI:
+
+- spinner indicator
+- source `description` from task `start` payload
+- active tool-call count
+- elapsed time (`mm:ss`)
+
+Minimal target line format:
+
+```bash
+⠋ [finder] Auth flow scan
+  Tools 3/3 · Elapsed 00:18
+```
+
+Terminal state line format examples:
+
+```bash
+✓ [finder] Auth flow scan
+  Tools 5/5 · Elapsed 00:42
+
+✕ [finder] Auth flow scan
+  Tools 2/3 · Elapsed 00:11
+```
+
+Behavior requirements:
+
+- Spinner animates only for non-terminal task states.
+- Elapsed time starts at task `start` acceptance and stops at terminal state.
+- Tool-call count reflects in-flight calls for that task scope.
+- If TUI is unavailable, provide equivalent plain-text progress in `onUpdate`.
 
 ---
 

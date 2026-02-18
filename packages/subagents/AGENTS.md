@@ -29,6 +29,16 @@ An honorable mention, though in a separate package, `@pi-ohm/painter` should shi
 
 What makes this rather difficult is that it should be semi modular, such that different models can be plugged in for each agent, but ship with recommended "default" models.
 
+Task orchestration UX baseline:
+
+- use the `task` tool as the orchestration entrypoint
+- use `@mariozechner/pi-tui` for live task status rendering
+- running state should include: spinner, description, active tool-call count, elapsed time
+- terminal state should replace spinner with success/failure indicator while keeping description/tool-count/elapsed summary
+- preferred compact display is two lines:
+  - line 1: `⠋ [finder] Auth flow scan`
+  - line 2: `  Tools 3/3 · Elapsed 00:18`
+
 We want to mirror "anomalyco/opencode" implementation of subagents/agents
 
 For instance, the full schema for an opencode style agent is:

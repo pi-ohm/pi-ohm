@@ -9,6 +9,7 @@ This backlog is organized into demoable sprints with **atomic, commit-ready task
 3. Tool boundary schemas must be compatible with Pi extension APIs.
 4. Internal validation/state schemas must use **Zod v4**.
 5. Every ticket must ship with automated tests for its acceptance criteria.
+6. Live subagent visual feedback must use `@mariozechner/pi-tui` (with plain-text fallback when UI is unavailable).
 
 ---
 
@@ -71,6 +72,14 @@ Establish the canonical Task tool contract and schema validation foundation.
     - Build/typecheck confirms no legacy Zod API usage in new schema modules.
   - Test evidence:
     - Typecheck/lint checks in CI pipeline pass.
+
+- [ ] **S1-T6: Package metadata alignment for pi-tui usage**
+  - Requirements:
+    - Document dependency policy for `@mariozechner/pi-tui` in package metadata/docs according to Pi package guidance.
+  - Acceptance criteria:
+    - Subagents package declares and documents expected pi-tui integration contract for consumers.
+  - Test evidence:
+    - Package metadata validation/typecheck passes.
 
 ---
 
@@ -333,58 +342,91 @@ Expose primary profiles as direct top-level tools while preserving unified task 
 
 ---
 
-## Sprint 7 — Live UX Feedback (Status, Widget, Streaming)
+## Sprint 7 — Live TUI Feedback (`@mariozechner/pi-tui`)
 
 ### Sprint goal
 
-Deliver high-signal visual runtime feedback for orchestration health and task activity.
+Deliver high-signal, basic runtime feedback using pi-tui primitives.
 
 ### Demo outcome
 
-During task execution, UI displays live counters for running tasks and active tool calls, plus task descriptions and statuses.
+During task execution, UI displays a two-line block per running task:
+
+- line 1: spinner + `[subagent_type]` + description
+- line 2: `Tools X/Y · Elapsed mm:ss`
+
+Terminal states replace spinner with success/failure marker and preserve summary fields.
 
 ### Tickets
 
-- [ ] **S7-T1: Footer status telemetry**
+- [ ] **S7-T1: Define TUI task snapshot contract**
   - Requirements:
-    - Footer includes live counters: running/completed/failed tasks and active tool calls.
+    - Canonical snapshot fields include `task_id`, `subagent_type`, `description`, `state`, `active_tool_calls`, `started_at`, `ended_at`, `elapsed_ms`.
   - Acceptance criteria:
-    - Footer updates on relevant lifecycle transitions and clears when idle.
+    - All UI formatters consume one normalized snapshot shape.
   - Test evidence:
-    - Formatter unit tests + event-driven status update integration test.
+    - Snapshot schema/formatter contract tests.
 
-- [ ] **S7-T2: Task widget panel with compact task descriptors**
+- [ ] **S7-T2: Spinner and terminal marker policy**
   - Requirements:
-    - Show top N active/recent tasks with icon + `subagent_type` + `description`.
+    - Running states render spinner frames; terminal states render deterministic success/failure/cancel markers.
   - Acceptance criteria:
-    - Widget placement and truncation behavior documented and stable.
+    - Spinner never appears for terminal tasks.
   - Test evidence:
-    - Widget snapshot tests (idle, running, mixed terminal states).
+    - State-to-marker mapping tests.
 
-- [ ] **S7-T3: Streaming progress updates via `onUpdate`**
+- [ ] **S7-T3: Description propagation to TUI**
   - Requirements:
-    - Emit periodic deterministic snapshots while task(s) are in progress.
+    - TUI line description must be sourced from `task start` request payload.
+    - Missing description falls back to deterministic placeholder.
   - Acceptance criteria:
-    - Partial updates never regress terminal states.
+    - UI consistently shows the expected description for each task.
   - Test evidence:
-    - Streaming update sequence tests.
+    - Description propagation tests.
 
-- [ ] **S7-T4: Tool-call in-flight counter integration**
+- [ ] **S7-T4: In-flight tool-call counter integration**
   - Requirements:
-    - Active tool call counter is sourced from tool execution lifecycle events and/or runtime tracker.
+    - Per-task active tool-call count is updated from lifecycle events/runtime tracker.
   - Acceptance criteria:
-    - Counter reflects starts/ends accurately under parallel load.
+    - Counters are accurate under parallel execution.
   - Test evidence:
-    - In-flight counter correctness tests with concurrent tasks.
+    - Concurrent counter correctness tests.
 
-- [ ] **S7-T5: Render UX polish for collapsed vs expanded tool results**
+- [ ] **S7-T5: Elapsed time semantics and formatting**
   - Requirements:
-    - Collapsed view optimized for at-a-glance monitoring.
-    - Expanded view shows per-task details and outcomes.
+    - Elapsed time starts when task is accepted and stops at terminal state.
+    - Display format is `mm:ss` for UI lines.
   - Acceptance criteria:
-    - Render behavior consistent across terminal states.
+    - Elapsed values are monotonic while running and frozen after completion.
   - Test evidence:
-    - Renderer snapshot tests.
+    - Time progression/freeze tests with controlled clock.
+
+- [ ] **S7-T6: Basic pi-tui line renderer for task list**
+  - Requirements:
+    - Render baseline two-line format:
+      - line 1: `spinner/marker + [subagent_type] + description`
+      - line 2: `Tools X/Y · Elapsed mm:ss`
+    - Keep rendering compact and stable for narrow terminal widths.
+  - Acceptance criteria:
+    - Line output remains readable with truncation policy documented.
+  - Test evidence:
+    - Renderer snapshot tests across widths.
+
+- [ ] **S7-T7: Footer and widget synchronization**
+  - Requirements:
+    - Footer summary and widget/task lines reflect the same underlying task snapshot state.
+  - Acceptance criteria:
+    - No contradictory counts or state labels across UI surfaces.
+  - Test evidence:
+    - Integration tests validating synchronized UI snapshots.
+
+- [ ] **S7-T8: Non-UI fallback parity**
+  - Requirements:
+    - When TUI is unavailable, `onUpdate` plain text must include description, tool count, and elapsed time.
+  - Acceptance criteria:
+    - Headless mode preserves observability parity for core runtime metrics.
+  - Test evidence:
+    - Headless update format tests.
 
 ---
 
