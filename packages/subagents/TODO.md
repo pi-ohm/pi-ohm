@@ -704,6 +704,57 @@ A ticket is complete only if all are true:
 
 ---
 
+## Epic 4 — Primary tool schema specialization + observability consistency
+
+### Epic goal
+
+Support subagent-specific primary input schemas while keeping task-routed parity and deterministic lifecycle observability labels.
+
+### Demo outcome
+
+Primary tools accept role-specific inputs (`query`/`task`/`files`) and lifecycle `status`/`wait` no longer emit confusing top-level runtime labels that diverge from item metadata.
+
+### Tickets
+
+- [x] **E4-T1: Normalize collection-level observability aggregation**
+  - Requirements:
+    - `status`/`wait` top-level observability fields should be derived from item metadata when present.
+    - Avoid route/runtime conflation in collection envelopes.
+  - Acceptance criteria:
+    - Sync/async lifecycle responses do not flip between `runtime: pi-cli` and `runtime: interactive-shell` for the same execution path.
+  - Test evidence:
+    - Unit tests for collection aggregation with consistent + mixed item observability values.
+
+- [x] **E4-T2: Primary schema specialization per subagent profile**
+  - Requirements:
+    - Primary tool input schema can vary by subagent id.
+    - Preserve backward compatibility for existing `prompt` payloads.
+  - Acceptance criteria:
+    - Librarian primary accepts `query` + optional `context`.
+    - Oracle primary accepts `task` + optional `context` + optional `files[]`.
+    - Finder primary accepts `query`.
+  - Test evidence:
+    - Primary-tool unit tests for each schema path and normalization.
+
+- [x] **E4-T3: Structured context/file forwarding for primary routing**
+  - Requirements:
+    - Convert schema-specific fields into deterministic task prompt payloads.
+    - Forward oracle file list in machine-readable, stable prompt block.
+  - Acceptance criteria:
+    - Backend receives normalized prompt content containing context/files when provided.
+  - Test evidence:
+    - Tests asserting normalized prompt body for librarian/oracle/finder.
+
+- [x] **E4-T4: Primary schema docs + invocation contract updates**
+  - Requirements:
+    - README/ARCH document per-subagent primary input contract and compatibility aliases.
+  - Acceptance criteria:
+    - Integrators can call primary tools without guessing field names.
+  - Test evidence:
+    - Smoke run examples using librarian query/context and oracle task/context/files.
+
+---
+
 ## Epic 3 — Task UX + lifecycle contract ergonomics
 
 ### Epic goal

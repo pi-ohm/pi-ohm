@@ -61,6 +61,8 @@ Current behavior:
   - `model`
   - `runtime`
   - `route`
+- collection lifecycle ops (`status`/`wait`) aggregate observability from task items
+  (so top-level `runtime`/`route` align with per-item metadata when present)
 - persists task registry snapshots to disk for resume/reload behavior
 - enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
@@ -231,3 +233,23 @@ Commands:
 
 - `/ohm-subagents`
 - `/ohm-subagent <id>`
+
+## Primary tool input schemas
+
+For profiles marked `primary:true`, direct tool input schema is subagent-specific:
+
+- `librarian`
+  - required: `query`
+  - optional: `context`, `async`, `description`
+- `oracle`
+  - required: `task`
+  - optional: `context`, `files[]`, `async`, `description`
+- `finder`
+  - required: `query`
+  - optional: `async`, `description`
+
+Normalization behavior:
+
+- `context` is forwarded in a dedicated prompt section (`Context:`)
+- oracle `files[]` is forwarded in a dedicated prompt block (`Files:` + bullet paths)
+- task lifecycle/result contract remains identical after primary normalization

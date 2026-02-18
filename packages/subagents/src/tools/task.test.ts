@@ -1351,6 +1351,64 @@ defineTest("runTaskToolMvp exposes observability fields in lifecycle payload", a
   assert.equal(Reflect.get(started.details, "model"), "unavailable");
 });
 
+defineTest("runTaskToolMvp status aggregates runtime observability from task items", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "interactive-shell",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: runtime test",
+          output: "runtime test output",
+          provider: "unavailable",
+          model: "unavailable",
+          runtime: "pi-cli",
+          route: "interactive-shell",
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+          provider: "unavailable",
+          model: "unavailable",
+          runtime: "pi-cli",
+          route: "interactive-shell",
+        });
+      },
+    },
+  });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Runtime alignment check",
+      prompt: "Return runtime metadata",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(Reflect.get(started.details, "runtime"), "pi-cli");
+  assert.equal(Reflect.get(started.details, "route"), "interactive-shell");
+
+  const status = await runTask({
+    params: {
+      op: "status",
+      ids: [String(started.details.task_id ?? "")],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(Reflect.get(status.details, "runtime"), "pi-cli");
+  assert.equal(Reflect.get(status.details, "route"), "interactive-shell");
+});
+
 defineTest(
   "runTaskToolMvp batch async honors configured concurrency and wait coverage",
   async () => {

@@ -120,6 +120,8 @@ Output payload behavior:
   - `model`
   - `runtime`
   - `route`
+- collection ops (`status`/`wait`) aggregate observability from items:
+  - prevents top-level runtime drift when item metadata is richer than backend fallback
 
 Backend selection behavior:
 
@@ -144,6 +146,19 @@ Summary/output ergonomics:
 Error category refinement:
 
 - unknown/expired task ids are categorized as `not_found` (not generic runtime)
+
+Primary tool schema specialization:
+
+- `librarian` primary schema: `query` + optional `context`
+- `oracle` primary schema: `task` + optional `context` + optional `files[]`
+- `finder` primary schema: `query`
+
+Primary normalization contract:
+
+- map specialized primary payloads into task-start prompt blocks before routing
+- context forwarded under `Context:` block
+- oracle file paths forwarded under deterministic `Files:` block
+- post-routing lifecycle contract remains task-identical (`contract_version: task.v1`)
 
 ### Task tool discovery payload requirements
 

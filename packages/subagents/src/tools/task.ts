@@ -213,6 +213,41 @@ function resolveCollectionBackend(items: readonly TaskToolItemDetails[], fallbac
   return first;
 }
 
+function resolveCollectionField(
+  items: readonly TaskToolItemDetails[],
+  select: (item: TaskToolItemDetails) => string | undefined,
+  fallback: string,
+): string {
+  const values = items
+    .filter((item) => item.found)
+    .map((item) => select(item))
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+
+  const [first] = values;
+  if (!first) return fallback;
+
+  const hasMismatch = values.some((value) => value !== first);
+  if (hasMismatch) return "mixed";
+  return first;
+}
+
+function resolveCollectionObservability(
+  items: readonly TaskToolItemDetails[],
+  backend: string,
+): {
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+  readonly route: string;
+} {
+  return {
+    provider: resolveCollectionField(items, (item) => item.provider, "unavailable"),
+    model: resolveCollectionField(items, (item) => item.model, "unavailable"),
+    runtime: resolveCollectionField(items, (item) => item.runtime, backend),
+    route: resolveCollectionField(items, (item) => item.route, backend),
+  };
+}
+
 function operationNotSupportedDetails(op: TaskToolParameters["op"]): TaskToolResultDetails {
   return {
     op,
@@ -961,6 +996,10 @@ function buildCollectionResult(
   options: {
     readonly done?: boolean;
     readonly waitStatus?: TaskWaitStatus;
+    readonly provider?: string;
+    readonly model?: string;
+    readonly runtime?: string;
+    readonly route?: string;
   } = {},
 ): AgentToolResult<TaskToolResultDetails> {
   const status = aggregateStatus(items);
@@ -972,6 +1011,10 @@ function buildCollectionResult(
     status,
     summary,
     backend,
+    provider: options.provider,
+    model: options.model,
+    runtime: options.runtime,
+    route: options.route,
     items,
     timed_out: timedOut,
     done: options.done,
@@ -1426,11 +1469,16 @@ async function runTaskStartBatch(
     });
 
     const batch = resolveBatchStatus(normalizedItems, true);
+    const observability = resolveCollectionObservability(normalizedItems, backendId);
     return toAgentToolResult({
       op: "start",
       status: batch.status,
       summary: summarizeBatchStart(normalizedItems, true),
       backend: backendId,
+      provider: observability.provider,
+      model: observability.model,
+      runtime: observability.runtime,
+      route: observability.route,
       items: normalizedItems,
       total_count: batch.totalCount,
       accepted_count: batch.acceptedCount,
@@ -1458,11 +1506,16 @@ async function runTaskStartBatch(
   });
 
   const batch = resolveBatchStatus(normalizedItems, false);
+  const observability = resolveCollectionObservability(normalizedItems, backendId);
   return toAgentToolResult({
     op: "start",
     status: batch.status,
     summary: summarizeBatchStart(normalizedItems, false),
     backend: backendId,
+    provider: observability.provider,
+    model: observability.model,
+    runtime: observability.runtime,
+    route: observability.route,
     items: normalizedItems,
     total_count: batch.totalCount,
     accepted_count: batch.acceptedCount,
@@ -1593,7 +1646,13 @@ async function runTaskStatus(
   const lookups = input.deps.taskStore.getTasks(params.ids);
   const items = lookups.map((lookup) => lookupToItem(lookup));
   const backend = resolveCollectionBackend(items, input.deps.backend.id);
-  const result = buildCollectionResult("status", items, backend, false);
+  const observability = resolveCollectionObservability(items, backend);
+  const result = buildCollectionResult("status", items, backend, false, {
+    provider: observability.provider,
+    model: observability.model,
+    runtime: observability.runtime,
+    route: observability.route,
+  });
   emitTaskRuntimeUpdate({
     details: result.details,
     deps: input.deps,
@@ -1618,6 +1677,7 @@ async function runTaskWait(
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
   const backend = resolveCollectionBackend(items, input.deps.backend.id);
+  const observability = resolveCollectionObservability(items, backend);
   const waitStatus: TaskWaitStatus =
     waited.timeoutReason === "timeout"
       ? "timeout"
@@ -1628,6 +1688,10 @@ async function runTaskWait(
   const baseResult = buildCollectionResult("wait", items, backend, waited.timedOut, {
     done: waitStatus === "completed",
     waitStatus,
+    provider: observability.provider,
+    model: observability.model,
+    runtime: observability.runtime,
+    route: observability.route,
   });
   const result =
     waited.timeoutReason === "timeout"

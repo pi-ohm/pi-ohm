@@ -6,9 +6,9 @@ import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
 import { createInMemoryTaskRuntimeStore } from "../runtime/tasks";
 import {
+  PrimaryToolParametersSchemasBySubagent,
   registerPrimarySubagentTools,
   runPrimarySubagentTool,
-  type PrimaryToolParameters,
 } from "./primary";
 import type { TaskToolDependencies } from "./task";
 import { runTaskToolMvp } from "./task";
@@ -82,6 +82,15 @@ const finderFixture: OhmSubagentDefinition = {
   scaffoldPrompt: "Search repo",
 };
 
+const oracleFixture: OhmSubagentDefinition = {
+  id: "oracle",
+  name: "Oracle",
+  summary: "Architecture and code review advisor",
+  primary: true,
+  whenToUse: ["Review architecture"],
+  scaffoldPrompt: "Review plan",
+};
+
 function makeTaskDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDependencies {
   let sequence = 0;
 
@@ -105,9 +114,10 @@ function makeTaskDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDe
     findSubagentById: (id) => {
       if (id === "librarian") return librarianFixture;
       if (id === "finder") return finderFixture;
+      if (id === "oracle") return oracleFixture;
       return undefined;
     },
-    subagents: [librarianFixture, finderFixture],
+    subagents: [librarianFixture, finderFixture, oracleFixture],
     createTaskId: () => {
       sequence += 1;
       return `task_primary_${String(sequence).padStart(4, "0")}`;
@@ -120,7 +130,7 @@ function makeTaskDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDe
 defineTest("runPrimarySubagentTool routes through task runtime start semantics", async () => {
   const deps = makeTaskDeps();
 
-  const params: PrimaryToolParameters = {
+  const params = {
     prompt: "Map auth architecture",
     description: "Auth architecture scan",
   };
@@ -146,7 +156,7 @@ defineTest("runPrimarySubagentTool routes through task runtime start semantics",
 defineTest("runPrimarySubagentTool defaults description when omitted", async () => {
   const deps = makeTaskDeps();
 
-  const params: PrimaryToolParameters = {
+  const params = {
     prompt: "Map auth architecture",
   };
 
@@ -162,6 +172,75 @@ defineTest("runPrimarySubagentTool defaults description when omitted", async () 
   });
 
   assert.equal(result.details.description, "Librarian direct tool request");
+});
+
+defineTest("runPrimarySubagentTool librarian accepts query + context payload", async () => {
+  const deps = makeTaskDeps();
+
+  const result = await runPrimarySubagentTool({
+    subagent: librarianFixture,
+    params: {
+      query: "Explain auth architecture",
+      context: "Focus on monorepo boundaries and service edges",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
+    deps,
+  });
+
+  assert.equal(result.details.status, "succeeded");
+  assert.match(result.details.output ?? "", /Explain auth architecture/);
+  assert.match(result.details.output ?? "", /Context:/);
+  assert.match(result.details.output ?? "", /monorepo boundaries/);
+});
+
+defineTest("runPrimarySubagentTool oracle accepts task + context + files payload", async () => {
+  const deps = makeTaskDeps();
+
+  const result = await runPrimarySubagentTool({
+    subagent: oracleFixture,
+    params: {
+      task: "Review auth refactor plan",
+      context: "Need risk-ranked rollout guidance",
+      files: ["packages/subagents/src/tools/task.ts", "packages/subagents/src/runtime/tasks.ts"],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
+    deps,
+  });
+
+  assert.equal(result.details.status, "succeeded");
+  assert.match(result.details.output ?? "", /Review auth refactor plan/);
+  assert.match(result.details.output ?? "", /Context:/);
+  assert.match(result.details.output ?? "", /Files:/);
+  assert.match(result.details.output ?? "", /packages\/subagents\/src\/tools\/task.ts/);
+  assert.match(result.details.output ?? "", /Inspect these paths first\./);
+});
+
+defineTest("runPrimarySubagentTool finder accepts query payload", async () => {
+  const deps = makeTaskDeps();
+
+  const result = await runPrimarySubagentTool({
+    subagent: finderFixture,
+    params: {
+      query: "Find JWT verification entry points",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    hasUI: false,
+    ui: undefined,
+    deps,
+  });
+
+  assert.equal(result.details.status, "succeeded");
+  assert.match(result.details.output ?? "", /Find JWT verification entry points/);
 });
 
 defineTest("runPrimarySubagentTool keeps result contract parity with task tool path", async () => {
@@ -264,6 +343,37 @@ defineTest("registerPrimarySubagentTools registers only primary profiles", () =>
   assert.match(descriptions[0] ?? "", /When to use:/);
   assert.match(descriptions[0] ?? "", /Analyze architecture/);
   assert.match(descriptions[0] ?? "", /Task route still available/);
+});
+
+defineTest("registerPrimarySubagentTools exposes specialized schema per subagent", () => {
+  const definitionsByName = new Map<string, unknown>();
+
+  const pi: Pick<ExtensionAPI, "registerTool"> = {
+    registerTool(definition) {
+      definitionsByName.set(definition.name, definition.parameters);
+    },
+  };
+
+  registerPrimarySubagentTools(pi, {
+    taskDeps: makeTaskDeps(),
+    catalog: [librarianFixture, { ...finderFixture, primary: true }, oracleFixture],
+  });
+
+  const librarianSchema = JSON.stringify(definitionsByName.get("librarian") ?? {});
+  const finderSchema = JSON.stringify(definitionsByName.get("finder") ?? {});
+  const oracleSchema = JSON.stringify(definitionsByName.get("oracle") ?? {});
+
+  assert.match(librarianSchema, /"query"/);
+  assert.match(librarianSchema, /"context"/);
+
+  assert.match(finderSchema, /"query"/);
+  assert.doesNotMatch(finderSchema, /"files"/);
+
+  assert.match(oracleSchema, /"task"/);
+  assert.match(oracleSchema, /"context"/);
+  assert.match(oracleSchema, /"files"/);
+
+  assert.match(JSON.stringify(PrimaryToolParametersSchemasBySubagent.oracle), /"task"/);
 });
 
 defineTest("registerPrimarySubagentTools emits diagnostics for naming collisions", () => {

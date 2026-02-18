@@ -16,16 +16,67 @@ import {
   type TaskToolResultDetails,
 } from "./task";
 
-const PrimaryToolParametersSchema = Type.Object(
+const PrimaryControlFieldsSchema = {
+  description: Type.Optional(Type.String({ minLength: 1 })),
+  async: Type.Optional(Type.Boolean()),
+} as const;
+
+const PrimaryToolLegacyParametersSchema = Type.Object(
   {
     prompt: Type.String({ minLength: 1 }),
-    description: Type.Optional(Type.String({ minLength: 1 })),
-    async: Type.Optional(Type.Boolean()),
+    ...PrimaryControlFieldsSchema,
   },
   { additionalProperties: false },
 );
 
-export type PrimaryToolParameters = Static<typeof PrimaryToolParametersSchema>;
+const PrimaryToolLibrarianParametersSchema = Type.Object(
+  {
+    query: Type.String({ minLength: 1 }),
+    context: Type.Optional(Type.String({ minLength: 1 })),
+    prompt: Type.Optional(Type.String({ minLength: 1 })),
+    ...PrimaryControlFieldsSchema,
+  },
+  { additionalProperties: false },
+);
+
+const PrimaryToolOracleParametersSchema = Type.Object(
+  {
+    task: Type.String({ minLength: 1 }),
+    context: Type.Optional(Type.String({ minLength: 1 })),
+    files: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { minItems: 1 })),
+    prompt: Type.Optional(Type.String({ minLength: 1 })),
+    ...PrimaryControlFieldsSchema,
+  },
+  { additionalProperties: false },
+);
+
+const PrimaryToolFinderParametersSchema = Type.Object(
+  {
+    query: Type.String({ minLength: 1 }),
+    prompt: Type.Optional(Type.String({ minLength: 1 })),
+    ...PrimaryControlFieldsSchema,
+  },
+  { additionalProperties: false },
+);
+
+const PrimaryToolDefaultParametersSchema = PrimaryToolLegacyParametersSchema;
+
+export const PrimaryToolParametersSchemasBySubagent = {
+  librarian: PrimaryToolLibrarianParametersSchema,
+  oracle: PrimaryToolOracleParametersSchema,
+  finder: PrimaryToolFinderParametersSchema,
+  default: PrimaryToolDefaultParametersSchema,
+} as const;
+
+export type PrimaryToolLegacyParameters = Static<typeof PrimaryToolLegacyParametersSchema>;
+export type PrimaryToolLibrarianParameters = Static<typeof PrimaryToolLibrarianParametersSchema>;
+export type PrimaryToolOracleParameters = Static<typeof PrimaryToolOracleParametersSchema>;
+export type PrimaryToolFinderParameters = Static<typeof PrimaryToolFinderParametersSchema>;
+export type PrimaryToolParameters =
+  | PrimaryToolLegacyParameters
+  | PrimaryToolLibrarianParameters
+  | PrimaryToolOracleParameters
+  | PrimaryToolFinderParameters;
 
 export interface PrimarySubagentRegistrationResult {
   readonly registeredTools: readonly string[];
@@ -51,37 +102,204 @@ function buildPrimaryToolDescription(subagent: OhmSubagentDefinition): string {
     `Task route still available via: task op=start subagent_type=${subagent.id}`,
   );
 
+  if (subagent.id === "librarian") {
+    lines.push("", "Input: query (required), context (optional), async (optional)");
+  } else if (subagent.id === "oracle") {
+    lines.push(
+      "",
+      "Input: task (required), context (optional), files[] (optional), async (optional)",
+    );
+  } else if (subagent.id === "finder") {
+    lines.push("", "Input: query (required), async (optional)");
+  } else {
+    lines.push("", "Input: prompt (required), async (optional)");
+  }
+
   return lines.join("\n");
 }
 
-function normalizePrimaryPrompt(
-  input: PrimaryToolParameters,
-  subagent: OhmSubagentDefinition,
-): {
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function toBoolean(value: unknown): boolean | undefined {
+  if (typeof value !== "boolean") return undefined;
+  return value;
+}
+
+function toStringList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+
+  const values: string[] = [];
+  for (const item of value) {
+    const text = toTrimmedString(item);
+    if (!text) continue;
+    values.push(text);
+  }
+
+  return values;
+}
+
+function joinPromptSections(sections: readonly string[]): string {
+  return sections.filter((section) => section.trim().length > 0).join("\n\n");
+}
+
+interface PrimaryPromptNormalizationSuccess {
+  readonly ok: true;
   readonly description: string;
   readonly prompt: string;
   readonly async: boolean | undefined;
-} {
-  const prompt = input.prompt.trim();
+}
+
+interface PrimaryPromptNormalizationFailure {
+  readonly ok: false;
+  readonly message: string;
+}
+
+type PrimaryPromptNormalization =
+  | PrimaryPromptNormalizationSuccess
+  | PrimaryPromptNormalizationFailure;
+
+function normalizePrimaryPrompt(
+  input: unknown,
+  subagent: OhmSubagentDefinition,
+): PrimaryPromptNormalization {
+  if (!isObjectRecord(input)) {
+    return {
+      ok: false,
+      message: `Primary tool payload for '${subagent.id}' must be an object`,
+    };
+  }
+
   const description =
-    input.description && input.description.trim().length > 0
-      ? input.description.trim()
-      : `${subagent.name} direct tool request`;
+    toTrimmedString(Reflect.get(input, "description")) ?? `${subagent.name} direct tool request`;
+  const asyncFlag = toBoolean(Reflect.get(input, "async"));
+  const legacyPrompt = toTrimmedString(Reflect.get(input, "prompt"));
+
+  if (subagent.id === "librarian") {
+    const query = toTrimmedString(Reflect.get(input, "query")) ?? legacyPrompt;
+    if (!query) {
+      return {
+        ok: false,
+        message: "librarian requires 'query' (or legacy 'prompt')",
+      };
+    }
+
+    const context = toTrimmedString(Reflect.get(input, "context"));
+    const prompt = joinPromptSections([query, context ? `Context:\n${context}` : ""]);
+    return {
+      ok: true,
+      description,
+      prompt,
+      async: asyncFlag,
+    };
+  }
+
+  if (subagent.id === "oracle") {
+    const task = toTrimmedString(Reflect.get(input, "task")) ?? legacyPrompt;
+    if (!task) {
+      return {
+        ok: false,
+        message: "oracle requires 'task' (or legacy 'prompt')",
+      };
+    }
+
+    const context = toTrimmedString(Reflect.get(input, "context"));
+    const files = toStringList(Reflect.get(input, "files"));
+    const filesBlock =
+      files.length > 0
+        ? ["Files:", ...files.map((file) => `- ${file}`), "Inspect these paths first."].join("\n")
+        : "";
+
+    const prompt = joinPromptSections([task, context ? `Context:\n${context}` : "", filesBlock]);
+
+    return {
+      ok: true,
+      description,
+      prompt,
+      async: asyncFlag,
+    };
+  }
+
+  if (subagent.id === "finder") {
+    const query = toTrimmedString(Reflect.get(input, "query")) ?? legacyPrompt;
+    if (!query) {
+      return {
+        ok: false,
+        message: "finder requires 'query' (or legacy 'prompt')",
+      };
+    }
+
+    return {
+      ok: true,
+      description,
+      prompt: query,
+      async: asyncFlag,
+    };
+  }
+
+  if (!legacyPrompt) {
+    return {
+      ok: false,
+      message: `primary tool '${subagent.id}' requires 'prompt'`,
+    };
+  }
 
   return {
+    ok: true,
     description,
-    prompt,
-    async: input.async,
+    prompt: legacyPrompt,
+    async: asyncFlag,
   };
 }
 
-function toPrimaryToolCallText(subagentId: string, params: PrimaryToolParameters): string {
-  const suffix = params.async ? " async" : "";
-  if (params.description && params.description.trim().length > 0) {
-    return `${subagentId} · ${params.description.trim()}${suffix}`;
-  }
+function toValidationFailure(input: {
+  readonly subagent: OhmSubagentDefinition;
+  readonly message: string;
+}): AgentToolResult<TaskToolResultDetails> {
+  const details: TaskToolResultDetails = {
+    contract_version: "task.v1",
+    op: "start",
+    status: "failed",
+    summary: input.message,
+    backend: "task",
+    provider: "unavailable",
+    model: "unavailable",
+    runtime: "task",
+    route: "task",
+    subagent_type: input.subagent.id,
+    invocation: getSubagentInvocationMode(input.subagent.primary),
+    error_code: "invalid_primary_tool_payload",
+    error_category: "validation",
+    error_message: input.message,
+  };
 
-  return `${subagentId}${suffix}`;
+  return {
+    content: [{ type: "text", text: formatTaskToolResult(details, false) }],
+    details,
+  };
+}
+
+function resolvePrimaryToolParameterSchema(subagent: OhmSubagentDefinition) {
+  if (subagent.id === "librarian") return PrimaryToolParametersSchemasBySubagent.librarian;
+  if (subagent.id === "oracle") return PrimaryToolParametersSchemasBySubagent.oracle;
+  if (subagent.id === "finder") return PrimaryToolParametersSchemasBySubagent.finder;
+  return PrimaryToolParametersSchemasBySubagent.default;
+}
+
+function toPrimaryToolCallText(subagent: OhmSubagentDefinition, params: unknown): string {
+  const normalized = normalizePrimaryPrompt(params, subagent);
+  if (!normalized.ok) return subagent.id;
+
+  const suffix = normalized.async ? " async" : "";
+  return `${subagent.id} · ${normalized.description}${suffix}`;
 }
 
 function toResultText(result: AgentToolResult<unknown>): string {
@@ -112,7 +330,7 @@ function isTaskToolResultDetails(value: unknown): value is TaskToolResultDetails
 
 export async function runPrimarySubagentTool(input: {
   readonly subagent: OhmSubagentDefinition;
-  readonly params: PrimaryToolParameters;
+  readonly params: unknown;
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
@@ -130,6 +348,12 @@ export async function runPrimarySubagentTool(input: {
   readonly deps: TaskToolDependencies;
 }): Promise<AgentToolResult<TaskToolResultDetails>> {
   const normalized = normalizePrimaryPrompt(input.params, input.subagent);
+  if (!normalized.ok) {
+    return toValidationFailure({
+      subagent: input.subagent,
+      message: normalized.message,
+    });
+  }
 
   return runTaskToolMvp({
     params: {
@@ -181,7 +405,7 @@ export function registerPrimarySubagentTools(
       name: toolName,
       label: subagent.name,
       description: buildPrimaryToolDescription(subagent),
-      parameters: PrimaryToolParametersSchema,
+      parameters: resolvePrimaryToolParameterSchema(subagent),
       execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
         return runPrimarySubagentTool({
           subagent,
@@ -195,12 +419,7 @@ export function registerPrimarySubagentTools(
         });
       },
       renderCall: (args, _theme) => {
-        const params: PrimaryToolParameters = {
-          prompt: typeof args.prompt === "string" ? args.prompt : "",
-          description: typeof args.description === "string" ? args.description : undefined,
-          async: args.async === true,
-        };
-        return new Text(toPrimaryToolCallText(subagent.id, params), 0, 0);
+        return new Text(toPrimaryToolCallText(subagent, args), 0, 0);
       },
       renderResult: (result, _options, _theme) => {
         return new Text(toResultText(result), 0, 0);
