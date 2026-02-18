@@ -874,7 +874,7 @@ Interactive sessions show a persistent one-line subagents status + compact widge
     - Coordinator unit tests for throttle/dedupe/idle-clear.
     - Task tool tests confirming widget wiring in interactive path.
 
-- [ ] **E5-T3: Interactive transition-only onUpdate policy**
+- [x] **E5-T3: Interactive transition-only onUpdate policy**
   - Requirements:
     - In UI mode, emit `onUpdate` only for lifecycle transitions/errors (not every progress frame).
     - Keep non-UI update behavior compatible for automation/print/json consumers.

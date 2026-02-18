@@ -471,6 +471,7 @@ defineTest(
   "runTaskToolMvp updates sticky UI status and avoids runtime text spam in UI mode",
   async () => {
     const updates: string[] = [];
+    const updateStatuses: string[] = [];
     const statuses: string[] = [];
 
     const result = await runTaskToolMvp({
@@ -483,6 +484,7 @@ defineTest(
       cwd: "/tmp/project",
       signal: undefined,
       onUpdate: (partial) => {
+        updateStatuses.push(partial.details.status);
         const text = partial.content.find((part) => part.type === "text");
         if (text && text.type === "text") {
           updates.push(text.text);
@@ -503,7 +505,8 @@ defineTest(
     assert.equal(result.details.status, "succeeded");
     assert.equal(statuses.length >= 1, true);
     assert.match(statuses.join("\n"), /subagents/);
-    assert.equal(updates.length >= 2, true);
+    assert.deepEqual(updateStatuses, ["succeeded"]);
+    assert.equal(updates.length, 1);
     for (const update of updates) {
       assert.equal(update.includes("[finder]"), false);
       assert.match(update, /^summary:/);

@@ -990,7 +990,25 @@ function emitTaskRuntimeUpdate(input: {
     getTaskLiveUiCoordinator(input.ui).publish(presentation);
   }
 
-  if (input.onUpdate) {
+  if (!input.onUpdate) {
+    return;
+  }
+
+  if (input.hasUI) {
+    const terminal = isTerminalState(input.details.status);
+    const interactiveLifecycleSignal =
+      terminal ||
+      input.details.op === "cancel" ||
+      input.details.wait_status === "timeout" ||
+      input.details.wait_status === "aborted" ||
+      input.details.error_code !== undefined;
+
+    if (!interactiveLifecycleSignal) {
+      return;
+    }
+  }
+
+  {
     const runtimeText =
       presentation.widgetLines.length > 0
         ? presentation.widgetLines.join("\n")
