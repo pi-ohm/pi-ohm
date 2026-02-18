@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import type { OhmSubagentDefinition } from "../catalog";
 import { Result } from "better-result";
-import { createInMemoryTaskRuntimeStore } from "./tasks";
+import type { OhmSubagentDefinition } from "../catalog";
+import { createInMemoryTaskRuntimeStore, createJsonTaskRuntimePersistence } from "./tasks";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
@@ -31,6 +34,15 @@ function makeStoreWithClock() {
     store,
     tick,
   };
+}
+
+function withTempDir(run: (dir: string) => void): void {
+  const dir = mkdtempSync(join(tmpdir(), "pi-ohm-subagents-"));
+  try {
+    run(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 defineTest("createTask creates queued task snapshot", () => {
@@ -131,6 +143,53 @@ defineTest("state machine enforces legal transitions", () => {
 
   assert.equal(illegal.error.code, "illegal_task_state_transition");
 });
+
+defineTest(
+  "markInteractionRunning and markInteractionComplete update active task without terminal transition",
+  () => {
+    const { store, tick } = makeStoreWithClock();
+
+    const created = store.createTask({
+      taskId: "task_1",
+      subagent: finderSubagent,
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+      backend: "scaffold",
+      invocation: "task-routed",
+    });
+    assert.equal(Result.isOk(created), true);
+
+    tick(10);
+    const running = store.markInteractionRunning(
+      "task_1",
+      "Continuing Finder: Auth flow scan",
+      "Now include tests",
+    );
+    assert.equal(Result.isOk(running), true);
+    if (Result.isError(running)) {
+      assert.fail("Expected interaction start to succeed");
+    }
+
+    assert.equal(running.value.state, "running");
+    assert.equal(running.value.totalToolCalls, 1);
+    assert.deepEqual(running.value.followUpPrompts, ["Now include tests"]);
+
+    tick(20);
+    const completed = store.markInteractionComplete(
+      "task_1",
+      "Finder follow-up complete",
+      "Follow-up output",
+    );
+    assert.equal(Result.isOk(completed), true);
+    if (Result.isError(completed)) {
+      assert.fail("Expected interaction completion to succeed");
+    }
+
+    assert.equal(completed.value.state, "running");
+    assert.equal(completed.value.activeToolCalls, 0);
+    assert.equal(completed.value.output, "Follow-up output");
+  },
+);
 
 defineTest("markFailed requires terminal metadata and stores error info", () => {
   const { store, tick } = makeStoreWithClock();
@@ -265,4 +324,106 @@ defineTest("setExecutionPromise and getExecutionPromise round-trip", async () =>
   }
 
   assert.equal(resolved, true);
+});
+
+defineTest("persistence restores snapshots across store instances", () => {
+  withTempDir((dir) => {
+    const filePath = join(dir, "tasks.json");
+    let now = 1000;
+
+    const persistence = createJsonTaskRuntimePersistence(filePath);
+
+    const storeOne = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+    });
+
+    const created = storeOne.createTask({
+      taskId: "task_1",
+      subagent: finderSubagent,
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+      backend: "scaffold",
+      invocation: "task-routed",
+    });
+    assert.equal(Result.isOk(created), true);
+
+    now += 5;
+    const running = storeOne.markRunning("task_1", "Starting Finder");
+    assert.equal(Result.isOk(running), true);
+
+    now += 5;
+    const succeeded = storeOne.markSucceeded("task_1", "Finder done", "done output");
+    assert.equal(Result.isOk(succeeded), true);
+
+    const storeTwo = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+    });
+
+    const restored = storeTwo.getTask("task_1");
+    assert.notEqual(restored, undefined);
+    assert.equal(restored?.state, "succeeded");
+    assert.equal(restored?.summary, "Finder done");
+    assert.equal(restored?.output, "done output");
+  });
+});
+
+defineTest("retention policy expires terminal tasks with explicit error reason", () => {
+  let now = 1000;
+  const store = createInMemoryTaskRuntimeStore({
+    now: () => now,
+    retentionMs: 25,
+  });
+
+  const created = store.createTask({
+    taskId: "task_1",
+    subagent: finderSubagent,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+  assert.equal(Result.isOk(created), true);
+
+  now += 5;
+  const running = store.markRunning("task_1", "Starting Finder");
+  assert.equal(Result.isOk(running), true);
+
+  now += 5;
+  const succeeded = store.markSucceeded("task_1", "Finder done", "done output");
+  assert.equal(Result.isOk(succeeded), true);
+
+  now += 30;
+  const lookup = store.getTasks(["task_1"])[0];
+  assert.equal(lookup?.found, false);
+  assert.equal(lookup?.errorCode, "task_expired");
+  assert.match(String(lookup?.errorMessage), /retention policy/);
+});
+
+defineTest("corrupt persistence snapshot falls back to empty store and records diagnostics", () => {
+  withTempDir((dir) => {
+    const filePath = join(dir, "tasks.json");
+    writeFileSync(filePath, "{invalid-json", "utf8");
+
+    const persistence = createJsonTaskRuntimePersistence(filePath);
+    const store = createInMemoryTaskRuntimeStore({ persistence });
+
+    const diagnostics = store.getPersistenceDiagnostics();
+    assert.equal(diagnostics.length > 0, true);
+
+    const lookups = store.getTasks(["task_missing"]);
+    assert.equal(lookups[0]?.found, false);
+
+    const recoveredPath = diagnostics.find((entry) => entry.includes("Recovered corrupt"));
+    assert.notEqual(recoveredPath, undefined);
+
+    const recoveredFilePath = recoveredPath?.split(": ").at(-1);
+    assert.notEqual(recoveredFilePath, undefined);
+    if (recoveredFilePath) {
+      assert.equal(existsSync(recoveredFilePath), true);
+      const recoveredRaw = readFileSync(recoveredFilePath, "utf8");
+      assert.match(recoveredRaw, /invalid-json/);
+    }
+  });
 });

@@ -18,11 +18,31 @@ export interface TaskBackendStartOutput {
   readonly output: string;
 }
 
+export interface TaskBackendSendInput {
+  readonly taskId: string;
+  readonly subagent: OhmSubagentDefinition;
+  readonly description: string;
+  readonly initialPrompt: string;
+  readonly followUpPrompts: readonly string[];
+  readonly prompt: string;
+  readonly config: OhmRuntimeConfig;
+  readonly cwd: string;
+  readonly signal: AbortSignal | undefined;
+}
+
+export interface TaskBackendSendOutput {
+  readonly summary: string;
+  readonly output: string;
+}
+
 export interface TaskExecutionBackend {
   readonly id: string;
   executeStart(
     input: TaskBackendStartInput,
   ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>>;
+  executeSend(
+    input: TaskBackendSendInput,
+  ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>>;
 }
 
 function truncate(input: string, maxLength: number): string {
@@ -52,6 +72,35 @@ export class ScaffoldTaskExecutionBackend implements TaskExecutionBackend {
       `subagent: ${input.subagent.id}`,
       `description: ${input.description}`,
       `prompt: ${truncate(input.prompt, 220)}`,
+      `backend: ${this.id}`,
+      `cwd: ${input.cwd}`,
+      `mode: ${input.config.defaultMode}`,
+    ].join("\n");
+
+    return Result.ok({ summary, output });
+  }
+
+  async executeSend(
+    input: TaskBackendSendInput,
+  ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>> {
+    if (input.signal?.aborted) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_aborted",
+          stage: "execute_send",
+          message: `Task ${input.taskId} was aborted before follow-up`,
+          meta: { taskId: input.taskId },
+        }),
+      );
+    }
+
+    const summary = `${input.subagent.name} follow-up: ${truncate(input.prompt, 72)}`;
+    const output = [
+      `subagent: ${input.subagent.id}`,
+      `description: ${input.description}`,
+      `initial_prompt: ${truncate(input.initialPrompt, 220)}`,
+      `follow_up_prompt: ${truncate(input.prompt, 220)}`,
+      `follow_up_count: ${input.followUpPrompts.length}`,
       `backend: ${this.id}`,
       `cwd: ${input.cwd}`,
       `mode: ${input.config.defaultMode}`,

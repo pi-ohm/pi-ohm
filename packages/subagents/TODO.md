@@ -236,7 +236,7 @@ A task started earlier can be continued via `send`, even after session switch/re
 
 ### Tickets
 
-- [ ] **S4-T1: Persist task registry snapshots**
+- [x] **S4-T1: Persist task registry snapshots**
   - Requirements:
     - Persist minimal task metadata needed for lifecycle and resume operations.
   - Acceptance criteria:
@@ -245,7 +245,7 @@ A task started earlier can be continued via `send`, even after session switch/re
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Serialization/deserialization tests + restore flow integration test.
 
-- [ ] **S4-T2: Implement `send` op for follow-up prompts**
+- [x] **S4-T2: Implement `send` op for follow-up prompts**
   - Requirements:
     - Continue an existing task context by ID.
   - Acceptance criteria:
@@ -254,7 +254,7 @@ A task started earlier can be continued via `send`, even after session switch/re
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Send-to-running and send-to-terminal tests.
 
-- [ ] **S4-T3: Add task retention policy requirements**
+- [x] **S4-T3: Add task retention policy requirements**
   - Requirements:
     - Configurable retention window / cleanup behavior documented and enforced.
   - Acceptance criteria:
@@ -263,7 +263,7 @@ A task started earlier can be continued via `send`, even after session switch/re
     - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Retention and expiry tests.
 
-- [ ] **S4-T4: Add corruption-safe persistence handling**
+- [x] **S4-T4: Add corruption-safe persistence handling**
   - Requirements:
     - Corrupt state file does not crash extension startup.
   - Acceptance criteria:

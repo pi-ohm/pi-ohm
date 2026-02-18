@@ -70,6 +70,32 @@ defineTest("ScaffoldTaskExecutionBackend returns deterministic summary/output", 
   assert.match(result.value.output, /mode: smart/);
 });
 
+defineTest("ScaffoldTaskExecutionBackend returns deterministic follow-up output", async () => {
+  const backend = new ScaffoldTaskExecutionBackend();
+
+  const result = await backend.executeSend({
+    taskId: "task_1",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    initialPrompt: "Find auth validation path",
+    followUpPrompts: ["Now include tests"],
+    prompt: "Now include edge-case tests",
+    cwd: "/tmp/project",
+    config: configFixture,
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  if (Result.isError(result)) {
+    assert.fail("Expected scaffold follow-up execution to succeed");
+  }
+
+  assert.match(result.value.summary, /follow-up/);
+  assert.match(result.value.output, /initial_prompt:/);
+  assert.match(result.value.output, /follow_up_prompt:/);
+  assert.match(result.value.output, /follow_up_count: 1/);
+});
+
 defineTest("ScaffoldTaskExecutionBackend maps aborted signal to runtime error", async () => {
   const backend = new ScaffoldTaskExecutionBackend();
   const controller = new AbortController();
@@ -92,4 +118,30 @@ defineTest("ScaffoldTaskExecutionBackend maps aborted signal to runtime error", 
 
   assert.equal(result.error.code, "task_aborted");
   assert.equal(result.error.stage, "execute_start");
+});
+
+defineTest("ScaffoldTaskExecutionBackend maps aborted send signal to runtime error", async () => {
+  const backend = new ScaffoldTaskExecutionBackend();
+  const controller = new AbortController();
+  controller.abort();
+
+  const result = await backend.executeSend({
+    taskId: "task_3",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    initialPrompt: "initial",
+    followUpPrompts: [],
+    prompt: "prompt",
+    cwd: "/tmp/project",
+    config: configFixture,
+    signal: controller.signal,
+  });
+
+  assert.equal(Result.isError(result), true);
+  if (Result.isOk(result)) {
+    assert.fail("Expected aborted signal to produce runtime error");
+  }
+
+  assert.equal(result.error.code, "task_aborted");
+  assert.equal(result.error.stage, "execute_send");
 });

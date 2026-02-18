@@ -30,8 +30,10 @@ operations (`start/status/wait/send/cancel`) are exposed through this tool.
 Current behavior:
 
 - supports `op: "start"` for a single task payload (sync + `async:true`)
-- supports lifecycle operations: `status`, `wait`, `cancel`
+- supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - returns `task_id`, status, and deterministic task details
+- persists task registry snapshots to disk for resume/reload behavior
+- enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
 
 Example payload:
@@ -47,8 +49,13 @@ Example payload:
 
 Not shipped yet:
 
-- `send` execution path
 - batched `start` (`tasks[]`)
+
+Persistence details:
+
+- default snapshot path: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.subagents.tasks.json`
+- retention window is configurable via `OHM_SUBAGENTS_TASK_RETENTION_MS` (positive integer ms)
+- corrupt snapshot files are auto-recovered to `*.corrupt-<epoch>` and runtime falls back to empty state
 
 ## Live TUI feedback
 

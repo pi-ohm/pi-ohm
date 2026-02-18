@@ -1,29 +1,32 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
   ExtensionAPI,
 } from "@mariozechner/pi-coding-agent";
-import type { OhmRuntimeConfig, LoadedOhmRuntimeConfig } from "@pi-ohm/config";
+import { Text } from "@mariozechner/pi-tui";
+import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { loadOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
-import { Text } from "@mariozechner/pi-tui";
 import type { OhmSubagentDefinition, OhmSubagentId } from "../catalog";
 import { getSubagentById } from "../catalog";
 import { getSubagentInvocationMode, type SubagentInvocationMode } from "../extension";
 import { SubagentRuntimeError } from "../errors";
-import {
-  parseTaskToolParameters,
-  TaskToolRegistrationParametersSchema,
-  type TaskToolParameters,
-} from "../schema";
 import { createDefaultTaskExecutionBackend, type TaskExecutionBackend } from "../runtime/backend";
 import {
   createInMemoryTaskRuntimeStore,
+  createJsonTaskRuntimePersistence,
   type TaskLifecycleState,
   type TaskRuntimeLookup,
   type TaskRuntimeSnapshot,
   type TaskRuntimeStore,
 } from "../runtime/tasks";
+import {
+  parseTaskToolParameters,
+  TaskToolRegistrationParametersSchema,
+  type TaskToolParameters,
+} from "../schema";
 
 export type TaskToolStatus = TaskLifecycleState;
 
@@ -66,7 +69,29 @@ export interface TaskToolDependencies {
   readonly taskStore: TaskRuntimeStore;
 }
 
-const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore();
+function parsePositiveIntegerEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+function resolveDefaultTaskPersistencePath(): string {
+  const baseDir =
+    process.env.PI_CONFIG_DIR ??
+    process.env.PI_CODING_AGENT_DIR ??
+    process.env.PI_AGENT_DIR ??
+    join(homedir(), ".pi", "agent");
+
+  return join(baseDir, "ohm.subagents.tasks.json");
+}
+
+const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore({
+  persistence: createJsonTaskRuntimePersistence(resolveDefaultTaskPersistencePath()),
+  retentionMs: parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_RETENTION_MS"),
+});
 
 let taskSequence = 0;
 
@@ -123,17 +148,20 @@ function batchNotSupportedDetails(): TaskToolResultDetails {
   };
 }
 
-function unknownTaskIdDetails(
-  op: "status" | "wait" | "cancel",
+function lookupNotFoundDetails(
+  op: TaskToolParameters["op"],
   taskId: string,
+  code: string,
+  message: string,
 ): TaskToolResultDetails {
   return {
     op,
     status: "failed",
-    summary: `Unknown task id '${taskId}'`,
+    summary: message,
     backend: "task",
-    error_code: "unknown_task_id",
-    error_message: `Unknown task id '${taskId}'`,
+    task_id: taskId,
+    error_code: code,
+    error_message: message,
   };
 }
 
@@ -297,8 +325,8 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
   };
 }
 
-function snapshotToStartResultDetails(
-  op: "start",
+function snapshotToTaskResultDetails(
+  op: TaskToolParameters["op"],
   snapshot: TaskRuntimeSnapshot,
   output?: string,
 ): TaskToolResultDetails {
@@ -368,6 +396,7 @@ async function runTaskExecutionLifecycle(input: {
       subagentType: input.subagent.id,
       description: input.description,
       prompt: input.prompt,
+      followUpPrompts: [],
       summary: running.error.message,
       backend: input.deps.backend.id,
       invocation: getSubagentInvocationMode(input.subagent.primary),
@@ -385,10 +414,10 @@ async function runTaskExecutionLifecycle(input: {
     content: [
       {
         type: "text",
-        text: detailsToText(snapshotToStartResultDetails("start", running.value), false),
+        text: detailsToText(snapshotToTaskResultDetails("start", running.value), false),
       },
     ],
-    details: snapshotToStartResultDetails("start", running.value),
+    details: snapshotToTaskResultDetails("start", running.value),
   });
 
   const execution = await input.deps.backend.executeStart({
@@ -517,6 +546,20 @@ async function waitForTasks(input: {
   }
 }
 
+function resolveSingleLookup(
+  op: TaskToolParameters["op"],
+  lookup: TaskRuntimeLookup | undefined,
+): AgentToolResult<TaskToolResultDetails> | TaskRuntimeSnapshot {
+  if (!lookup || !lookup.found || !lookup.snapshot) {
+    const taskId = lookup?.id ?? "unknown";
+    const code = lookup?.errorCode ?? "unknown_task_id";
+    const message = lookup?.errorMessage ?? `Unknown task id '${taskId}'`;
+    return toAgentToolResult(lookupNotFoundDetails(op, taskId, code, message));
+  }
+
+  return lookup.snapshot;
+}
+
 async function runTaskStart(
   params: Extract<TaskToolParameters, { op: "start" }>,
   input: RunTaskToolInput,
@@ -634,7 +677,7 @@ async function runTaskStart(
   }
 
   const completed = await lifecyclePromise;
-  return toAgentToolResult(snapshotToStartResultDetails("start", completed, completed.output));
+  return toAgentToolResult(snapshotToTaskResultDetails("start", completed, completed.output));
 }
 
 async function runTaskStatus(
@@ -661,16 +704,150 @@ async function runTaskWait(
   return buildCollectionResult("wait", items, input.deps.backend.id, waited.timedOut);
 }
 
+async function runTaskSend(
+  params: Extract<TaskToolParameters, { op: "send" }>,
+  input: RunTaskToolInput,
+  config: LoadedOhmRuntimeConfig,
+): Promise<AgentToolResult<TaskToolResultDetails>> {
+  const lookup = input.deps.taskStore.getTasks([params.id])[0];
+  const resolved = resolveSingleLookup("send", lookup);
+  if ("content" in resolved) return resolved;
+
+  if (isTerminalState(resolved.state)) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: resolved.id,
+      subagent_type: resolved.subagentType,
+      description: resolved.description,
+      summary: `Task '${resolved.id}' is terminal (${resolved.state}) and cannot be resumed`,
+      backend: resolved.backend,
+      invocation: resolved.invocation,
+      error_code: "task_not_resumable",
+      error_message: `Task '${resolved.id}' is terminal (${resolved.state}) and cannot be resumed`,
+    });
+  }
+
+  const subagent = input.deps.findSubagentById(resolved.subagentType);
+  if (!subagent) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: resolved.id,
+      subagent_type: resolved.subagentType,
+      description: resolved.description,
+      summary: `Unknown subagent_type '${resolved.subagentType}'`,
+      backend: input.deps.backend.id,
+      error_code: "unknown_subagent_type",
+      error_message: `No subagent profile found for '${resolved.subagentType}'.`,
+    });
+  }
+
+  const availability = isSubagentAvailable(subagent, config.config);
+  if (Result.isError(availability)) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: resolved.id,
+      subagent_type: resolved.subagentType,
+      description: resolved.description,
+      summary: availability.error.message,
+      backend: input.deps.backend.id,
+      invocation: resolved.invocation,
+      error_code: availability.error.code,
+      error_message: availability.error.message,
+    });
+  }
+
+  const interaction = input.deps.taskStore.markInteractionRunning(
+    params.id,
+    `Continuing ${subagent.name}: ${resolved.description}`,
+    params.prompt,
+  );
+
+  if (Result.isError(interaction)) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: params.id,
+      summary: interaction.error.message,
+      backend: input.deps.backend.id,
+      error_code: interaction.error.code,
+      error_message: interaction.error.message,
+    });
+  }
+
+  const sendResult = await input.deps.backend.executeSend({
+    taskId: interaction.value.id,
+    subagent,
+    description: interaction.value.description,
+    initialPrompt: interaction.value.prompt,
+    followUpPrompts: interaction.value.followUpPrompts,
+    prompt: params.prompt,
+    cwd: input.cwd,
+    config: config.config,
+    signal: input.signal,
+  });
+
+  if (Result.isError(sendResult)) {
+    const failed = input.deps.taskStore.markFailed(
+      interaction.value.id,
+      sendResult.error.message,
+      sendResult.error.code,
+      sendResult.error.message,
+    );
+
+    if (Result.isError(failed)) {
+      return toAgentToolResult({
+        op: "send",
+        status: "failed",
+        task_id: interaction.value.id,
+        summary: failed.error.message,
+        backend: input.deps.backend.id,
+        error_code: failed.error.code,
+        error_message: failed.error.message,
+      });
+    }
+
+    return toAgentToolResult(
+      snapshotToTaskResultDetails("send", failed.value, failed.value.output),
+    );
+  }
+
+  const completed = input.deps.taskStore.markInteractionComplete(
+    interaction.value.id,
+    sendResult.value.summary,
+    sendResult.value.output,
+  );
+
+  if (Result.isError(completed)) {
+    return toAgentToolResult({
+      op: "send",
+      status: "failed",
+      task_id: interaction.value.id,
+      summary: completed.error.message,
+      backend: input.deps.backend.id,
+      error_code: completed.error.code,
+      error_message: completed.error.message,
+    });
+  }
+
+  return toAgentToolResult(
+    snapshotToTaskResultDetails("send", completed.value, sendResult.value.output),
+  );
+}
+
 async function runTaskCancel(
   params: Extract<TaskToolParameters, { op: "cancel" }>,
   input: RunTaskToolInput,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
-  const current = input.deps.taskStore.getTask(params.id);
-  if (!current) return toAgentToolResult(unknownTaskIdDetails("cancel", params.id));
+  const lookup = input.deps.taskStore.getTasks([params.id])[0];
+  const resolved = resolveSingleLookup("cancel", lookup);
+  if ("content" in resolved) return resolved;
 
   const cancelled = input.deps.taskStore.markCancelled(
     params.id,
-    `Cancelled ${current.subagentType}: ${current.description}`,
+    `Cancelled ${resolved.subagentType}: ${resolved.description}`,
   );
 
   if (Result.isError(cancelled)) {
@@ -685,18 +862,7 @@ async function runTaskCancel(
     });
   }
 
-  return toAgentToolResult({
-    op: "cancel",
-    status: cancelled.value.state,
-    task_id: cancelled.value.id,
-    subagent_type: cancelled.value.subagentType,
-    description: cancelled.value.description,
-    summary: cancelled.value.summary,
-    backend: cancelled.value.backend,
-    invocation: cancelled.value.invocation,
-    error_code: cancelled.value.errorCode,
-    error_message: cancelled.value.errorMessage,
-  });
+  return toAgentToolResult(snapshotToTaskResultDetails("cancel", cancelled.value));
 }
 
 export async function runTaskToolMvp(
@@ -747,11 +913,17 @@ export async function runTaskToolMvp(
     return runTaskWait(parsed.value, input);
   }
 
+  if (parsed.value.op === "send") {
+    return runTaskSend(parsed.value, input, configResult.value);
+  }
+
   if (parsed.value.op === "cancel") {
     return runTaskCancel(parsed.value, input);
   }
 
-  return toAgentToolResult(operationNotSupportedDetails(parsed.value.op));
+  const unreachableOp: never = parsed.value;
+  void unreachableOp;
+  return toAgentToolResult(operationNotSupportedDetails("start"));
 }
 
 export function registerTaskTool(
@@ -762,7 +934,7 @@ export function registerTaskTool(
     name: "task",
     label: "Task",
     description:
-      "Orchestrate subagent execution. Supports start/status/wait/cancel with async task lifecycle.",
+      "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
     parameters: TaskToolRegistrationParametersSchema,
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
       return runTaskToolMvp({

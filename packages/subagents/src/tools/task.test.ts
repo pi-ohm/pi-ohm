@@ -5,7 +5,11 @@ import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
 import { SubagentRuntimeError } from "../errors";
-import type { TaskBackendStartInput, TaskExecutionBackend } from "../runtime/backend";
+import type {
+  TaskBackendSendInput,
+  TaskBackendStartInput,
+  TaskExecutionBackend,
+} from "../runtime/backend";
 import { createInMemoryTaskRuntimeStore } from "../runtime/tasks";
 import {
   createTaskId,
@@ -76,6 +80,13 @@ class SuccessfulBackend implements TaskExecutionBackend {
       output: "Detailed task output",
     });
   }
+
+  async executeSend() {
+    return Result.ok({
+      summary: "Finder follow-up: include tests",
+      output: "Follow-up output",
+    });
+  }
 }
 
 class FailingBackend implements TaskExecutionBackend {
@@ -87,6 +98,16 @@ class FailingBackend implements TaskExecutionBackend {
         code: "backend_failed",
         stage: "execute_start",
         message: "backend execution failed",
+      }),
+    );
+  }
+
+  async executeSend() {
+    return Result.err(
+      new SubagentRuntimeError({
+        code: "backend_send_failed",
+        stage: "execute_send",
+        message: "backend follow-up failed",
       }),
     );
   }
@@ -108,6 +129,7 @@ interface PendingCall {
 class DeferredBackend implements TaskExecutionBackend {
   readonly id = "deferred-backend";
   readonly calls: PendingCall[] = [];
+  readonly sendCalls: TaskBackendSendInput[] = [];
 
   async executeStart(input: TaskBackendStartInput): Promise<
     Result<
@@ -120,6 +142,14 @@ class DeferredBackend implements TaskExecutionBackend {
   > {
     return new Promise((resolve) => {
       this.calls.push({ input, resolve });
+    });
+  }
+
+  async executeSend(input: TaskBackendSendInput) {
+    this.sendCalls.push(input);
+    return Result.ok({
+      summary: `Finder follow-up: ${input.prompt}`,
+      output: `follow_up_prompt: ${input.prompt}`,
     });
   }
 
@@ -166,7 +196,7 @@ defineTest("createTaskId creates deterministic prefixed IDs", () => {
   assert.match(taskId, /^task_1700000000000_\d{4}$/);
 });
 
-defineTest("formatTaskToolCall supports start/status/wait/cancel", () => {
+defineTest("formatTaskToolCall supports start/status/wait/send/cancel", () => {
   assert.equal(
     formatTaskToolCall({
       op: "start",
@@ -193,6 +223,15 @@ defineTest("formatTaskToolCall supports start/status/wait/cancel", () => {
       timeout_ms: 250,
     }),
     "task wait",
+  );
+
+  assert.equal(
+    formatTaskToolCall({
+      op: "send",
+      id: "task_1",
+      prompt: "continue",
+    }),
+    "task send",
   );
 
   assert.equal(
@@ -388,6 +427,83 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waitedAfter.details.status, "succeeded");
 });
 
+defineTest("runTaskToolMvp send resumes running task", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTaskToolMvp({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  const send = await runTaskToolMvp({
+    params: {
+      op: "send",
+      id: "task_test_0001",
+      prompt: "Now include integration tests",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(send.details.op, "send");
+  assert.equal(send.details.status, "running");
+  assert.match(send.details.summary, /follow-up/i);
+  assert.equal(backend.sendCalls.length, 1);
+  assert.equal(backend.sendCalls[0]?.followUpPrompts.length, 1);
+
+  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
+  await Promise.resolve();
+  await Promise.resolve();
+});
+
+defineTest("runTaskToolMvp send rejects terminal task", async () => {
+  const deps = makeDeps();
+
+  const started = await runTaskToolMvp({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "succeeded");
+
+  const send = await runTaskToolMvp({
+    params: {
+      op: "send",
+      id: "task_test_0001",
+      prompt: "continue",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(send.details.status, "failed");
+  assert.equal(send.details.error_code, "task_not_resumable");
+});
+
 defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
@@ -500,23 +616,6 @@ defineTest("runTaskToolMvp maps config load failures", async () => {
   assert.equal(result.details.error_code, "task_config_load_failed");
 });
 
-defineTest("runTaskToolMvp still reports unsupported send operation", async () => {
-  const result = await runTaskToolMvp({
-    params: {
-      op: "send",
-      id: "task_test_0001",
-      prompt: "continue",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps: makeDeps(),
-  });
-
-  assert.equal(result.details.status, "failed");
-  assert.equal(result.details.error_code, "task_operation_not_supported");
-});
-
 defineTest("runTaskToolMvp rejects batch start for now", async () => {
   const result = await runTaskToolMvp({
     params: {
@@ -558,5 +657,5 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.equal(registeredNames.length, 1);
   assert.equal(registeredNames[0], "task");
   assert.equal(registeredLabels[0], "Task");
-  assert.match(registeredDescriptions[0], /start\/status\/wait\/cancel/);
+  assert.match(registeredDescriptions[0], /start\/status\/wait\/send\/cancel/);
 });
