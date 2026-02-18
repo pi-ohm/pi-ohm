@@ -86,6 +86,8 @@ You should often write failing tests for implementations prior to actually imple
 
 If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
 
+Tests should live in test files alongside the files that you're testing.
+
 ## TODO.md & ARCH.md
 
 These two files serve as a strong human-agent plane for planning and implementing features.
