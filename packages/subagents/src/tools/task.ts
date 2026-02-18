@@ -22,7 +22,7 @@ import {
   type TaskRuntimeSnapshot,
   type TaskRuntimeStore,
 } from "../runtime/tasks";
-import { createTaskRuntimePresentation, renderTaskSnapshotLines } from "../runtime/ui";
+import { createTaskRuntimePresentation } from "../runtime/ui";
 import {
   parseTaskToolParameters,
   TaskToolRegistrationParametersSchema,
@@ -414,10 +414,7 @@ async function runTaskExecutionLifecycle(input: {
 
   const runningDetails = snapshotToTaskResultDetails("start", running.value);
   emitTaskRuntimeUpdate({
-    details: {
-      ...runningDetails,
-      summary: `${runningDetails.summary}\n${createTaskProgressText(running.value)}`,
-    },
+    details: runningDetails,
     deps: input.deps,
     hasUI: input.hasUI,
     ui: input.ui,
@@ -566,15 +563,6 @@ interface RunTaskToolInput {
   readonly deps: TaskToolDependencies;
 }
 
-function createTaskProgressText(snapshot: TaskRuntimeSnapshot): string {
-  const [line1, line2] = renderTaskSnapshotLines({
-    snapshot,
-    nowEpochMs: Date.now(),
-  });
-
-  return `${line1}\n${line2}`;
-}
-
 function emitTaskRuntimeUpdate(input: {
   readonly details: TaskToolResultDetails;
   readonly deps: TaskToolDependencies;
@@ -588,17 +576,13 @@ function emitTaskRuntimeUpdate(input: {
     maxItems: 5,
   });
 
-  if (input.hasUI && input.ui) {
-    input.ui.setStatus("ohm-subagents", presentation.statusLine);
-    input.ui.setWidget("ohm-subagents", [...presentation.widgetLines], {
-      placement: "belowEditor",
-    });
-  }
-
   if (input.onUpdate) {
-    const body = input.hasUI
-      ? detailsToText(input.details, false)
-      : `${detailsToText(input.details, false)}\n\n${presentation.plainText}`;
+    const runtimeText =
+      presentation.widgetLines.length > 0
+        ? presentation.widgetLines.join("\n")
+        : presentation.statusLine;
+
+    const body = `${runtimeText}\n\n${detailsToText(input.details, false)}`;
 
     input.onUpdate({
       content: [{ type: "text", text: body }],
