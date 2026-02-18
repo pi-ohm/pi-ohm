@@ -557,6 +557,72 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waitedAfter.details.status, "succeeded");
 });
 
+defineTest("runTaskToolMvp status/wait include terminal outputs for async tasks", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  backend.resolveSuccess(0, "Finder: Auth flow scan", "line1\nline2\nline3");
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const waited = await runTask({
+    params: {
+      op: "wait",
+      ids: ["task_test_0001"],
+      timeout_ms: 100,
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const waitedItem = waited.details.items?.[0];
+  assert.notEqual(waitedItem, undefined);
+  if (!waitedItem) {
+    assert.fail("Expected wait item");
+  }
+
+  assert.equal(Reflect.get(waitedItem, "output_available"), true);
+  assert.equal(Reflect.get(waitedItem, "output"), "line1\nline2\nline3");
+
+  const status = await runTask({
+    params: {
+      op: "status",
+      ids: ["task_test_0001"],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const statusItem = status.details.items?.[0];
+  assert.notEqual(statusItem, undefined);
+  if (!statusItem) {
+    assert.fail("Expected status item");
+  }
+
+  assert.equal(Reflect.get(statusItem, "output_available"), true);
+  assert.equal(Reflect.get(statusItem, "output"), "line1\nline2\nline3");
+});
+
 defineTest("runTaskToolMvp send resumes running task", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
@@ -1035,6 +1101,14 @@ defineTest(
     assert.equal(waited.details.status, "succeeded");
     assert.equal(
       waited.details.items?.every((item) => item.status === "succeeded"),
+      true,
+    );
+    assert.equal(
+      (waited.details.items ?? []).every((item) => Reflect.get(item, "output_available") === true),
+      true,
+    );
+    assert.equal(
+      (waited.details.items ?? []).every((item) => typeof Reflect.get(item, "output") === "string"),
       true,
     );
     assert.equal(backend.maxInFlight, 2);

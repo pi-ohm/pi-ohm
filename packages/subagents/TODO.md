@@ -623,7 +623,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
 
 ### Tickets
 
-- [ ] **E2-T1: Async batch output retrieval contract**
+- [x] **E2-T1: Async batch output retrieval contract**
   - Requirements:
     - `start` with `async:true` + batch must expose a deterministic path to retrieve final subagent outputs.
     - `status`/`wait` responses must include output availability semantics per task item.

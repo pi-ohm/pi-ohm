@@ -42,6 +42,8 @@ export interface TaskToolItemDetails {
   readonly summary: string;
   readonly invocation?: SubagentInvocationMode;
   readonly backend?: string;
+  readonly output?: string;
+  readonly output_available?: boolean;
   readonly updated_at_epoch_ms?: number;
   readonly ended_at_epoch_ms?: number;
   readonly error_code?: string;
@@ -57,6 +59,7 @@ export interface TaskToolResultDetails {
   readonly description?: string;
   readonly summary: string;
   readonly output?: string;
+  readonly output_available?: boolean;
   readonly backend: string;
   readonly invocation?: SubagentInvocationMode;
   readonly error_code?: string;
@@ -428,6 +431,7 @@ function lookupToItem(lookup: TaskRuntimeLookup): TaskToolItemDetails {
       id: lookup.id,
       found: false,
       summary: lookup.errorMessage ?? `Unknown task id '${lookup.id}'`,
+      output_available: false,
       error_code: lookup.errorCode ?? "unknown_task_id",
       error_message: lookup.errorMessage ?? `Unknown task id '${lookup.id}'`,
     };
@@ -436,7 +440,31 @@ function lookupToItem(lookup: TaskRuntimeLookup): TaskToolItemDetails {
   return snapshotToItem(lookup.snapshot);
 }
 
+function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
+  readonly output?: string;
+  readonly output_available: boolean;
+} {
+  const isTerminal =
+    snapshot.state === "succeeded" || snapshot.state === "failed" || snapshot.state === "cancelled";
+
+  if (!isTerminal) {
+    return { output_available: false };
+  }
+
+  const output = snapshot.output;
+  if (typeof output !== "string" || output.length === 0) {
+    return { output_available: false };
+  }
+
+  return {
+    output,
+    output_available: true,
+  };
+}
+
 function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
+  const output = resolveSnapshotOutput(snapshot);
+
   return {
     id: snapshot.id,
     found: true,
@@ -446,6 +474,8 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     summary: snapshot.summary,
     invocation: snapshot.invocation,
     backend: snapshot.backend,
+    output: output.output,
+    output_available: output.output_available,
     updated_at_epoch_ms: snapshot.updatedAtEpochMs,
     ended_at_epoch_ms: snapshot.endedAtEpochMs,
     error_code: snapshot.errorCode,
@@ -458,6 +488,11 @@ function snapshotToTaskResultDetails(
   snapshot: TaskRuntimeSnapshot,
   output?: string,
 ): TaskToolResultDetails {
+  const resolvedOutput =
+    typeof output === "string" && output.length > 0
+      ? { output, output_available: true }
+      : resolveSnapshotOutput(snapshot);
+
   return {
     op,
     status: snapshot.state,
@@ -465,7 +500,8 @@ function snapshotToTaskResultDetails(
     subagent_type: snapshot.subagentType,
     description: snapshot.description,
     summary: snapshot.summary,
-    output,
+    output: resolvedOutput.output,
+    output_available: resolvedOutput.output_available,
     backend: snapshot.backend,
     invocation: snapshot.invocation,
     error_code: snapshot.errorCode,
@@ -842,6 +878,7 @@ function toTaskItemFailure(input: {
     summary: input.summary,
     subagent_type: input.subagentType,
     description: input.description,
+    output_available: false,
     error_code: input.errorCode,
     error_message: input.errorMessage,
   };
