@@ -26,6 +26,8 @@
 2. **Primary-tool path** (`primary: true`)
    - Agent is also exposed as direct top-level tool entrypoint.
    - No delegation handoff required for invocation.
+   - Tool registration must be generated from active profile definitions.
+   - Tool description/help text must be derived from profile metadata (`summary`, `whenToUse`, `prompt` summary).
 
 Default profile intent:
 
@@ -80,6 +82,20 @@ OpenCode-style payload + Codex-style async lifecycle.
 { "op": "send", "id": "task_1", "prompt": "Now check tests" }
 { "op": "cancel", "id": "task_1" }
 ```
+
+### Task tool discovery payload requirements
+
+The `task` tool description/instructions presented to the model should include an
+active subagent roster derived from merged definitions.
+
+Required roster fields per subagent:
+
+- `id`
+- invocation mode (`task-routed` | `primary-tool`)
+- short summary/description
+- condensed `whenToUse` guidance
+
+Goal: model can pick the right subagent without guessing hidden catalog state.
 
 ---
 
@@ -261,6 +277,13 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 - `src/tools/task.ts` — task tool registration + op routing
 - `src/tools/primary/*.ts` — direct tools generated for `primary: true` agents
 - `src/extension.ts` — wiring + events + status synchronization
+
+Primary-tool generator requirements:
+
+- register/unregister on config/catalog changes
+- generate tool name from profile id
+- generate tool description/help text from profile definition
+- include `whenToUse` snippets so tools are self-selecting to the model
 
 ---
 

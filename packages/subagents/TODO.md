@@ -105,6 +105,8 @@ Ship a runnable Task tool MVP that executes one task synchronously.
 
 Model can call `task` with `op:start` + `{subagent_type, description, prompt}` and receive structured result payload.
 
+The `task` tool description/help text includes a current subagent roster so model routing has explicit context.
+
 ### Tickets
 
 - [x] **S2-T1: Register `task` tool in extension**
@@ -149,6 +151,16 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
     - New user can invoke one task from documented examples.
   - Test evidence:
     - Documentation example validation check (if available) or tested snippet scripts.
+
+- [ ] **S2-T6: Task tool roster prompt/context injection**
+  - Requirements:
+    - `task` tool description/help text must include active subagent roster from merged catalog/config.
+    - Roster entry fields: `id`, invocation mode, summary, and condensed `whenToUse` hints.
+  - Acceptance criteria:
+    - Model-visible `task` metadata always includes current active subagent list.
+    - Roster updates after config/catalog changes and extension reload.
+  - Test evidence:
+    - Tool registration/render tests validating roster content and update behavior.
 
 ---
 
@@ -351,6 +363,23 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - No stale tool entries after configuration changes/reload.
   - Test evidence:
     - Reload + registration/unregistration tests.
+
+- [ ] **S6-T5: Primary tool descriptions from profile definitions**
+  - Requirements:
+    - Generated primary tools must derive description/help text from profile metadata (`summary`, `whenToUse`, prompt summary).
+  - Acceptance criteria:
+    - `librarian` and other primary tools expose model-facing guidance equivalent to profile definitions.
+  - Test evidence:
+    - Tool registration snapshot tests asserting metadata mapping from profile definitions.
+
+- [ ] **S6-T6: Primary-tool registration for all active `primary:true` profiles**
+  - Requirements:
+    - Active `primary:true` profiles are auto-registered as direct tools at startup/reload.
+  - Acceptance criteria:
+    - `librarian` appears as a direct top-level tool when active.
+    - Non-primary profiles are not registered as direct tools.
+  - Test evidence:
+    - Integration tests for startup/reload registration matrix.
 
 ---
 
