@@ -81,6 +81,26 @@ export const TaskToolParametersSchema = Type.Union([
   TaskCancelOperationSchema,
 ]);
 
+/**
+ * Tool registration schema must be a top-level JSON object for Pi tool APIs.
+ * Detailed op validation is enforced by parseTaskToolParameters().
+ */
+export const TaskToolRegistrationParametersSchema = Type.Object(
+  {
+    op: NonEmptyStringSchema,
+    subagent_type: Type.Optional(NonEmptyStringSchema),
+    description: Type.Optional(NonEmptyStringSchema),
+    prompt: Type.Optional(NonEmptyStringSchema),
+    async: Type.Optional(Type.Boolean()),
+    tasks: Type.Optional(Type.Array(TaskStartItemSchema, { minItems: 1 })),
+    parallel: Type.Optional(Type.Boolean()),
+    ids: Type.Optional(Type.Array(NonEmptyStringSchema, { minItems: 1 })),
+    timeout_ms: Type.Optional(PositiveTimeoutMsSchema),
+    id: Type.Optional(NonEmptyStringSchema),
+  },
+  { additionalProperties: false },
+);
+
 const TaskOperationSchemas = [
   TaskStartSingleOperationSchema,
   TaskStartBatchOperationSchema,

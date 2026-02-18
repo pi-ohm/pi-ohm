@@ -13,7 +13,7 @@ import { getSubagentInvocationMode, type SubagentInvocationMode } from "../exten
 import { SubagentRuntimeError } from "../errors";
 import {
   parseTaskToolParameters,
-  TaskToolParametersSchema,
+  TaskToolRegistrationParametersSchema,
   type TaskToolParameters,
 } from "../schema";
 import { createDefaultTaskExecutionBackend, type TaskExecutionBackend } from "../runtime/backend";
@@ -161,6 +161,19 @@ function toAgentToolResult(details: TaskToolResultDetails): AgentToolResult<Task
   };
 }
 
+function formatTaskToolCallFromRegistrationArgs(args: unknown): string {
+  const parsed = parseTaskToolParameters(args);
+  if (Result.isError(parsed)) {
+    const op =
+      args && typeof args === "object" && "op" in args && typeof args.op === "string"
+        ? args.op
+        : "unknown";
+    return `task ${op}`;
+  }
+
+  return formatTaskToolCall(parsed.value);
+}
+
 interface RunTaskToolInput {
   readonly params: unknown;
   readonly cwd: string;
@@ -304,7 +317,7 @@ export function registerTaskTool(
     label: "Task",
     description:
       "Orchestrate subagent execution. MVP supports op:start for a single task and returns task_id + status.",
-    parameters: TaskToolParametersSchema,
+    parameters: TaskToolRegistrationParametersSchema,
     execute: async (_toolCallId, params, signal, onUpdate, ctx) => {
       return runTaskToolMvp({
         params,
@@ -314,7 +327,7 @@ export function registerTaskTool(
         deps,
       });
     },
-    renderCall: (args: TaskToolParameters, _theme) => new Text(formatTaskToolCall(args), 0, 0),
+    renderCall: (args, _theme) => new Text(formatTaskToolCallFromRegistrationArgs(args), 0, 0),
     renderResult: (result, _options, _theme) => {
       const textBlocks = result.content.filter(
         (part): part is { readonly type: "text"; readonly text: string } => part.type === "text",

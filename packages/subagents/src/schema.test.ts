@@ -3,6 +3,7 @@ import test from "node:test";
 import { Result } from "better-result";
 import {
   TaskToolParametersSchema,
+  TaskToolRegistrationParametersSchema,
   TaskRecordSchema,
   SubagentProfileOverrideSchema,
   ensureZodV4,
@@ -51,6 +52,7 @@ defineTest("ensureZodV4 succeeds in current environment", () => {
 defineTest("TaskToolParametersSchema accepts valid single start payload", () => {
   const isValid = Value.Check(TaskToolParametersSchema, validSingleStartPayload);
   assert.equal(isValid, true);
+  assert.equal(Value.Check(TaskToolRegistrationParametersSchema, validSingleStartPayload), true);
 
   const parsed = parseTaskToolParameters(validSingleStartPayload);
   assert.equal(Result.isOk(parsed), true);
@@ -365,7 +367,16 @@ defineTest("SubagentProfileOverrideSchema rejects malformed overrides", () => {
 
 defineTest("raw schema objects stay aligned with parser behavior", () => {
   assert.equal(Value.Check(TaskToolParametersSchema, validSingleStartPayload), true);
+  assert.equal(Value.Check(TaskToolRegistrationParametersSchema, validSingleStartPayload), true);
   assert.equal(Value.Check(TaskToolParametersSchema, { op: "send", id: "task_1" }), false);
+  assert.equal(
+    Value.Check(TaskToolRegistrationParametersSchema, {
+      op: "send",
+      id: "task_1",
+      extra: "nope",
+    }),
+    false,
+  );
 
   const runningSchemaResult = TaskRecordSchema.safeParse({
     id: "task_1",
