@@ -509,6 +509,63 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
   assert.match(textBlock.text, /gamma/);
 });
 
+defineTest("runTaskToolMvp exposes truncation metadata for long output", async () => {
+  const previous = process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;
+  process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS = "24";
+
+  try {
+    const deps = makeDeps({
+      backend: {
+        id: "truncate-backend",
+        async executeStart() {
+          return Result.ok({
+            summary: "Finder: long output",
+            output: "abcdefghijklmnopqrstuvwxyz0123456789",
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const result = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Long output",
+        prompt: "Return long output",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    assert.equal(Reflect.get(result.details, "output_truncated"), true);
+    assert.equal(Reflect.get(result.details, "output_total_chars"), 36);
+    assert.equal(Reflect.get(result.details, "output_returned_chars"), 24);
+
+    const textBlock = result.content.find((part) => part.type === "text");
+    assert.notEqual(textBlock, undefined);
+    if (!textBlock || textBlock.type !== "text") {
+      assert.fail("Expected text content block");
+    }
+
+    assert.match(textBlock.text, /output_truncated: true/);
+    assert.match(textBlock.text, /output_total_chars: 36/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;
+    } else {
+      process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS = previous;
+    }
+  }
+});
+
 defineTest("runTaskToolMvp handles async start and status lifecycle", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });

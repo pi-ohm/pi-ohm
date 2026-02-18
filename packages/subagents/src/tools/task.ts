@@ -44,6 +44,9 @@ export interface TaskToolItemDetails {
   readonly backend?: string;
   readonly output?: string;
   readonly output_available?: boolean;
+  readonly output_truncated?: boolean;
+  readonly output_total_chars?: number;
+  readonly output_returned_chars?: number;
   readonly updated_at_epoch_ms?: number;
   readonly ended_at_epoch_ms?: number;
   readonly error_code?: string;
@@ -60,6 +63,9 @@ export interface TaskToolResultDetails {
   readonly summary: string;
   readonly output?: string;
   readonly output_available?: boolean;
+  readonly output_truncated?: boolean;
+  readonly output_total_chars?: number;
+  readonly output_returned_chars?: number;
   readonly backend: string;
   readonly invocation?: SubagentInvocationMode;
   readonly error_code?: string;
@@ -116,6 +122,12 @@ function parsePositiveIntegerEnv(name: string): number | undefined {
   const parsed = Number.parseInt(raw, 10);
   if (Number.isNaN(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function resolveOutputMaxChars(): number {
+  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_OUTPUT_MAX_CHARS");
+  if (fromEnv !== undefined) return fromEnv;
+  return 8_000;
 }
 
 function resolveDefaultTaskPersistencePath(): string {
@@ -336,6 +348,16 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
     for (const outputLine of details.output.split("\n")) {
       lines.push(outputLine);
     }
+
+    if (details.output_truncated) {
+      lines.push("output_truncated: true");
+      if (typeof details.output_total_chars === "number") {
+        lines.push(`output_total_chars: ${details.output_total_chars}`);
+      }
+      if (typeof details.output_returned_chars === "number") {
+        lines.push(`output_returned_chars: ${details.output_returned_chars}`);
+      }
+    }
   }
 
   if (details.items && details.items.length > 0) {
@@ -362,6 +384,16 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
           for (const outputLine of item.output.split("\n")) {
             lines.push(`  ${outputLine}`);
           }
+
+          if (item.output_truncated) {
+            lines.push("  output_truncated: true");
+            if (typeof item.output_total_chars === "number") {
+              lines.push(`  output_total_chars: ${item.output_total_chars}`);
+            }
+            if (typeof item.output_returned_chars === "number") {
+              lines.push(`  output_returned_chars: ${item.output_returned_chars}`);
+            }
+          }
         }
         if (item.error_code) lines.push(`  error_code: ${item.error_code}`);
         if (item.error_category) lines.push(`  error_category: ${item.error_category}`);
@@ -370,6 +402,16 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
         lines.push("  output:");
         for (const outputLine of item.output.split("\n")) {
           lines.push(`  ${outputLine}`);
+        }
+
+        if (item.output_truncated) {
+          lines.push("  output_truncated: true");
+          if (typeof item.output_total_chars === "number") {
+            lines.push(`  output_total_chars: ${item.output_total_chars}`);
+          }
+          if (typeof item.output_returned_chars === "number") {
+            lines.push(`  output_returned_chars: ${item.output_returned_chars}`);
+          }
         }
       }
     }
@@ -456,9 +498,49 @@ function lookupToItem(lookup: TaskRuntimeLookup): TaskToolItemDetails {
   return snapshotToItem(lookup.snapshot);
 }
 
+interface TaskOutputPayload {
+  readonly output?: string;
+  readonly output_available: boolean;
+  readonly output_truncated?: boolean;
+  readonly output_total_chars?: number;
+  readonly output_returned_chars?: number;
+}
+
+function toTaskOutputPayload(output: string | undefined): TaskOutputPayload {
+  if (typeof output !== "string" || output.length === 0) {
+    return { output_available: false };
+  }
+
+  const maxChars = resolveOutputMaxChars();
+  const totalChars = output.length;
+
+  if (totalChars <= maxChars) {
+    return {
+      output,
+      output_available: true,
+      output_truncated: false,
+      output_total_chars: totalChars,
+      output_returned_chars: totalChars,
+    };
+  }
+
+  const truncatedOutput = output.slice(0, maxChars);
+
+  return {
+    output: truncatedOutput,
+    output_available: true,
+    output_truncated: true,
+    output_total_chars: totalChars,
+    output_returned_chars: truncatedOutput.length,
+  };
+}
+
 function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
   readonly output?: string;
   readonly output_available: boolean;
+  readonly output_truncated?: boolean;
+  readonly output_total_chars?: number;
+  readonly output_returned_chars?: number;
 } {
   const isTerminal =
     snapshot.state === "succeeded" || snapshot.state === "failed" || snapshot.state === "cancelled";
@@ -467,15 +549,7 @@ function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
     return { output_available: false };
   }
 
-  const output = snapshot.output;
-  if (typeof output !== "string" || output.length === 0) {
-    return { output_available: false };
-  }
-
-  return {
-    output,
-    output_available: true,
-  };
+  return toTaskOutputPayload(snapshot.output);
 }
 
 function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
@@ -492,6 +566,9 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     backend: snapshot.backend,
     output: output.output,
     output_available: output.output_available,
+    output_truncated: output.output_truncated,
+    output_total_chars: output.output_total_chars,
+    output_returned_chars: output.output_returned_chars,
     updated_at_epoch_ms: snapshot.updatedAtEpochMs,
     ended_at_epoch_ms: snapshot.endedAtEpochMs,
     error_code: snapshot.errorCode,
@@ -506,7 +583,7 @@ function snapshotToTaskResultDetails(
 ): TaskToolResultDetails {
   const resolvedOutput =
     typeof output === "string" && output.length > 0
-      ? { output, output_available: true }
+      ? toTaskOutputPayload(output)
       : resolveSnapshotOutput(snapshot);
 
   return {
@@ -518,6 +595,9 @@ function snapshotToTaskResultDetails(
     summary: snapshot.summary,
     output: resolvedOutput.output,
     output_available: resolvedOutput.output_available,
+    output_truncated: resolvedOutput.output_truncated,
+    output_total_chars: resolvedOutput.output_total_chars,
+    output_returned_chars: resolvedOutput.output_returned_chars,
     backend: snapshot.backend,
     invocation: snapshot.invocation,
     error_code: snapshot.errorCode,

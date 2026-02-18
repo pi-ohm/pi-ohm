@@ -644,7 +644,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
     - Unit/integration test with known multiline fixture response.
     - Smoke run with multiline prompt (e.g., poem/list) validating full output in details.
 
-- [ ] **E2-T3: Truncation policy hardening and disclosure**
+- [x] **E2-T3: Truncation policy hardening and disclosure**
   - Requirements:
     - Define/implement explicit truncation behavior for long single-line outputs.
     - Include deterministic truncation metadata in result details when truncation occurs.

@@ -38,6 +38,11 @@ Current behavior:
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - compatibility aliases: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
 - returns `task_id`, status, and deterministic task details
+- includes structured output metadata in details/items:
+  - `output_available`
+  - `output_truncated`
+  - `output_total_chars`
+  - `output_returned_chars`
 - persists task registry snapshots to disk for resume/reload behavior
 - enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
@@ -52,6 +57,17 @@ Runtime backend is selected from `subagentBackend` config:
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
 If output appears like prompt regurgitation, verify `subagentBackend` is not set to `none`.
+
+### Output truncation policy
+
+Task output returned in tool payloads is capped to prevent oversized context injection.
+
+- env override: `OHM_SUBAGENTS_OUTPUT_MAX_CHARS`
+- default cap: `8000` chars
+- when truncation occurs, payloads include:
+  - `output_truncated: true`
+  - `output_total_chars`
+  - `output_returned_chars`
 
 Example payload:
 

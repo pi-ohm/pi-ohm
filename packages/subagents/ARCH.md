@@ -94,6 +94,15 @@ Compatibility behavior:
 - `status`/`wait` normalize either `id` or `ids`
 - `op:"result"` normalizes to `status`
 
+Output payload behavior:
+
+- lifecycle responses include `output_available` for top-level/task-item entries
+- large output is capped by `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
+- truncation is machine-signaled via:
+  - `output_truncated`
+  - `output_total_chars`
+  - `output_returned_chars`
+
 Backend selection behavior:
 
 - `subagentBackend:"interactive-shell"` runs nested `pi` execution
