@@ -107,7 +107,7 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
 
 ### Tickets
 
-- [ ] **S2-T1: Register `task` tool in extension**
+- [x] **S2-T1: Register `task` tool in extension**
   - Requirements:
     - Tool appears in active tools with clear description.
     - Existing extension commands remain functional.
@@ -116,7 +116,7 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
   - Test evidence:
     - Extension integration test for tool registration.
 
-- [ ] **S2-T2: Implement `start` op (single task, sync)**
+- [x] **S2-T2: Implement `start` op (single task, sync)**
   - Requirements:
     - Resolve requested subagent profile.
     - Execute one task using current runtime backend abstraction.
@@ -126,7 +126,7 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
   - Test evidence:
     - Unit tests for successful start + invalid subagent type.
 
-- [ ] **S2-T3: Enforce profile availability checks**
+- [x] **S2-T3: Enforce profile availability checks**
   - Requirements:
     - Respect package feature flags and profile requirements (e.g., optional packages/features).
   - Acceptance criteria:
@@ -134,7 +134,7 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
   - Test evidence:
     - Tests for availability pass/fail conditions.
 
-- [ ] **S2-T4: Add minimal result renderer behavior for Task tool**
+- [x] **S2-T4: Add minimal result renderer behavior for Task tool**
   - Requirements:
     - `renderCall` and `renderResult` show concise task identity + outcome.
   - Acceptance criteria:
@@ -142,7 +142,7 @@ Model can call `task` with `op:start` + `{subagent_type, description, prompt}` a
   - Test evidence:
     - Snapshot tests for renderer outputs.
 
-- [ ] **S2-T5: Add operational docs for MVP usage**
+- [x] **S2-T5: Add operational docs for MVP usage**
   - Requirements:
     - README includes basic `task` `start` usage.
   - Acceptance criteria:

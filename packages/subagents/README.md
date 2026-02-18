@@ -20,6 +20,30 @@ invocation as a top-level tool entrypoint instead of task-tool-only invocation.
 The orchestration tool name is **`task`**. Async orchestration lifecycle
 operations (`start/status/wait/send/cancel`) are exposed through this tool.
 
+## Task tool (MVP)
+
+Current MVP behavior:
+
+- supports `op: "start"` for a **single** task payload
+- returns `task_id`, `status`, and summary details
+- validates all payloads with TypeBox boundary schema + typed Result errors
+
+Example payload:
+
+```jsonc
+{
+  "op": "start",
+  "subagent_type": "finder",
+  "description": "Auth flow scan",
+  "prompt": "Trace token validation + refresh paths",
+}
+```
+
+MVP non-goals (yet):
+
+- `status`, `wait`, `send`, `cancel` execution paths
+- batched `start` (`tasks[]`)
+
 ## Live TUI feedback
 
 `@pi-ohm/subagents` uses `@mariozechner/pi-tui` for task runtime visuals.

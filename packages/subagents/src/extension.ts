@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
+import { registerTaskTool } from "./tools/task";
 
 interface CommandArgsEnvelope {
   args?: unknown;
@@ -51,6 +52,7 @@ function listSubagentIds(): string {
 
 export default function registerSubagentsExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);
+  registerTaskTool(pi);
 
   pi.on("session_start", async (_event, ctx) => {
     const { config } = await loadOhmRuntimeConfig(ctx.cwd);
