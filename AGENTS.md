@@ -93,3 +93,7 @@ These two files serve as a strong human-agent plane for planning and implementin
 Generally, you want to treat them as if you were working in an agile team.
 
 You want to break task down into "sprints". Some questions to consider: how would you do it (timeline doesnt matter) - every task/ticket should be an atomic, commitable piece of work that is testable. Every sprint should be a demoable piece of software that can be run, tested, and build on top of previous work/sprints. Be exhaustive. Be clear. Be technical - but technical in requirements - not implementation details per se. It should read like it's gone through a single back and forth with a technical product manager. Always focus on small atomic tasks that compose a clear goal for each sprint.
+
+## Error Handling
+
+- All errors should be handled via `better-result` package: https://github.com/dmmulroy/better-result. You should use the better-result skill for more information.
