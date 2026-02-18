@@ -40,6 +40,9 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 
 - Scope is required for all conventional commits.
 - Multiple scopes are allowed with commas, e.g. `fix(session,subagents): ...`.
+- Commit messages must be technical and descriptive: avoid planning labels/terminology (for example, avoid references to "sprint" in commit titles/bodies).
+- Commit messages must include a non-empty body that explains the concrete implementation details, major file/module changes, and verification performed.
+- Prefer longer, explicit commit bodies over terse one-line summaries.
 
 ### Scope usage guide
 
