@@ -1,1 +1,1 @@
-See the ./AGENTS.md file for more information.
+See the ./ARCH.md file for architecture and implementation plan details.
