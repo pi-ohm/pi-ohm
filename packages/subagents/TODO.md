@@ -655,7 +655,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
     - Tests covering long-output truncation boundary and metadata flags.
     - Doc update for truncation limits and retrieval strategy.
 
-- [ ] **E2-T4: Backend identity normalization**
+- [x] **E2-T4: Backend identity normalization**
   - Requirements:
     - Standardize backend identity fields across task summary/details and nested subagent output metadata.
     - Eliminate ambiguous/mixed backend labels for a single task execution.
@@ -666,7 +666,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
     - Tests asserting backend identity consistency in `start/status/wait/send`.
     - Smoke run confirming no mixed backend labels for one task.
 
-- [ ] **E2-T5: Stable machine payload contract for task results**
+- [x] **E2-T5: Stable machine payload contract for task results**
   - Requirements:
     - Define canonical structured fields for downstream parsing (beyond human-formatted text blocks).
     - Ensure lifecycle ops expose stable task/item fields for automation.
@@ -677,7 +677,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
     - Contract tests asserting field presence/types for each op.
     - Regression tests for backward-compatible text output.
 
-- [ ] **E2-T6: Invocation mode behavior docs + parity checks**
+- [x] **E2-T6: Invocation mode behavior docs + parity checks**
   - Requirements:
     - Document expected differences between `task-routed` and `primary-tool` invocation paths.
     - Validate parity expectations for shared result envelope fields.

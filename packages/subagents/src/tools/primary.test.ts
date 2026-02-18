@@ -201,6 +201,9 @@ defineTest("runPrimarySubagentTool keeps result contract parity with task tool p
   assert.equal(primary.details.subagent_type, task.details.subagent_type);
   assert.equal(primary.details.description, task.details.description);
   assert.equal(primary.details.backend, task.details.backend);
+  assert.equal(primary.details.contract_version, task.details.contract_version);
+  assert.equal(primary.details.output_available, task.details.output_available);
+  assert.equal(primary.details.output, task.details.output);
   assert.equal(primary.details.error_code, task.details.error_code);
 });
 

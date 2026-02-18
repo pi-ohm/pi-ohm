@@ -55,6 +55,7 @@ export interface TaskToolItemDetails {
 }
 
 export interface TaskToolResultDetails {
+  readonly contract_version?: "task.v1";
   readonly op: TaskToolParameters["op"];
   readonly status: TaskToolStatus;
   readonly task_id?: string;
@@ -438,6 +439,7 @@ export function formatTaskToolResult(details: TaskToolResultDetails, expanded: b
 function toAgentToolResult(details: TaskToolResultDetails): AgentToolResult<TaskToolResultDetails> {
   const normalizedItems = details.items?.map((item) => applyErrorCategoryToItem(item));
   const normalizedDetails = applyErrorCategory({
+    contract_version: "task.v1",
     ...details,
     items: normalizedItems,
   });

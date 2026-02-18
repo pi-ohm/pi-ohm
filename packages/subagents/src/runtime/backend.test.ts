@@ -238,6 +238,48 @@ defineTest(
   },
 );
 
+defineTest(
+  "PiCliTaskExecutionBackend strips backend/provider/model metadata lines from nested output",
+  async () => {
+    const runner: PiCliRunner = async () => ({
+      exitCode: 0,
+      stdout: [
+        "backend: pi-coding-agent",
+        "provider: openai-codex",
+        "model: gpt-5.3-codex",
+        "",
+        "actual line one",
+        "actual line two",
+      ].join("\n"),
+      stderr: "",
+      timedOut: false,
+      aborted: false,
+    });
+
+    const backend = new PiCliTaskExecutionBackend(runner, 1_000);
+    const result = await backend.executeStart({
+      taskId: "task_9",
+      subagent: subagentFixture,
+      description: "Auth flow scan",
+      prompt: "Find auth validation path and refresh flow",
+      cwd: "/tmp/project",
+      config: makeConfig("interactive-shell"),
+      signal: undefined,
+    });
+
+    assert.equal(Result.isOk(result), true);
+    if (Result.isError(result)) {
+      assert.fail("Expected sanitized output success");
+    }
+
+    assert.doesNotMatch(result.value.output, /^backend:/m);
+    assert.doesNotMatch(result.value.output, /^provider:/m);
+    assert.doesNotMatch(result.value.output, /^model:/m);
+    assert.match(result.value.output, /actual line one/);
+    assert.match(result.value.output, /actual line two/);
+  },
+);
+
 defineTest("PiCliTaskExecutionBackend reports timeout and backend execution failures", async () => {
   const timeoutRunner: PiCliRunner = async () => ({
     exitCode: 124,

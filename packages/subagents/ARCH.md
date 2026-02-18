@@ -102,12 +102,23 @@ Output payload behavior:
   - `output_truncated`
   - `output_total_chars`
   - `output_returned_chars`
+- every task tool details payload includes stable contract marker:
+  - `contract_version: "task.v1"`
 
 Backend selection behavior:
 
 - `subagentBackend:"interactive-shell"` runs nested `pi` execution
 - `subagentBackend:"none"` uses deterministic scaffold backend
 - `subagentBackend:"custom-plugin"` is currently surfaced as unsupported
+
+Interactive-shell output normalization:
+
+- strip nested runtime metadata prefixes from surfaced subagent text:
+  - `backend:`
+  - `provider:`
+  - `model:`
+
+This keeps backend identity deterministic at task payload level (`details.backend`).
 
 ### Task tool discovery payload requirements
 

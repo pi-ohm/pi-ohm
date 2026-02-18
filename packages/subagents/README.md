@@ -43,6 +43,8 @@ Current behavior:
   - `output_truncated`
   - `output_total_chars`
   - `output_returned_chars`
+- includes stable machine contract marker on every tool details payload:
+  - `contract_version: "task.v1"`
 - persists task registry snapshots to disk for resume/reload behavior
 - enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
@@ -57,6 +59,9 @@ Runtime backend is selected from `subagentBackend` config:
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
 If output appears like prompt regurgitation, verify `subagentBackend` is not set to `none`.
+
+Nested interactive-shell outputs are sanitized to strip runtime metadata lines (`backend:`,
+`provider:`, `model:`) before surfacing task output.
 
 ### Output truncation policy
 
@@ -136,6 +141,25 @@ Existing slash commands remain unchanged:
 
 - `/ohm-subagents`
 - `/ohm-subagent <id>`
+
+## Invocation mode parity
+
+`task-routed` and `primary-tool` invocation paths share one runtime/result envelope.
+
+Expected parity fields:
+
+- `contract_version`
+- `status`
+- `subagent_type`
+- `description`
+- `backend`
+- `output_available`
+- `output` (subject to truncation policy)
+
+Invocation mode differences are intentional and explicit via `invocation`:
+
+- `task-routed` for non-primary profiles
+- `primary-tool` for direct primary profile calls
 
 ## Live TUI feedback
 

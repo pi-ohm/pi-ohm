@@ -383,6 +383,7 @@ defineTest("runTaskToolMvp returns validation failure for malformed payload", as
   });
 
   assert.equal(result.details.status, "failed");
+  assert.equal(Reflect.get(result.details, "contract_version"), "task.v1");
   assert.equal(result.details.error_code, "invalid_task_tool_payload");
   assert.equal(result.details.error_category, "validation");
 });
@@ -459,6 +460,7 @@ defineTest("runTaskToolMvp handles sync start success", async () => {
 
   assert.deepEqual(updates, ["running", "succeeded"]);
   assert.equal(result.details.status, "succeeded");
+  assert.equal(Reflect.get(result.details, "contract_version"), "task.v1");
   assert.equal(result.details.task_id, "task_test_0001");
   assert.equal(result.details.subagent_type, "finder");
   assert.equal(result.details.backend, "test-backend");
@@ -600,6 +602,7 @@ defineTest("runTaskToolMvp handles async start and status lifecycle", async () =
   });
 
   assert.equal(statusBefore.details.op, "status");
+  assert.equal(Reflect.get(statusBefore.details, "contract_version"), "task.v1");
   assert.equal(statusBefore.details.status, "running");
   assert.equal(statusBefore.details.items?.[0]?.status, "running");
 

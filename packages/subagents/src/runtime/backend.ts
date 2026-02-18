@@ -67,6 +67,15 @@ function normalizeOutput(stdout: string, stderr: string): string {
   return "(no output)";
 }
 
+function sanitizeNestedOutput(output: string): string {
+  const filtered = output
+    .split(/\r?\n/u)
+    .filter((line) => !/^\s*(backend|provider|model)\s*:/iu.test(line));
+
+  const sanitized = filtered.join("\n").trim();
+  return sanitized.length > 0 ? sanitized : "(no output)";
+}
+
 function getTimeoutMsFromEnv(): number {
   const raw = process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS;
   if (!raw) return 180_000;
@@ -405,7 +414,7 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       );
     }
 
-    const output = normalizeOutput(run.stdout, run.stderr);
+    const output = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
     const summary = `${input.subagent.name}: ${truncate(firstLine(output), 72)}`;
     return Result.ok({ summary, output });
   }
@@ -451,7 +460,7 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       );
     }
 
-    const output = normalizeOutput(run.stdout, run.stderr);
+    const output = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
     const summary = `${input.subagent.name} follow-up: ${truncate(firstLine(output), 72)}`;
     return Result.ok({ summary, output });
   }
