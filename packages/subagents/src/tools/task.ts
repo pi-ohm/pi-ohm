@@ -31,7 +31,10 @@ import {
 } from "../schema";
 
 export type TaskToolStatus = TaskLifecycleState;
-export type TaskErrorCategory = "validation" | "policy" | "runtime" | "persistence";
+export type TaskErrorCategory = "validation" | "policy" | "runtime" | "persistence" | "not_found";
+
+export type TaskWaitStatus = "completed" | "timeout" | "aborted";
+export type TaskBatchStatus = "accepted" | "partial" | "completed" | "rejected";
 
 export interface TaskToolItemDetails {
   readonly id: string;
@@ -42,6 +45,10 @@ export interface TaskToolItemDetails {
   readonly summary: string;
   readonly invocation?: SubagentInvocationMode;
   readonly backend?: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly route?: string;
   readonly output?: string;
   readonly output_available?: boolean;
   readonly output_truncated?: boolean;
@@ -68,12 +75,24 @@ export interface TaskToolResultDetails {
   readonly output_total_chars?: number;
   readonly output_returned_chars?: number;
   readonly backend: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly route?: string;
   readonly invocation?: SubagentInvocationMode;
   readonly error_code?: string;
   readonly error_category?: TaskErrorCategory;
   readonly error_message?: string;
   readonly items?: readonly TaskToolItemDetails[];
   readonly timed_out?: boolean;
+  readonly done?: boolean;
+  readonly wait_status?: TaskWaitStatus;
+  readonly cancel_applied?: boolean;
+  readonly prior_status?: TaskToolStatus;
+  readonly total_count?: number;
+  readonly accepted_count?: number;
+  readonly rejected_count?: number;
+  readonly batch_status?: TaskBatchStatus;
 }
 
 export interface TaskToolDependencies {
@@ -265,6 +284,10 @@ function getFeatureGateForSubagent(
 }
 
 function categorizeErrorCode(code: string): TaskErrorCategory {
+  if (code === "unknown_task_id" || code === "task_expired" || code.includes("not_found")) {
+    return "not_found";
+  }
+
   if (
     code.startsWith("invalid_") ||
     code.includes("validation") ||
@@ -309,6 +332,26 @@ function applyErrorCategoryToItem(item: TaskToolItemDetails): TaskToolItemDetail
   };
 }
 
+function withObservabilityDefaults(details: TaskToolResultDetails): TaskToolResultDetails {
+  return {
+    ...details,
+    provider: details.provider ?? "unavailable",
+    model: details.model ?? "unavailable",
+    runtime: details.runtime ?? details.backend,
+    route: details.route ?? details.backend,
+  };
+}
+
+function withItemObservabilityDefaults(item: TaskToolItemDetails): TaskToolItemDetails {
+  return {
+    ...item,
+    provider: item.provider ?? "unavailable",
+    model: item.model ?? "unavailable",
+    runtime: item.runtime ?? item.backend ?? "unavailable",
+    route: item.route ?? item.backend ?? "unavailable",
+  };
+}
+
 function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): string {
   const lines: string[] = [
     "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
@@ -331,14 +374,32 @@ function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): 
 }
 
 function detailsToText(details: TaskToolResultDetails, expanded: boolean): string {
-  const lines: string[] = [details.summary];
+  const lines: string[] = [`summary: ${details.summary}`];
 
   if (details.task_id) lines.push(`task_id: ${details.task_id}`);
   if (details.subagent_type) lines.push(`subagent_type: ${details.subagent_type}`);
   if (details.description) lines.push(`description: ${details.description}`);
   lines.push(`status: ${details.status}`);
   lines.push(`backend: ${details.backend}`);
+  if (details.provider) lines.push(`provider: ${details.provider}`);
+  if (details.model) lines.push(`model: ${details.model}`);
+  if (details.runtime) lines.push(`runtime: ${details.runtime}`);
+  if (details.route) lines.push(`route: ${details.route}`);
   if (details.invocation) lines.push(`invocation: ${details.invocation}`);
+  if (details.wait_status) lines.push(`wait_status: ${details.wait_status}`);
+  if (typeof details.done === "boolean") lines.push(`done: ${details.done ? "true" : "false"}`);
+  if (typeof details.cancel_applied === "boolean") {
+    lines.push(`cancel_applied: ${details.cancel_applied ? "true" : "false"}`);
+  }
+  if (details.prior_status) lines.push(`prior_status: ${details.prior_status}`);
+  if (typeof details.total_count === "number") lines.push(`total_count: ${details.total_count}`);
+  if (typeof details.accepted_count === "number") {
+    lines.push(`accepted_count: ${details.accepted_count}`);
+  }
+  if (typeof details.rejected_count === "number") {
+    lines.push(`rejected_count: ${details.rejected_count}`);
+  }
+  if (details.batch_status) lines.push(`batch_status: ${details.batch_status}`);
   if (details.error_code) lines.push(`error_code: ${details.error_code}`);
   if (details.error_category) lines.push(`error_category: ${details.error_category}`);
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
@@ -380,6 +441,11 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
 
       if (expanded) {
         lines.push(`  summary: ${item.summary}`);
+        if (item.backend) lines.push(`  backend: ${item.backend}`);
+        if (item.provider) lines.push(`  provider: ${item.provider}`);
+        if (item.model) lines.push(`  model: ${item.model}`);
+        if (item.runtime) lines.push(`  runtime: ${item.runtime}`);
+        if (item.route) lines.push(`  route: ${item.route}`);
         if (item.output_available && item.output) {
           lines.push("  output:");
           for (const outputLine of item.output.split("\n")) {
@@ -437,12 +503,17 @@ export function formatTaskToolResult(details: TaskToolResultDetails, expanded: b
 }
 
 function toAgentToolResult(details: TaskToolResultDetails): AgentToolResult<TaskToolResultDetails> {
-  const normalizedItems = details.items?.map((item) => applyErrorCategoryToItem(item));
-  const normalizedDetails = applyErrorCategory({
-    contract_version: "task.v1",
-    ...details,
-    items: normalizedItems,
-  });
+  const contractVersion = "task.v1" as const;
+  const normalizedItems = details.items?.map((item) =>
+    withItemObservabilityDefaults(applyErrorCategoryToItem(item)),
+  );
+  const normalizedDetails = withObservabilityDefaults(
+    applyErrorCategory({
+      contract_version: contractVersion,
+      ...details,
+      items: normalizedItems,
+    }),
+  );
 
   return {
     content: [{ type: "text", text: detailsToText(normalizedDetails, false) }],
@@ -566,6 +637,10 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     summary: snapshot.summary,
     invocation: snapshot.invocation,
     backend: snapshot.backend,
+    provider: snapshot.provider,
+    model: snapshot.model,
+    runtime: snapshot.runtime,
+    route: snapshot.route,
     output: output.output,
     output_available: output.output_available,
     output_truncated: output.output_truncated,
@@ -601,6 +676,10 @@ function snapshotToTaskResultDetails(
     output_total_chars: resolvedOutput.output_total_chars,
     output_returned_chars: resolvedOutput.output_returned_chars,
     backend: snapshot.backend,
+    provider: snapshot.provider,
+    model: snapshot.model,
+    runtime: snapshot.runtime,
+    route: snapshot.route,
     invocation: snapshot.invocation,
     error_code: snapshot.errorCode,
     error_message: snapshot.errorMessage,
@@ -654,6 +733,7 @@ async function runTaskExecutionLifecycle(input: {
   );
 
   if (Result.isError(running)) {
+    const backendId = resolveBackendId(input.deps.backend, input.config);
     const failedSnapshot: TaskRuntimeSnapshot = {
       id: input.taskId,
       state: "failed",
@@ -662,7 +742,11 @@ async function runTaskExecutionLifecycle(input: {
       prompt: input.prompt,
       followUpPrompts: [],
       summary: running.error.message,
-      backend: resolveBackendId(input.deps.backend, input.config),
+      backend: backendId,
+      provider: "unavailable",
+      model: "unavailable",
+      runtime: backendId,
+      route: backendId,
       invocation: getSubagentInvocationMode(input.subagent.primary),
       totalToolCalls: 0,
       activeToolCalls: 0,
@@ -780,6 +864,12 @@ async function runTaskExecutionLifecycle(input: {
     input.taskId,
     execution.value.summary,
     execution.value.output,
+    {
+      provider: execution.value.provider,
+      model: execution.value.model,
+      runtime: execution.value.runtime,
+      route: execution.value.route,
+    },
   );
 
   if (Result.isError(succeeded)) {
@@ -868,6 +958,10 @@ function buildCollectionResult(
   items: readonly TaskToolItemDetails[],
   backend: string,
   timedOut: boolean,
+  options: {
+    readonly done?: boolean;
+    readonly waitStatus?: TaskWaitStatus;
+  } = {},
 ): AgentToolResult<TaskToolResultDetails> {
   const status = aggregateStatus(items);
   const summaryBase = `${op} for ${items.length} task(s)`;
@@ -880,6 +974,8 @@ function buildCollectionResult(
     backend,
     items,
     timed_out: timedOut,
+    done: options.done,
+    wait_status: options.waitStatus,
   });
 }
 
@@ -1019,6 +1115,12 @@ function prepareTaskExecution(input: {
     description: input.description,
     prompt: input.prompt,
     backend: resolveBackendId(input.deps.backend, input.config),
+    observability: {
+      provider: "unavailable",
+      model: "unavailable",
+      runtime: resolveBackendId(input.deps.backend, input.config),
+      route: resolveBackendId(input.deps.backend, input.config),
+    },
     invocation: getSubagentInvocationMode(input.subagent.primary),
   });
 
@@ -1146,15 +1248,73 @@ async function runPreparedTaskExecutions(
 
 function summarizeBatchStart(items: readonly TaskToolItemDetails[], asyncMode: boolean): string {
   const total = items.length;
-  const failed = items.filter((item) => !item.found || item.status === "failed").length;
-  const active = total - failed;
+  const accepted = items.filter((item) => item.found).length;
+  const rejected = total - accepted;
 
   if (asyncMode) {
-    return `Started batch tasks: ${active}/${total} accepted`;
+    if (rejected > 0) {
+      return `Started batch tasks: ${accepted}/${total} accepted (${rejected} rejected)`;
+    }
+
+    return `Started batch tasks: ${accepted}/${total} accepted`;
   }
 
   const succeeded = items.filter((item) => item.status === "succeeded").length;
+  if (rejected > 0) {
+    return `Completed batch tasks: ${succeeded}/${accepted} succeeded (${rejected} rejected)`;
+  }
+
   return `Completed batch tasks: ${succeeded}/${total} succeeded`;
+}
+
+function resolveBatchStatus(
+  items: readonly TaskToolItemDetails[],
+  asyncMode: boolean,
+): {
+  readonly status: TaskToolStatus;
+  readonly totalCount: number;
+  readonly acceptedCount: number;
+  readonly rejectedCount: number;
+  readonly batchStatus: TaskBatchStatus;
+} {
+  const totalCount = items.length;
+  const acceptedCount = items.filter((item) => item.found).length;
+  const rejectedCount = totalCount - acceptedCount;
+
+  const succeededCount = items.filter((item) => item.status === "succeeded").length;
+  const failedCount = items.filter((item) => item.status === "failed" || !item.found).length;
+
+  if (asyncMode) {
+    const batchStatus: TaskBatchStatus =
+      acceptedCount === 0 ? "rejected" : rejectedCount > 0 ? "partial" : "accepted";
+
+    const status: TaskToolStatus = acceptedCount > 0 ? "running" : "failed";
+    return {
+      status,
+      totalCount,
+      acceptedCount,
+      rejectedCount,
+      batchStatus,
+    };
+  }
+
+  const batchStatus: TaskBatchStatus =
+    acceptedCount === 0
+      ? "rejected"
+      : failedCount === 0 && rejectedCount === 0
+        ? "completed"
+        : "partial";
+
+  const status: TaskToolStatus =
+    succeededCount === acceptedCount && rejectedCount === 0 ? "succeeded" : "failed";
+
+  return {
+    status,
+    totalCount,
+    acceptedCount,
+    rejectedCount,
+    batchStatus,
+  };
 }
 
 async function runTaskStartBatch(
@@ -1265,13 +1425,17 @@ async function runTaskStartBatch(
       });
     });
 
-    const status = aggregateStatus(normalizedItems);
+    const batch = resolveBatchStatus(normalizedItems, true);
     return toAgentToolResult({
       op: "start",
-      status,
+      status: batch.status,
       summary: summarizeBatchStart(normalizedItems, true),
       backend: backendId,
       items: normalizedItems,
+      total_count: batch.totalCount,
+      accepted_count: batch.acceptedCount,
+      rejected_count: batch.rejectedCount,
+      batch_status: batch.batchStatus,
     });
   }
 
@@ -1293,13 +1457,17 @@ async function runTaskStartBatch(
     });
   });
 
-  const status = aggregateStatus(normalizedItems);
+  const batch = resolveBatchStatus(normalizedItems, false);
   return toAgentToolResult({
     op: "start",
-    status,
+    status: batch.status,
     summary: summarizeBatchStart(normalizedItems, false),
     backend: backendId,
     items: normalizedItems,
+    total_count: batch.totalCount,
+    accepted_count: batch.acceptedCount,
+    rejected_count: batch.rejectedCount,
+    batch_status: batch.batchStatus,
   });
 }
 
@@ -1392,6 +1560,10 @@ async function runTaskStartSingle(
       description: current.description,
       summary: `Started async ${subagent.name}: ${params.description}`,
       backend: current.backend,
+      provider: current.provider,
+      model: current.model,
+      runtime: current.runtime,
+      route: current.route,
       invocation: current.invocation,
       error_code: current.errorCode,
       error_message: current.errorMessage,
@@ -1446,7 +1618,17 @@ async function runTaskWait(
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
   const backend = resolveCollectionBackend(items, input.deps.backend.id);
-  const baseResult = buildCollectionResult("wait", items, backend, waited.timedOut);
+  const waitStatus: TaskWaitStatus =
+    waited.timeoutReason === "timeout"
+      ? "timeout"
+      : waited.timeoutReason === "aborted"
+        ? "aborted"
+        : "completed";
+
+  const baseResult = buildCollectionResult("wait", items, backend, waited.timedOut, {
+    done: waitStatus === "completed",
+    waitStatus,
+  });
   const result =
     waited.timeoutReason === "timeout"
       ? toAgentToolResult({
@@ -1632,6 +1814,12 @@ async function runTaskSend(
     interaction.value.id,
     sendResult.value.summary,
     sendResult.value.output,
+    {
+      provider: sendResult.value.provider,
+      model: sendResult.value.model,
+      runtime: sendResult.value.runtime,
+      route: sendResult.value.route,
+    },
   );
 
   if (Result.isError(completed)) {
@@ -1679,6 +1867,27 @@ async function runTaskCancel(
   const resolved = resolveSingleLookup("cancel", lookup);
   if ("content" in resolved) return resolved;
 
+  const priorStatus = resolved.state;
+
+  if (isTerminalState(resolved.state)) {
+    const result = toAgentToolResult({
+      ...snapshotToTaskResultDetails("cancel", resolved),
+      summary: `Task '${resolved.id}' is already terminal (${resolved.state}); cancel not applied`,
+      cancel_applied: false,
+      prior_status: priorStatus,
+    });
+
+    emitTaskRuntimeUpdate({
+      details: result.details,
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+
+    return result;
+  }
+
   const cancelled = input.deps.taskStore.markCancelled(
     params.id,
     `Cancelled ${resolved.subagentType}: ${resolved.description}`,
@@ -1706,7 +1915,12 @@ async function runTaskCancel(
     return result;
   }
 
-  const result = toAgentToolResult(snapshotToTaskResultDetails("cancel", cancelled.value));
+  const cancelApplied = cancelled.value.state === "cancelled";
+  const result = toAgentToolResult({
+    ...snapshotToTaskResultDetails("cancel", cancelled.value),
+    cancel_applied: cancelApplied,
+    prior_status: priorStatus,
+  });
 
   emitTaskRuntimeUpdate({
     details: result.details,

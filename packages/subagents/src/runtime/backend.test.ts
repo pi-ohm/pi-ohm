@@ -197,7 +197,11 @@ defineTest(
     assert.equal(prompts.length, 1);
     assert.match(prompts[0] ?? "", /You are the Finder subagent in Pi OHM/);
     assert.equal(result.value.output, "finder online");
-    assert.match(result.value.summary, /Finder: finder online/);
+    assert.match(result.value.summary, /Finder: Auth flow scan/);
+    assert.equal(result.value.runtime, "pi-cli");
+    assert.equal(result.value.route, "interactive-shell");
+    assert.equal(result.value.provider, "unavailable");
+    assert.equal(result.value.model, "unavailable");
   },
 );
 
@@ -277,6 +281,10 @@ defineTest(
     assert.doesNotMatch(result.value.output, /^model:/m);
     assert.match(result.value.output, /actual line one/);
     assert.match(result.value.output, /actual line two/);
+    assert.equal(result.value.provider, "openai-codex");
+    assert.equal(result.value.model, "gpt-5.3-codex");
+    assert.equal(result.value.runtime, "pi-coding-agent");
+    assert.equal(result.value.route, "interactive-shell");
   },
 );
 

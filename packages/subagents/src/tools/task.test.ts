@@ -406,7 +406,7 @@ defineTest("runTaskToolMvp normalizes wait id alias + extra fields", async () =>
   assert.equal(waited.details.op, "wait");
   assert.equal(waited.details.status, "failed");
   assert.equal(waited.details.items?.[0]?.error_code, "unknown_task_id");
-  assert.equal(waited.details.items?.[0]?.error_category, "runtime");
+  assert.equal(waited.details.items?.[0]?.error_category, "not_found");
 });
 
 defineTest("runTaskToolMvp maps result op alias to status", async () => {
@@ -660,6 +660,8 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waited.details.op, "wait");
   assert.equal(waited.details.timed_out, true);
   assert.equal(waited.details.status, "running");
+  assert.equal(Reflect.get(waited.details, "done"), false);
+  assert.equal(Reflect.get(waited.details, "wait_status"), "timeout");
   assert.equal(waited.details.error_code, "task_wait_timeout");
   assert.equal(waited.details.error_category, "runtime");
 
@@ -681,6 +683,54 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
 
   assert.equal(waitedAfter.details.timed_out, false);
   assert.equal(waitedAfter.details.status, "succeeded");
+  assert.equal(Reflect.get(waitedAfter.details, "done"), true);
+  assert.equal(Reflect.get(waitedAfter.details, "wait_status"), "completed");
+});
+
+defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  const controller = new AbortController();
+  controller.abort();
+
+  const waited = await runTask({
+    params: {
+      op: "wait",
+      ids: ["task_test_0001"],
+      timeout_ms: 100,
+    },
+    cwd: "/tmp/project",
+    signal: controller.signal,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(waited.details.status, "running");
+  assert.equal(waited.details.error_code, "task_wait_aborted");
+  assert.equal(waited.details.timed_out, true);
+  assert.equal(Reflect.get(waited.details, "done"), false);
+  assert.equal(Reflect.get(waited.details, "wait_status"), "aborted");
+
+  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
+  await Promise.resolve();
+  await Promise.resolve();
 });
 
 defineTest("runTaskToolMvp status/wait include terminal outputs for async tasks", async () => {
@@ -859,6 +909,8 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
 
   assert.equal(cancelled.details.op, "cancel");
   assert.equal(cancelled.details.status, "cancelled");
+  assert.equal(Reflect.get(cancelled.details, "cancel_applied"), true);
+  assert.equal(Reflect.get(cancelled.details, "prior_status"), "running");
 
   const signal = backend.calls[0]?.input.signal;
   assert.notEqual(signal, undefined);
@@ -876,6 +928,42 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
   });
 
   assert.equal(cancelledAgain.details.status, "cancelled");
+  assert.equal(Reflect.get(cancelledAgain.details, "cancel_applied"), false);
+  assert.equal(Reflect.get(cancelledAgain.details, "prior_status"), "cancelled");
+});
+
+defineTest("runTaskToolMvp cancel on completed task is explicit no-op", async () => {
+  const deps = makeDeps();
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "succeeded");
+
+  const cancelled = await runTask({
+    params: {
+      op: "cancel",
+      id: "task_test_0001",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(cancelled.details.status, "succeeded");
+  assert.equal(Reflect.get(cancelled.details, "cancel_applied"), false);
+  assert.equal(Reflect.get(cancelled.details, "prior_status"), "succeeded");
 });
 
 defineTest("runTaskToolMvp returns per-id errors on status for unknown IDs", async () => {
@@ -893,6 +981,7 @@ defineTest("runTaskToolMvp returns per-id errors on status for unknown IDs", asy
   assert.equal(result.details.status, "failed");
   assert.equal(result.details.items?.[0]?.found, false);
   assert.equal(result.details.items?.[0]?.error_code, "unknown_task_id");
+  assert.equal(result.details.items?.[0]?.error_category, "not_found");
 });
 
 defineTest("runTaskToolMvp enforces deny policy decisions", async () => {
@@ -1117,6 +1206,9 @@ defineTest("runTaskToolMvp supports batch start with deterministic item ordering
 
   assert.equal(result.details.op, "start");
   assert.equal(result.details.status, "succeeded");
+  assert.equal(Reflect.get(result.details, "accepted_count"), 3);
+  assert.equal(Reflect.get(result.details, "rejected_count"), 0);
+  assert.equal(Reflect.get(result.details, "batch_status"), "completed");
 
   const items = result.details.items ?? [];
   assert.equal(items.length, 3);
@@ -1161,11 +1253,102 @@ defineTest("runTaskToolMvp batch start isolates failures", async () => {
   });
 
   assert.equal(result.details.status, "failed");
+  assert.equal(Reflect.get(result.details, "accepted_count"), 3);
+  assert.equal(Reflect.get(result.details, "rejected_count"), 0);
+  assert.equal(Reflect.get(result.details, "batch_status"), "partial");
   const items = result.details.items ?? [];
   assert.equal(items.length, 3);
   assert.equal(items[0]?.status, "succeeded");
   assert.equal(items[1]?.status, "failed");
   assert.equal(items[2]?.status, "succeeded");
+});
+
+defineTest("runTaskToolMvp batch async mixed validity reports partial acceptance", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      parallel: true,
+      tasks: [
+        {
+          subagent_type: "finder",
+          description: "valid-1",
+          prompt: "trace valid-1",
+        },
+        {
+          subagent_type: "unknown-subagent",
+          description: "invalid-2",
+          prompt: "trace invalid-2",
+        },
+        {
+          subagent_type: "finder",
+          description: "valid-3",
+          prompt: "trace valid-3",
+        },
+      ],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+  assert.equal(Reflect.get(started.details, "accepted_count"), 2);
+  assert.equal(Reflect.get(started.details, "rejected_count"), 1);
+  assert.equal(Reflect.get(started.details, "batch_status"), "partial");
+
+  const acceptedIds = (started.details.items ?? [])
+    .filter((item) => item.found)
+    .map((item) => item.id);
+
+  assert.equal(acceptedIds.length, 2);
+
+  backend.resolveSuccess(0, "Finder: valid-1", "output valid-1");
+  backend.resolveSuccess(1, "Finder: valid-3", "output valid-3");
+  await Promise.resolve();
+  await Promise.resolve();
+
+  const waited = await runTask({
+    params: {
+      op: "wait",
+      ids: acceptedIds,
+      timeout_ms: 200,
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(waited.details.status, "succeeded");
+  assert.equal(Reflect.get(waited.details, "done"), true);
+  assert.equal(Reflect.get(waited.details, "wait_status"), "completed");
+});
+
+defineTest("runTaskToolMvp exposes observability fields in lifecycle payload", async () => {
+  const deps = makeDeps();
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Observability scan",
+      prompt: "Trace runtime route",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(Reflect.get(started.details, "runtime"), "test-backend");
+  assert.equal(Reflect.get(started.details, "route"), "test-backend");
+  assert.equal(Reflect.get(started.details, "provider"), "unavailable");
+  assert.equal(Reflect.get(started.details, "model"), "unavailable");
 });
 
 defineTest(

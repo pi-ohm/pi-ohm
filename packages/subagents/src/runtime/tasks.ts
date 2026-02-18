@@ -8,6 +8,13 @@ import { parseTaskRecord, type TaskRecord } from "../schema";
 export type TaskLifecycleState = TaskRecord["state"];
 export type TaskInvocationMode = "task-routed" | "primary-tool";
 
+export interface TaskRuntimeObservability {
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+  readonly route: string;
+}
+
 const TASK_PERSISTENCE_SCHEMA_VERSION = 1;
 const DEFAULT_RETENTION_MS = 1000 * 60 * 60 * 24;
 
@@ -21,6 +28,10 @@ export interface TaskRuntimeSnapshot {
   readonly summary: string;
   readonly output?: string;
   readonly backend: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+  readonly route: string;
   readonly invocation: TaskInvocationMode;
   readonly totalToolCalls: number;
   readonly activeToolCalls: number;
@@ -45,6 +56,7 @@ export interface CreateTaskInput {
   readonly description: string;
   readonly prompt: string;
   readonly backend: string;
+  readonly observability?: Partial<TaskRuntimeObservability>;
   readonly invocation: TaskInvocationMode;
 }
 
@@ -53,6 +65,10 @@ export interface PersistedTaskRuntimeEntry {
   readonly summary: string;
   readonly output?: string;
   readonly backend: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+  readonly route: string;
   readonly invocation: TaskInvocationMode;
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;
@@ -91,11 +107,13 @@ export interface TaskRuntimeStore {
     taskId: string,
     summary: string,
     output: string,
+    observability?: Partial<TaskRuntimeObservability>,
   ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError>;
   markSucceeded(
     taskId: string,
     summary: string,
     output: string,
+    observability?: Partial<TaskRuntimeObservability>,
   ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError>;
   markFailed(
     taskId: string,
@@ -128,6 +146,10 @@ interface TaskRuntimeEntry {
   readonly summary: string;
   readonly output?: string;
   readonly backend: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+  readonly route: string;
   readonly invocation: TaskInvocationMode;
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;
@@ -220,6 +242,10 @@ function toTaskRuntimeSnapshot(entry: TaskRuntimeEntry): TaskRuntimeSnapshot {
     summary: entry.summary,
     output: entry.output,
     backend: entry.backend,
+    provider: entry.provider,
+    model: entry.model,
+    runtime: entry.runtime,
+    route: entry.route,
     invocation: entry.invocation,
     totalToolCalls: entry.record.totalToolCalls,
     activeToolCalls: entry.record.activeToolCalls,
@@ -263,6 +289,18 @@ function parseFollowUpPrompts(value: unknown): readonly string[] {
   }
 
   return prompts;
+}
+
+function normalizeObservability(
+  backend: string,
+  observability?: Partial<TaskRuntimeObservability>,
+): TaskRuntimeObservability {
+  return {
+    provider: observability?.provider ?? "unavailable",
+    model: observability?.model ?? "unavailable",
+    runtime: observability?.runtime ?? backend,
+    route: observability?.route ?? backend,
+  };
 }
 
 function parsePersistedEntry(
@@ -327,6 +365,12 @@ function parsePersistedEntry(
     record: parsedRecord.value,
     summary,
     backend,
+    ...normalizeObservability(backend, {
+      provider: parseOptionalString(input.provider),
+      model: parseOptionalString(input.model),
+      runtime: parseOptionalString(input.runtime),
+      route: parseOptionalString(input.route),
+    }),
     invocation,
     output: parseOptionalString(input.output),
     errorCode: parseOptionalString(input.errorCode),
@@ -527,6 +571,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       record: validated.value,
       summary: `Queued ${input.subagent.name}: ${input.description}`,
       backend: input.backend,
+      ...normalizeObservability(input.backend, input.observability),
       invocation: input.invocation,
       followUpPrompts: [],
     };
@@ -601,6 +646,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     taskId: string,
     summary: string,
     output: string,
+    observability?: Partial<TaskRuntimeObservability>,
   ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError> {
     this.pruneExpiredTerminalTasks();
 
@@ -633,6 +679,12 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       record: validated.value,
       summary,
       output,
+      ...normalizeObservability(current.backend, {
+        provider: observability?.provider ?? current.provider,
+        model: observability?.model ?? current.model,
+        runtime: observability?.runtime ?? current.runtime,
+        route: observability?.route ?? current.route,
+      }),
     };
 
     this.tasks.set(taskId, nextEntry);
@@ -644,10 +696,12 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     taskId: string,
     summary: string,
     output: string,
+    observability?: Partial<TaskRuntimeObservability>,
   ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError> {
     return this.transition(taskId, "succeeded", {
       summary,
       output,
+      observability,
       activeToolCalls: 0,
       totalToolCallsDelta: 0,
     });
@@ -808,6 +862,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       readonly output?: string;
       readonly errorCode?: string;
       readonly errorMessage?: string;
+      readonly observability?: Partial<TaskRuntimeObservability>;
       readonly activeToolCalls: number;
       readonly totalToolCallsDelta: number;
     },
@@ -860,6 +915,12 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       record: validated.value,
       summary: options.summary,
       output: options.output,
+      ...normalizeObservability(current.backend, {
+        provider: options.observability?.provider ?? current.provider,
+        model: options.observability?.model ?? current.model,
+        runtime: options.observability?.runtime ?? current.runtime,
+        route: options.observability?.route ?? current.route,
+      }),
       errorCode: options.errorCode,
       errorMessage: options.errorMessage,
     };
@@ -890,6 +951,10 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         summary: entry.summary,
         output: entry.output,
         backend: entry.backend,
+        provider: entry.provider,
+        model: entry.model,
+        runtime: entry.runtime,
+        route: entry.route,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
         errorCode: entry.errorCode,
@@ -934,6 +999,10 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         summary: entry.summary,
         output: entry.output,
         backend: entry.backend,
+        provider: entry.provider,
+        model: entry.model,
+        runtime: entry.runtime,
+        route: entry.route,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
         errorCode: entry.errorCode,

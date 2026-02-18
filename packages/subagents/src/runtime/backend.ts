@@ -17,6 +17,10 @@ export interface TaskBackendStartInput {
 export interface TaskBackendStartOutput {
   readonly summary: string;
   readonly output: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly route?: string;
 }
 
 export interface TaskBackendSendInput {
@@ -34,6 +38,10 @@ export interface TaskBackendSendInput {
 export interface TaskBackendSendOutput {
   readonly summary: string;
   readonly output: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly route?: string;
 }
 
 export interface TaskExecutionBackend {
@@ -52,11 +60,6 @@ function truncate(input: string, maxLength: number): string {
   return input.slice(0, maxLength - 1) + "…";
 }
 
-function firstLine(input: string): string {
-  const [line = ""] = input.split(/\r?\n/u);
-  return line.trim();
-}
-
 function normalizeOutput(stdout: string, stderr: string): string {
   const trimmedStdout = stdout.trim();
   if (trimmedStdout.length > 0) return trimmedStdout;
@@ -67,13 +70,55 @@ function normalizeOutput(stdout: string, stderr: string): string {
   return "(no output)";
 }
 
-function sanitizeNestedOutput(output: string): string {
-  const filtered = output
-    .split(/\r?\n/u)
-    .filter((line) => !/^\s*(backend|provider|model)\s*:/iu.test(line));
+interface NestedOutputNormalization {
+  readonly output: string;
+  readonly provider: string;
+  readonly model: string;
+  readonly runtime: string;
+}
 
-  const sanitized = filtered.join("\n").trim();
-  return sanitized.length > 0 ? sanitized : "(no output)";
+function sanitizeNestedOutput(output: string): NestedOutputNormalization {
+  const lines = output.split(/\r?\n/u);
+  const retained: string[] = [];
+
+  let provider = "unavailable";
+  let model = "unavailable";
+  let runtime = "pi-cli";
+
+  for (const line of lines) {
+    const matched = line.match(/^\s*(backend|provider|model|runtime|route)\s*:\s*(.+)\s*$/iu);
+    if (!matched) {
+      retained.push(line);
+      continue;
+    }
+
+    const key = matched[1]?.toLowerCase();
+    const value = matched[2]?.trim() ?? "";
+    if (value.length === 0) continue;
+
+    if (key === "provider") {
+      provider = value;
+      continue;
+    }
+
+    if (key === "model") {
+      model = value;
+      continue;
+    }
+
+    if (key === "runtime" || key === "backend") {
+      runtime = value;
+      continue;
+    }
+  }
+
+  const sanitized = retained.join("\n").trim();
+  return {
+    output: sanitized.length > 0 ? sanitized : "(no output)",
+    provider,
+    model,
+    runtime,
+  };
 }
 
 function getTimeoutMsFromEnv(): number {
@@ -325,7 +370,14 @@ export class ScaffoldTaskExecutionBackend implements TaskExecutionBackend {
       `mode: ${input.config.defaultMode}`,
     ].join("\n");
 
-    return Result.ok({ summary, output });
+    return Result.ok({
+      summary,
+      output,
+      provider: "unavailable",
+      model: "unavailable",
+      runtime: this.id,
+      route: this.id,
+    });
   }
 
   async executeSend(
@@ -354,7 +406,14 @@ export class ScaffoldTaskExecutionBackend implements TaskExecutionBackend {
       `mode: ${input.config.defaultMode}`,
     ].join("\n");
 
-    return Result.ok({ summary, output });
+    return Result.ok({
+      summary,
+      output,
+      provider: "unavailable",
+      model: "unavailable",
+      runtime: this.id,
+      route: this.id,
+    });
   }
 }
 
@@ -414,9 +473,16 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       );
     }
 
-    const output = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
-    const summary = `${input.subagent.name}: ${truncate(firstLine(output), 72)}`;
-    return Result.ok({ summary, output });
+    const normalized = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
+    const summary = `${input.subagent.name}: ${truncate(input.description, 72)}`;
+    return Result.ok({
+      summary,
+      output: normalized.output,
+      provider: normalized.provider,
+      model: normalized.model,
+      runtime: normalized.runtime,
+      route: this.id,
+    });
   }
 
   async executeSend(
@@ -460,9 +526,16 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       );
     }
 
-    const output = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
-    const summary = `${input.subagent.name} follow-up: ${truncate(firstLine(output), 72)}`;
-    return Result.ok({ summary, output });
+    const normalized = sanitizeNestedOutput(normalizeOutput(run.stdout, run.stderr));
+    const summary = `${input.subagent.name} follow-up: ${truncate(input.prompt, 72)}`;
+    return Result.ok({
+      summary,
+      output: normalized.output,
+      provider: normalized.provider,
+      model: normalized.model,
+      runtime: normalized.runtime,
+      route: this.id,
+    });
   }
 }
 

@@ -97,6 +97,17 @@ Compatibility behavior:
 Output payload behavior:
 
 - lifecycle responses include `output_available` for top-level/task-item entries
+- lifecycle responses include explicit wait ergonomics fields:
+  - `wait_status` (`completed|timeout|aborted`)
+  - `done` (boolean terminality signal for wait)
+- cancel responses include explicit effect metadata:
+  - `cancel_applied`
+  - `prior_status`
+- batch start responses include acceptance accounting:
+  - `total_count`
+  - `accepted_count`
+  - `rejected_count`
+  - `batch_status` (`accepted|partial|completed|rejected`)
 - large output is capped by `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
 - truncation is machine-signaled via:
   - `output_truncated`
@@ -104,6 +115,11 @@ Output payload behavior:
   - `output_returned_chars`
 - every task tool details payload includes stable contract marker:
   - `contract_version: "task.v1"`
+- observability fields are explicit on details/items:
+  - `provider`
+  - `model`
+  - `runtime`
+  - `route`
 
 Backend selection behavior:
 
@@ -119,6 +135,15 @@ Interactive-shell output normalization:
   - `model:`
 
 This keeps backend identity deterministic at task payload level (`details.backend`).
+
+Summary/output ergonomics:
+
+- human text rendering labels concise summary as `summary:`
+- canonical full result remains `output` (never inferred from summary)
+
+Error category refinement:
+
+- unknown/expired task ids are categorized as `not_found` (not generic runtime)
 
 ### Task tool discovery payload requirements
 

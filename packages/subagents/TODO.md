@@ -701,3 +701,86 @@ A ticket is complete only if all are true:
 5. The change is small enough to be reviewed and merged as one atomic commit or a tightly scoped commit set.
 6. Recoverable error paths use `better-result` Result/TaggedError flows (no hidden try/catch swallowing).
 7. Interactive extension smoke run was executed via `interactive_shell` with `pi -e ./packages/subagents/src/extension.ts`.
+
+---
+
+## Epic 3 — Task UX + lifecycle contract ergonomics
+
+### Epic goal
+
+Reduce caller confusion in mixed/timeout/cancel flows while strengthening machine-contract observability for backend/runtime routing.
+
+### Demo outcome
+
+Task responses are easier for humans to read, safer for automation to parse, and explicit about partial acceptance, wait outcomes, cancellation effects, and runtime metadata.
+
+### Tickets
+
+- [x] **E3-T1: Resolve summary/output dual-read confusion**
+  - Requirements:
+    - Avoid misleading truncation-looking summaries when full `output` is present.
+    - Keep multiline `output` canonical for both humans and parsers.
+  - Acceptance criteria:
+    - Result text clearly distinguishes concise summary from canonical output body.
+    - No first-line summary appears to be the only returned result.
+  - Test evidence:
+    - Regression tests for summary + multiline output rendering behavior.
+    - Smoke run showing summary + full output clarity in one task response.
+
+- [x] **E3-T2: Batch partial-failure semantics (accepted vs rejected)**
+  - Requirements:
+    - Async batch start must expose accepted/rejected accounting when some items are invalid.
+    - Top-level status must not imply whole-batch failure when valid tasks were accepted.
+  - Acceptance criteria:
+    - Mixed async batch clearly signals partial acceptance and per-item outcomes.
+    - Callers can continue polling accepted tasks without ambiguity.
+  - Test evidence:
+    - Tests for mixed batch (valid + invalid) status/count contract.
+    - Smoke run demonstrating partial accept + later successful wait/status for accepted ids.
+
+- [x] **E3-T3: Explicit cancel semantics for terminal tasks**
+  - Requirements:
+    - `cancel` on terminal tasks must expose whether cancellation was applied.
+    - Response should include prior state to disambiguate no-op behavior.
+  - Acceptance criteria:
+    - Callers can detect cancel no-op vs real cancellation from fields alone.
+  - Test evidence:
+    - Tests covering running->cancelled and succeeded->cancel no-op behavior.
+
+- [x] **E3-T4: Backend/model/runtime observability fields**
+  - Requirements:
+    - Add stable metadata fields for provider/model/runtime/route in task lifecycle payloads.
+    - Explicitly mark unavailable values by contract (not implicit omission ambiguity).
+  - Acceptance criteria:
+    - Start/status/wait/send/cancel expose deterministic observability fields.
+    - Backend identity remains single-source and not inferred from model text.
+  - Test evidence:
+    - Contract tests asserting observability fields and fallback/unavailable semantics.
+
+- [x] **E3-T5: Invocation-path consistency docs + behavior contract**
+  - Requirements:
+    - Clearly document `task-routed` vs `primary-tool` behavior and expected parity fields.
+    - Ensure integration tests enforce intentional parity/divergence.
+  - Acceptance criteria:
+    - Integrators can predict response shape and differences per invocation path.
+  - Test evidence:
+    - Parity tests for shared fields, and explicit differences test for invocation marker.
+    - README/ARCH updates with unambiguous examples.
+
+- [x] **E3-T6: Wait timeout ergonomics contract**
+  - Requirements:
+    - Wait responses must include explicit terminality/wait-outcome fields (timeout vs completed vs aborted).
+    - Preserve compatibility while making timeout non-terminal outcome machine-obvious.
+  - Acceptance criteria:
+    - Callers can branch on wait outcome without parsing error text.
+  - Test evidence:
+    - Tests for timeout/aborted/completed wait outcomes.
+
+- [x] **E3-T7: Unknown task classification refinement**
+  - Requirements:
+    - Unknown/expired task ids should use explicit not-found category for retry strategy.
+    - Distinguish not-found from runtime backend failures in both top-level + item details.
+  - Acceptance criteria:
+    - Automation can classify retryability by stable category alone.
+  - Test evidence:
+    - Tests for unknown id + expired id category mapping.

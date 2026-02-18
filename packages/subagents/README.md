@@ -37,7 +37,18 @@ Current behavior:
 - supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - compatibility aliases: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
+- result text now always labels concise summary explicitly (`summary:`) and keeps canonical result in `output`
 - returns `task_id`, status, and deterministic task details
+- includes explicit wait/cancel ergonomics fields:
+  - `wait_status` (`completed|timeout|aborted`)
+  - `done` (boolean completion flag for `wait`)
+  - `cancel_applied`
+  - `prior_status`
+- includes batch acceptance accounting for `start` with `tasks[]`:
+  - `total_count`
+  - `accepted_count`
+  - `rejected_count`
+  - `batch_status` (`accepted|partial|completed|rejected`)
 - includes structured output metadata in details/items:
   - `output_available`
   - `output_truncated`
@@ -45,6 +56,11 @@ Current behavior:
   - `output_returned_chars`
 - includes stable machine contract marker on every tool details payload:
   - `contract_version: "task.v1"`
+- includes stable observability fields on details/items:
+  - `provider`
+  - `model`
+  - `runtime`
+  - `route`
 - persists task registry snapshots to disk for resume/reload behavior
 - enforces terminal-task retention expiry with explicit `task_expired` lookup errors
 - validates all payloads with TypeBox boundary schema + typed Result errors
@@ -62,6 +78,8 @@ If output appears like prompt regurgitation, verify `subagentBackend` is not set
 
 Nested interactive-shell outputs are sanitized to strip runtime metadata lines (`backend:`,
 `provider:`, `model:`) before surfacing task output.
+
+For unknown tasks/expired tasks, error categorization is explicit: `error_category: "not_found"`.
 
 ### Output truncation policy
 
@@ -90,6 +108,8 @@ Batch execution notes:
 - aggregate item order is deterministic (input order)
 - bounded parallelism is enforced by `subagents.taskMaxConcurrency` (default `3`)
 - task failures are isolated; one failed batch item does not abort siblings
+- async mixed-validity batch starts no longer collapse to top-level failure when tasks were accepted;
+  use acceptance counters + `batch_status` to decide polling behavior
 
 ## Task permission policy
 
@@ -153,6 +173,10 @@ Expected parity fields:
 - `subagent_type`
 - `description`
 - `backend`
+- `provider`
+- `model`
+- `runtime`
+- `route`
 - `output_available`
 - `output` (subject to truncation policy)
 
