@@ -254,7 +254,7 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 ## Suggested Module Layout
 
 - `src/schema.ts` — Zod internal schemas + TypeBox parameter schemas
-- `src/errors.ts` — `better-result` TaggedError definitions + shared error unions
+- `@pi-ohm/core/errors` — shared `better-result` TaggedError definitions + error unions
 - `src/runtime/tasks.ts` — task registry + lifecycle state machine
 - `src/runtime/executor.ts` — task execution engine + concurrency control
 - `src/runtime/ui.ts` — status/widget snapshot formatter

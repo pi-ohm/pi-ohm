@@ -86,6 +86,7 @@ Establish the canonical Task tool contract and schema validation foundation.
   - Requirements:
     - Define package-level error handling contract using `Result<T, E>` for recoverable failures.
     - Define initial `TaggedError` categories for validation/config, policy, runtime, persistence.
+    - Reuse shared error primitives from `@pi-ohm/core/errors` where applicable.
   - Acceptance criteria:
     - Architecture and code-facing contracts explicitly require typed Result error flows.
     - No new runtime module in this package returns thrown recoverable errors as its public behavior.
