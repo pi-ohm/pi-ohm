@@ -2,7 +2,7 @@
 
 ## Objectives
 
-- Mirror OpenCode-style delegated subagents with async lifecycle.
+- Mirror OpenCode-style subagents with a **Task tool** async lifecycle.
 - Support a `primary: true` option so selected agents are exposed as direct top-level tools.
 - Provide strong live UX feedback while tasks are running.
 - Keep default runtime self-contained (no third-party extension dependency).
@@ -17,8 +17,8 @@
 
 ## Invocation Model
 
-1. **Delegated path** (`primary: false`, default)
-   - Invoked through a delegate orchestration tool.
+1. **Task-routed path** (`primary: false`, default)
+   - Invoked through the `task` orchestration tool.
    - Runs in isolated task context with resumable task IDs.
 
 2. **Primary-tool path** (`primary: true`)
@@ -28,8 +28,8 @@
 Default profile intent:
 
 - `librarian`: `primary: true`
-- `finder`: delegated
-- `oracle`: delegated
+- `finder`: task-routed
+- `oracle`: task-routed
 
 ---
 
@@ -48,7 +48,7 @@ Merge policy:
 
 ---
 
-## Delegate Tool Contract
+## Task Tool Contract
 
 OpenCode-style payload + Codex-style async lifecycle.
 
@@ -114,9 +114,9 @@ Useful patterns:
 
 ## Visual Feedback Requirements (must-have)
 
-While delegation is running, show:
+While task orchestration is running, show:
 
-- number of delegated tasks running/completed/failed
+- number of task-tool jobs running/completed/failed
 - **live number of tool calls currently in-flight**
 - short task descriptors (`description`, `subagent_type`, status icon)
 
@@ -164,8 +164,8 @@ Rule: standardize internal schemas on Zod v4 APIs only.
 
 Core package behavior (required):
 
-- single delegate execution
-- batched parallel delegate execution in one tool call
+- single task-tool execution
+- batched parallel task-tool execution in one tool call
 - async lifecycle (`start/status/wait/send/cancel`)
 
 Implementation approach:
@@ -182,9 +182,9 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 
 - `src/schema.ts` — Zod internal schemas + TypeBox parameter schemas
 - `src/runtime/tasks.ts` — task registry + lifecycle state machine
-- `src/runtime/executor.ts` — delegate execution engine + concurrency control
+- `src/runtime/executor.ts` — task execution engine + concurrency control
 - `src/runtime/ui.ts` — status/widget snapshot formatter
-- `src/tools/delegate.ts` — delegate tool registration + op routing
+- `src/tools/task.ts` — task tool registration + op routing
 - `src/tools/primary/*.ts` — direct tools generated for `primary: true` agents
 - `src/extension.ts` — wiring + events + status synchronization
 
@@ -196,4 +196,4 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 - lifecycle tests (`start/status/wait/send/cancel`)
 - parallel determinism + bounded concurrency tests
 - renderer/status snapshot tests (for visual feedback correctness)
-- regression tests for `primary: true` routing vs delegated routing
+- regression tests for `primary: true` routing vs task-routed execution

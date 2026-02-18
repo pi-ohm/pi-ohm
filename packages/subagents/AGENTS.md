@@ -38,7 +38,7 @@ For instance, the full schema for an opencode style agent is:
   "name": "agent-name",
   "description": "agent-readable description",
   "mode": "subagent", // primary|subagent|all (default: subagent in this package)
-  "primary": false, // when true, expose as direct top-level tool (no delegation required)
+  "primary": false, // when true, expose as direct top-level tool (no task-tool routing required)
   "model": "model-name",
   "reasoningEffort": "string - typically none|low|medium|high and xhigh for gpt-5 family OpenAI models",
   "prompt": "string - prompt to use for the agent, should also accept `{file:/path/to/prompt.txt|md}`",
