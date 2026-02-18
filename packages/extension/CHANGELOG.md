@@ -1,38 +1,61 @@
 # Changelog
 
-## [0.6.4](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.3...pi-ohm-v0.6.4) (2026-02-18)
+## [0.6.5](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.4...pi-ohm-v0.6.5) (2026-02-18)
+
 
 ### Miscellaneous Chores
 
-- **pi-ohm:** Synchronize pi-ohm-lockstep versions
+* **pi-ohm:** Synchronize pi-ohm-lockstep versions
+
 
 ### Dependencies
 
-- The following workspace dependencies were updated
-  - dependencies
-    - @pi-ohm/config bumped to 0.6.4
-    - @pi-ohm/handoff bumped to 0.6.4
-    - @pi-ohm/modes bumped to 0.6.4
-    - @pi-ohm/painter bumped to 0.6.4
-    - @pi-ohm/session-search bumped to 0.6.4
-    - @pi-ohm/subagents bumped to 0.6.4
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.5
+    * @pi-ohm/handoff bumped to 0.6.5
+    * @pi-ohm/modes bumped to 0.6.5
+    * @pi-ohm/painter bumped to 0.6.5
+    * @pi-ohm/session-search bumped to 0.6.5
+    * @pi-ohm/subagents bumped to 0.6.5
+
+## [0.6.4](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.3...pi-ohm-v0.6.4) (2026-02-18)
+
+
+### Miscellaneous Chores
+
+* **pi-ohm:** Synchronize pi-ohm-lockstep versions
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.4
+    * @pi-ohm/handoff bumped to 0.6.4
+    * @pi-ohm/modes bumped to 0.6.4
+    * @pi-ohm/painter bumped to 0.6.4
+    * @pi-ohm/session-search bumped to 0.6.4
+    * @pi-ohm/subagents bumped to 0.6.4
 
 ## [0.6.3](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.2...pi-ohm-v0.6.3) (2026-02-18)
 
+
 ### Miscellaneous Chores
 
-- **pi-ohm:** Synchronize pi-ohm-lockstep versions
+* **pi-ohm:** Synchronize pi-ohm-lockstep versions
+
 
 ### Dependencies
 
-- The following workspace dependencies were updated
-  - dependencies
-    - @pi-ohm/config bumped to 0.6.3
-    - @pi-ohm/handoff bumped to 0.6.3
-    - @pi-ohm/modes bumped to 0.6.3
-    - @pi-ohm/painter bumped to 0.6.3
-    - @pi-ohm/session-search bumped to 0.6.3
-    - @pi-ohm/subagents bumped to 0.6.3
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.3
+    * @pi-ohm/handoff bumped to 0.6.3
+    * @pi-ohm/modes bumped to 0.6.3
+    * @pi-ohm/painter bumped to 0.6.3
+    * @pi-ohm/session-search bumped to 0.6.3
+    * @pi-ohm/subagents bumped to 0.6.3
 
 ## [0.6.2](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.1...pi-ohm-v0.6.2) (2026-02-17)
 
