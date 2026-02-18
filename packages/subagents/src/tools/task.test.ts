@@ -351,6 +351,28 @@ defineTest("formatTaskToolResult renders collection items", () => {
   assert.match(compact, /task_missing: unknown/);
 });
 
+defineTest("formatTaskToolResult preserves multiline output in compact text", () => {
+  const compact = formatTaskToolResult(
+    {
+      op: "start",
+      status: "succeeded",
+      task_id: "task_1",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      summary: "Finder: Auth flow scan",
+      output: "line one\nline two\nline three",
+      output_available: true,
+      backend: "test-backend",
+    },
+    false,
+  );
+
+  assert.match(compact, /output:/);
+  assert.match(compact, /line one/);
+  assert.match(compact, /line two/);
+  assert.match(compact, /line three/);
+});
+
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
   const result = await runTask({
     params: { op: "start", prompt: "missing fields" },
@@ -441,6 +463,50 @@ defineTest("runTaskToolMvp handles sync start success", async () => {
   assert.equal(result.details.subagent_type, "finder");
   assert.equal(result.details.backend, "test-backend");
   assert.match(result.details.summary, /Finder/);
+});
+
+defineTest("runTaskToolMvp surfaces multiline output text in tool content", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "multiline-backend",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: multiline",
+          output: "alpha\nbeta\ngamma",
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+        });
+      },
+    },
+  });
+
+  const result = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Multiline",
+      prompt: "Return multiple lines",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const textBlock = result.content.find((part) => part.type === "text");
+  assert.notEqual(textBlock, undefined);
+  if (!textBlock || textBlock.type !== "text") {
+    assert.fail("Expected text content block");
+  }
+
+  assert.match(textBlock.text, /output:/);
+  assert.match(textBlock.text, /alpha/);
+  assert.match(textBlock.text, /beta/);
+  assert.match(textBlock.text, /gamma/);
 });
 
 defineTest("runTaskToolMvp handles async start and status lifecycle", async () => {

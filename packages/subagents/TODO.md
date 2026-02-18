@@ -634,7 +634,7 @@ Task lifecycle calls return consistent, machine-parseable payloads with full sub
     - Integration tests for async batch (`start` -> `wait` -> output retrieval).
     - Required interactive smoke run showing async batch outputs surfaced without sync rerun.
 
-- [ ] **E2-T2: Preserve multiline output fidelity**
+- [x] **E2-T2: Preserve multiline output fidelity**
   - Requirements:
     - Task result payload must preserve newline content from backend responses.
     - Renderer may collapse visually, but canonical `details.output` must remain full multiline text.

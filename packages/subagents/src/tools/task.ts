@@ -331,6 +331,13 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
   if (details.timed_out) lines.push("timed_out: true");
 
+  if (details.output_available && details.output) {
+    lines.push("", "output:");
+    for (const outputLine of details.output.split("\n")) {
+      lines.push(outputLine);
+    }
+  }
+
   if (details.items && details.items.length > 0) {
     lines.push("", "items:");
     for (const item of details.items) {
@@ -350,14 +357,23 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
 
       if (expanded) {
         lines.push(`  summary: ${item.summary}`);
+        if (item.output_available && item.output) {
+          lines.push("  output:");
+          for (const outputLine of item.output.split("\n")) {
+            lines.push(`  ${outputLine}`);
+          }
+        }
         if (item.error_code) lines.push(`  error_code: ${item.error_code}`);
         if (item.error_category) lines.push(`  error_category: ${item.error_category}`);
         if (item.error_message) lines.push(`  error_message: ${item.error_message}`);
+      } else if (item.output_available && item.output) {
+        lines.push("  output:");
+        for (const outputLine of item.output.split("\n")) {
+          lines.push(`  ${outputLine}`);
+        }
       }
     }
   }
-
-  if (expanded && details.output) lines.push("", details.output);
 
   return lines.join("\n");
 }
