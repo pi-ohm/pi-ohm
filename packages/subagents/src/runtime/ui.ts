@@ -94,7 +94,7 @@ export function createTaskRuntimePresentation(input: {
 
   const statusLine =
     running > 0
-      ? `subagents ${running} running · tools ${activeTools} active`
+      ? `subagents ${running} running · tools ${activeTools} active · done ${completed} · failed ${failed} · cancelled ${cancelled}`
       : `subagents idle · done ${completed} · failed ${failed} · cancelled ${cancelled}`;
 
   const widgetLines: string[] = [];

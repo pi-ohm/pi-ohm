@@ -467,6 +467,50 @@ defineTest("runTaskToolMvp handles sync start success", async () => {
   assert.match(result.details.summary, /Finder/);
 });
 
+defineTest(
+  "runTaskToolMvp updates sticky UI status and avoids runtime text spam in UI mode",
+  async () => {
+    const updates: string[] = [];
+    const statuses: string[] = [];
+
+    const result = await runTaskToolMvp({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Auth flow scan",
+        prompt: "Trace auth validation",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: (partial) => {
+        const text = partial.content.find((part) => part.type === "text");
+        if (text && text.type === "text") {
+          updates.push(text.text);
+        }
+      },
+      hasUI: true,
+      ui: {
+        setStatus: (_key, text) => {
+          if (typeof text === "string") {
+            statuses.push(text);
+          }
+        },
+        setWidget: () => {},
+      },
+      deps: makeDeps(),
+    });
+
+    assert.equal(result.details.status, "succeeded");
+    assert.equal(statuses.length >= 2, true);
+    assert.match(statuses.join("\n"), /subagents/);
+    assert.equal(updates.length >= 2, true);
+    for (const update of updates) {
+      assert.equal(update.includes("[finder]"), false);
+      assert.match(update, /^summary:/);
+    }
+  },
+);
+
 defineTest("runTaskToolMvp surfaces multiline output text in tool content", async () => {
   const deps = makeDeps({
     backend: {

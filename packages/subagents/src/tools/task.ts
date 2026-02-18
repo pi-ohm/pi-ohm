@@ -973,13 +973,19 @@ function emitTaskRuntimeUpdate(input: {
     maxItems: 5,
   });
 
+  if (input.hasUI && input.ui) {
+    input.ui.setStatus("ohm-subagents", presentation.statusLine);
+  }
+
   if (input.onUpdate) {
     const runtimeText =
       presentation.widgetLines.length > 0
         ? presentation.widgetLines.join("\n")
         : presentation.statusLine;
 
-    const body = `${runtimeText}\n\n${detailsToText(input.details, false)}`;
+    const body = input.hasUI
+      ? detailsToText(input.details, false)
+      : `${runtimeText}\n\n${detailsToText(input.details, false)}`;
 
     input.onUpdate({
       content: [{ type: "text", text: body }],

@@ -835,3 +835,61 @@ Task responses are easier for humans to read, safer for automation to parse, and
     - Automation can classify retryability by stable category alone.
   - Test evidence:
     - Tests for unknown id + expired id category mapping.
+
+---
+
+## Epic 5 — Sticky TUI runtime surfaces + low-noise lifecycle updates
+
+### Epic goal
+
+Replace spammy per-update runtime text with sticky TUI surfaces while preserving machine-contract details and non-UI compatibility.
+
+### Demo outcome
+
+Interactive sessions show a persistent one-line subagents status + compact widget, with throttled/deduped updates and lifecycle-only transcript events.
+
+### Tickets
+
+- [x] **E5-T1: Sticky status baseline from runtime presentation**
+  - Requirements:
+    - Runtime presentation exposes stable one-line status counts for running/tools/done/failed/cancelled.
+    - Task runtime updates write sticky status through `ctx.ui.setStatus("ohm-subagents", ...)` when UI is available.
+    - Frequent update bodies should no longer prepend runtime widget dump in interactive mode.
+  - Acceptance criteria:
+    - Running tasks are visible in footer status without scrolling transcript.
+    - Task details payload shape remains unchanged.
+  - Test evidence:
+    - Runtime UI formatter tests for status count composition.
+    - Task tool tests asserting `setStatus` usage and non-spam update body shape.
+
+- [ ] **E5-T2: Compact widget + throttled/deduped live coordinator**
+  - Requirements:
+    - Add a live UI coordinator that applies throttling + text dedupe.
+    - Render compact (single-line) widget rows for active tasks below editor.
+    - Apply idle grace clear behavior for status + widget.
+  - Acceptance criteria:
+    - Widget updates do not flicker/churn when rendered frame is unchanged.
+    - Status/widget clear after idle grace with no active tasks.
+  - Test evidence:
+    - Coordinator unit tests for throttle/dedupe/idle-clear.
+    - Task tool tests confirming widget wiring in interactive path.
+
+- [ ] **E5-T3: Interactive transition-only onUpdate policy**
+  - Requirements:
+    - In UI mode, emit `onUpdate` only for lifecycle transitions/errors (not every progress frame).
+    - Keep non-UI update behavior compatible for automation/print/json consumers.
+  - Acceptance criteria:
+    - Interactive mode transcript/tool stream is significantly less noisy.
+    - Non-UI mode still emits rich intermediate updates.
+  - Test evidence:
+    - Task tool tests covering UI vs non-UI `onUpdate` emission policy.
+
+- [ ] **E5-T4: Live UI verbosity toggle command (`/ohm-subagents-live`)**
+  - Requirements:
+    - Add command to set `off | compact | verbose` live UI mode at runtime.
+    - Keep defaults/environment behavior deterministic.
+  - Acceptance criteria:
+    - Command updates mode and subsequent task updates follow selected verbosity.
+  - Test evidence:
+    - Extension command tests for mode switching.
+    - Live coordinator tests for per-mode render behavior.

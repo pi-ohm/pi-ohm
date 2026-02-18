@@ -118,6 +118,54 @@ defineTest("createTaskRuntimePresentation synchronizes status + widget summaries
   assert.match(presentation.plainText, /Tools/);
 });
 
+defineTest("createTaskRuntimePresentation running status includes aggregate counters", () => {
+  const running = makeSnapshot({
+    id: "task_running",
+    state: "running",
+    activeToolCalls: 3,
+    totalToolCalls: 5,
+    updatedAtEpochMs: 3000,
+  });
+
+  const succeeded = makeSnapshot({
+    id: "task_succeeded",
+    state: "succeeded",
+    activeToolCalls: 0,
+    totalToolCalls: 2,
+    endedAtEpochMs: 2600,
+    updatedAtEpochMs: 2600,
+  });
+
+  const failed = makeSnapshot({
+    id: "task_failed",
+    state: "failed",
+    activeToolCalls: 0,
+    totalToolCalls: 1,
+    endedAtEpochMs: 2500,
+    updatedAtEpochMs: 2500,
+  });
+
+  const cancelled = makeSnapshot({
+    id: "task_cancelled",
+    state: "cancelled",
+    activeToolCalls: 0,
+    totalToolCalls: 1,
+    endedAtEpochMs: 2400,
+    updatedAtEpochMs: 2400,
+  });
+
+  const presentation = createTaskRuntimePresentation({
+    snapshots: [running, succeeded, failed, cancelled],
+    nowEpochMs: 3500,
+  });
+
+  assert.match(presentation.statusLine, /subagents 1 running/);
+  assert.match(presentation.statusLine, /tools 3 active/);
+  assert.match(presentation.statusLine, /done 1/);
+  assert.match(presentation.statusLine, /failed 1/);
+  assert.match(presentation.statusLine, /cancelled 1/);
+});
+
 defineTest("createTaskRuntimePresentation applies maxItems and truncation", () => {
   const first = makeSnapshot({ id: "task_1", description: "A".repeat(120), updatedAtEpochMs: 10 });
   const second = makeSnapshot({ id: "task_2", description: "B", updatedAtEpochMs: 9 });
