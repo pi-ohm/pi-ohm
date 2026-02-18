@@ -17,15 +17,21 @@ Scaffolded subagents:
 Profiles can be marked with `primary: true` in config/catalog to indicate direct
 invocation as a top-level tool entrypoint instead of task-tool-only invocation.
 
+`primary: true` is additive:
+
+- profile gets a direct top-level tool
+- profile stays available in `task` subagent roster (`subagent_type`)
+
 The orchestration tool name is **`task`**. Async orchestration lifecycle
 operations (`start/status/wait/send/cancel`) are exposed through this tool.
 
-## Task tool (MVP)
+## Task tool (current)
 
-Current MVP behavior:
+Current behavior:
 
-- supports `op: "start"` for a **single** task payload
-- returns `task_id`, `status`, and summary details
+- supports `op: "start"` for a single task payload (sync + `async:true`)
+- supports lifecycle operations: `status`, `wait`, `cancel`
+- returns `task_id`, status, and deterministic task details
 - validates all payloads with TypeBox boundary schema + typed Result errors
 
 Example payload:
@@ -39,9 +45,9 @@ Example payload:
 }
 ```
 
-MVP non-goals (yet):
+Not shipped yet:
 
-- `status`, `wait`, `send`, `cancel` execution paths
+- `send` execution path
 - batched `start` (`tasks[]`)
 
 ## Live TUI feedback

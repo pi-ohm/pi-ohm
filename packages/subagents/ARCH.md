@@ -28,12 +28,18 @@
    - No delegation handoff required for invocation.
    - Tool registration must be generated from active profile definitions.
    - Tool description/help text must be derived from profile metadata (`summary`, `whenToUse`, `prompt` summary).
+   - `primary: true` does **not** remove task-tool routing; profile remains callable via `task` (`subagent_type`).
 
 Default profile intent:
 
 - `librarian`: `primary: true`
 - `finder`: task-routed
 - `oracle`: task-routed
+
+Primary profiles are dual-path by design:
+
+- direct tool invocation
+- task-tool invocation via `subagent_type`
 
 ---
 
@@ -88,12 +94,14 @@ OpenCode-style payload + Codex-style async lifecycle.
 The `task` tool description/instructions presented to the model should include an
 active subagent roster derived from merged definitions.
 
+Roster must include **all active subagents**, including profiles with `primary: true`.
+
 Required roster fields per subagent:
 
 - `id`
 - invocation mode (`task-routed` | `primary-tool`)
 - short summary/description
-- condensed `whenToUse` guidance
+- full `whenToUse` guidance (no condensation)
 
 Goal: model can pick the right subagent without guessing hidden catalog state.
 
@@ -283,7 +291,7 @@ Primary-tool generator requirements:
 - register/unregister on config/catalog changes
 - generate tool name from profile id
 - generate tool description/help text from profile definition
-- include `whenToUse` snippets so tools are self-selecting to the model
+- include full `whenToUse` guidance so tools are self-selecting to the model
 
 ---
 

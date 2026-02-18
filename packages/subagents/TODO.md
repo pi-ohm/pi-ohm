@@ -11,6 +11,7 @@ This backlog is organized into demoable sprints with **atomic, commit-ready task
 5. Every ticket must ship with automated tests for its acceptance criteria.
 6. Live subagent visual feedback must use `@mariozechner/pi-tui` (with plain-text fallback when UI is unavailable).
 7. Recoverable errors must be modeled with **`better-result`** (`Result<T, E>` + `TaggedError`), not ad-hoc try/catch throws.
+8. Every implementation iteration must run an interactive extension smoke check via `interactive_shell` using `pi -e ./packages/subagents/src/extension.ts`.
 
 ---
 
@@ -155,11 +156,14 @@ The `task` tool description/help text includes a current subagent roster so mode
 - [ ] **S2-T6: Task tool roster prompt/context injection**
   - Requirements:
     - `task` tool description/help text must include active subagent roster from merged catalog/config.
-    - Roster entry fields: `id`, invocation mode, summary, and condensed `whenToUse` hints.
+    - Roster entry fields: `id`, invocation mode, summary, and full `whenToUse` guidance.
+    - Roster must include primary profiles (e.g. `librarian`) in addition to task-routed-only profiles.
   - Acceptance criteria:
     - Model-visible `task` metadata always includes current active subagent list.
+    - `primary:true` profiles remain visible/selectable in task-tool roster.
     - Roster updates after config/catalog changes and extension reload.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Tool registration/render tests validating roster content and update behavior.
 
 ---
@@ -176,7 +180,7 @@ User/model can start async task(s), query status, wait with timeout, and cancel 
 
 ### Tickets
 
-- [ ] **S3-T1: Define task state machine**
+- [x] **S3-T1: Define task state machine**
   - Requirements:
     - States include at least: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
     - State transitions are explicit and validated.
@@ -185,7 +189,7 @@ User/model can start async task(s), query status, wait with timeout, and cancel 
   - Test evidence:
     - State transition unit tests.
 
-- [ ] **S3-T2: Implement async `start` mode (`async:true`)**
+- [x] **S3-T2: Implement async `start` mode (`async:true`)**
   - Requirements:
     - Returns immediately with task IDs.
   - Acceptance criteria:
@@ -193,7 +197,7 @@ User/model can start async task(s), query status, wait with timeout, and cancel 
   - Test evidence:
     - Async start test with follow-up status reaching terminal state.
 
-- [ ] **S3-T3: Implement `status` op**
+- [x] **S3-T3: Implement `status` op**
   - Requirements:
     - Supports one or many task IDs.
     - Includes state + high-level progress metadata.
@@ -202,7 +206,7 @@ User/model can start async task(s), query status, wait with timeout, and cancel 
   - Test evidence:
     - Multi-ID status tests with mixed known/unknown IDs.
 
-- [ ] **S3-T4: Implement `wait` op with timeout**
+- [x] **S3-T4: Implement `wait` op with timeout**
   - Requirements:
     - Wait can return early on timeout with partial completion report.
   - Acceptance criteria:
@@ -210,7 +214,7 @@ User/model can start async task(s), query status, wait with timeout, and cancel 
   - Test evidence:
     - Wait timeout tests + all-complete tests.
 
-- [ ] **S3-T5: Implement `cancel` op**
+- [x] **S3-T5: Implement `cancel` op**
   - Requirements:
     - Cancel marks task terminal and halts further work.
   - Acceptance criteria:
@@ -238,6 +242,7 @@ A task started earlier can be continued via `send`, even after session switch/re
   - Acceptance criteria:
     - Registry restores across extension/session restart flow.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Serialization/deserialization tests + restore flow integration test.
 
 - [ ] **S4-T2: Implement `send` op for follow-up prompts**
@@ -246,6 +251,7 @@ A task started earlier can be continued via `send`, even after session switch/re
   - Acceptance criteria:
     - `send` to terminal task fails with clear reason.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Send-to-running and send-to-terminal tests.
 
 - [ ] **S4-T3: Add task retention policy requirements**
@@ -254,6 +260,7 @@ A task started earlier can be continued via `send`, even after session switch/re
   - Acceptance criteria:
     - Expired tasks become non-resumable with explicit error reason.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Retention and expiry tests.
 
 - [ ] **S4-T4: Add corruption-safe persistence handling**
@@ -262,6 +269,7 @@ A task started earlier can be continued via `send`, even after session switch/re
   - Acceptance criteria:
     - Safe fallback to empty state + diagnostic log path.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Corrupt-file recovery test.
 
 ---
@@ -284,6 +292,7 @@ Support robust batched parallel execution through Task tool while preserving det
   - Acceptance criteria:
     - Invalid task entry returns scoped validation error.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Batch validation tests (all valid, mixed invalid, all invalid).
 
 - [ ] **S5-T2: Add bounded concurrency requirement + config key**
@@ -292,6 +301,7 @@ Support robust batched parallel execution through Task tool while preserving det
   - Acceptance criteria:
     - Active running tasks never exceed configured cap.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Concurrency cap tests with instrumentation counters.
 
 - [ ] **S5-T3: Deterministic aggregate ordering**
@@ -300,6 +310,7 @@ Support robust batched parallel execution through Task tool while preserving det
   - Acceptance criteria:
     - Ordering stable across repeated runs.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Determinism tests with randomized completion timing.
 
 - [ ] **S5-T4: Batch wait/status coverage**
@@ -308,6 +319,7 @@ Support robust batched parallel execution through Task tool while preserving det
   - Acceptance criteria:
     - Partial completion reports contain per-task terminal/non-terminal state.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Batch status/wait tests.
 
 - [ ] **S5-T5: Failure isolation in parallel mode**
@@ -316,6 +328,7 @@ Support robust batched parallel execution through Task tool while preserving det
   - Acceptance criteria:
     - Aggregate result includes per-task success/failure details.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Mixed outcome batch tests.
 
 ---
@@ -338,15 +351,19 @@ Expose primary profiles as direct top-level tools while preserving unified task 
   - Acceptance criteria:
     - Direct tool list reflects active primary profiles.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Tool registration tests for profile toggle scenarios.
 
 - [ ] **S6-T2: Shared execution contract between direct-tool and Task-tool entrypoints**
   - Requirements:
     - Same result envelope semantics for success/failure metadata.
+    - Primary profiles remain callable through `task` by `subagent_type` even when direct tool is registered.
   - Acceptance criteria:
     - Comparable outputs for equivalent prompts through both paths.
+    - Direct-tool registration never removes task-path access for the same profile.
   - Test evidence:
-    - Parity tests (task-routed vs direct primary tool).
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
+    - Parity tests (task-routed vs direct primary tool) + dual-path accessibility tests.
 
 - [ ] **S6-T3: Naming/collision policy for primary tools**
   - Requirements:
@@ -354,6 +371,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
   - Acceptance criteria:
     - Collision conflict surfaces explicit startup/runtime diagnostics.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Collision tests.
 
 - [ ] **S6-T4: Primary profile disable/availability behavior**
@@ -362,6 +380,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
   - Acceptance criteria:
     - No stale tool entries after configuration changes/reload.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Reload + registration/unregistration tests.
 
 - [ ] **S6-T5: Primary tool descriptions from profile definitions**
@@ -370,6 +389,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
   - Acceptance criteria:
     - `librarian` and other primary tools expose model-facing guidance equivalent to profile definitions.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Tool registration snapshot tests asserting metadata mapping from profile definitions.
 
 - [ ] **S6-T6: Primary-tool registration for all active `primary:true` profiles**
@@ -379,6 +399,7 @@ Expose primary profiles as direct top-level tools while preserving unified task 
     - `librarian` appears as a direct top-level tool when active.
     - Non-primary profiles are not registered as direct tools.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Integration tests for startup/reload registration matrix.
 
 ---
@@ -406,6 +427,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - All UI formatters consume one normalized snapshot shape.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Snapshot schema/formatter contract tests.
 
 - [ ] **S7-T2: Spinner and terminal marker policy**
@@ -414,6 +436,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - Spinner never appears for terminal tasks.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - State-to-marker mapping tests.
 
 - [ ] **S7-T3: Description propagation to TUI**
@@ -423,6 +446,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - UI consistently shows the expected description for each task.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Description propagation tests.
 
 - [ ] **S7-T4: In-flight tool-call counter integration**
@@ -431,6 +455,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - Counters are accurate under parallel execution.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Concurrent counter correctness tests.
 
 - [ ] **S7-T5: Elapsed time semantics and formatting**
@@ -440,6 +465,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - Elapsed values are monotonic while running and frozen after completion.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Time progression/freeze tests with controlled clock.
 
 - [ ] **S7-T6: Basic pi-tui line renderer for task list**
@@ -451,6 +477,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - Line output remains readable with truncation policy documented.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Renderer snapshot tests across widths.
 
 - [ ] **S7-T7: Footer and widget synchronization**
@@ -459,6 +486,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - No contradictory counts or state labels across UI surfaces.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Integration tests validating synchronized UI snapshots.
 
 - [ ] **S7-T8: Non-UI fallback parity**
@@ -467,6 +495,7 @@ Terminal states replace spinner with success/failure marker and preserve summary
   - Acceptance criteria:
     - Headless mode preserves observability parity for core runtime metrics.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Headless update format tests.
 
 ---
@@ -489,6 +518,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
   - Acceptance criteria:
     - Denied subagents cannot be invoked through task orchestration.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Policy evaluation tests.
 
 - [ ] **S8-T2: Hidden/internal profile behavior in Task tool exposure**
@@ -497,6 +527,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
   - Acceptance criteria:
     - Discovery output matches visibility rules.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Visibility and listing tests.
 
 - [ ] **S8-T3: Cancellation and timeout hardening**
@@ -505,6 +536,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
   - Acceptance criteria:
     - No zombie running states after timeout/cancel.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Stress tests for rapid cancel/timeout sequences.
 
 - [ ] **S8-T4: Error taxonomy and stable error surface**
@@ -515,6 +547,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
     - Errors are machine-parseable and human-readable.
     - Tool boundary error payloads map deterministically from TaggedError tags.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Error contract tests + TaggedError-to-tool-payload mapping tests.
 
 - [ ] **S8-T5: Backward compatibility and migration notes**
@@ -523,6 +556,7 @@ Task orchestration respects policy filters, handles malformed/hostile inputs saf
   - Acceptance criteria:
     - Existing commands remain functional and documented.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Regression suite for existing `/ohm-subagents` and `/ohm-subagent` flows.
 
 ---
@@ -545,6 +579,7 @@ Ship production-ready package quality with clear operational documentation and c
   - Acceptance criteria:
     - Smoke script passes in CI/local documented environment.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - E2E smoke test output artifacts.
 
 - [ ] **S9-T2: Config cookbook docs**
@@ -553,6 +588,7 @@ Ship production-ready package quality with clear operational documentation and c
   - Acceptance criteria:
     - Docs cover minimal, typical, and advanced setups.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Doc snippets validated by tests or fixture parsing.
 
 - [ ] **S9-T3: Observability docs for live feedback surfaces**
@@ -561,6 +597,7 @@ Ship production-ready package quality with clear operational documentation and c
   - Acceptance criteria:
     - Operator can interpret runtime state from UI surfaces alone.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - Snapshot references and expected-state matrix included.
 
 - [ ] **S9-T4: Final regression gate**
@@ -569,6 +606,7 @@ Ship production-ready package quality with clear operational documentation and c
   - Acceptance criteria:
     - All tests green under repository standard checks.
   - Test evidence:
+    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
     - CI check bundle documented in release notes.
 
 ---
@@ -583,3 +621,4 @@ A ticket is complete only if all are true:
 4. Docs are updated for any user-facing behavior changes.
 5. The change is small enough to be reviewed and merged as one atomic commit or a tightly scoped commit set.
 6. Recoverable error paths use `better-result` Result/TaggedError flows (no hidden try/catch swallowing).
+7. Interactive extension smoke run was executed via `interactive_shell` with `pi -e ./packages/subagents/src/extension.ts`.
