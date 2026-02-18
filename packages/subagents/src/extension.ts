@@ -2,6 +2,12 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { loadOhmRuntimeConfig, registerOhmSettings, type OhmRuntimeConfig } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
 import { isSubagentVisibleInTaskRoster } from "./policy";
+import {
+  getTaskLiveUiMode,
+  parseTaskLiveUiModeInput,
+  setTaskLiveUiMode,
+  type TaskLiveUiMode,
+} from "./runtime/live-ui";
 import { registerPrimarySubagentTools } from "./tools/primary";
 import { createDefaultTaskToolDependencies, registerTaskTool } from "./tools/task";
 
@@ -107,6 +113,47 @@ export function buildSubagentDetailText(input: {
   ].join("\n");
 }
 
+export interface ResolveSubagentsLiveUiModeResult {
+  readonly ok: boolean;
+  readonly mode: TaskLiveUiMode;
+  readonly message: string;
+}
+
+export function resolveSubagentsLiveUiModeCommand(args: unknown): ResolveSubagentsLiveUiModeResult {
+  const [requestedModeRaw] = normalizeCommandArgs(args);
+  const currentMode = getTaskLiveUiMode();
+
+  if (!requestedModeRaw) {
+    return {
+      ok: true,
+      mode: currentMode,
+      message: [
+        `subagents live ui mode: ${currentMode}`,
+        "Usage: /ohm-subagents-live <off|compact|verbose>",
+      ].join("\n"),
+    };
+  }
+
+  const parsedMode = parseTaskLiveUiModeInput(requestedModeRaw);
+  if (!parsedMode) {
+    return {
+      ok: false,
+      mode: currentMode,
+      message: [`Invalid mode '${requestedModeRaw}'.`, "Use one of: off|compact|verbose"].join(
+        "\n",
+      ),
+    };
+  }
+
+  setTaskLiveUiMode(parsedMode);
+
+  return {
+    ok: true,
+    mode: parsedMode,
+    message: `subagents live ui mode set to '${parsedMode}'`,
+  };
+}
+
 export function registerSubagentTools(pi: Pick<ExtensionAPI, "registerTool">): {
   readonly primaryToolCount: number;
   readonly diagnosticsCount: number;
@@ -187,6 +234,27 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
       }
 
       await ctx.ui.editor(`pi-ohm ${match.id} subagent`, text);
+    },
+  });
+
+  pi.registerCommand("ohm-subagents-live", {
+    description: "Set subagents live UI mode (off|compact|verbose)",
+    handler: async (args, ctx) => {
+      const result = resolveSubagentsLiveUiModeCommand(args);
+
+      if (!ctx.hasUI) {
+        console.log(result.message);
+        return;
+      }
+
+      if (result.mode === "off") {
+        ctx.ui.setStatus("ohm-subagents", undefined);
+        ctx.ui.setWidget("ohm-subagents", undefined, { placement: "belowEditor" });
+      } else {
+        ctx.ui.setStatus("ohm-subagents", `subagents live ui: ${result.mode}`);
+      }
+
+      await ctx.ui.editor("pi-ohm subagents live", result.message);
     },
   });
 }

@@ -884,7 +884,7 @@ Interactive sessions show a persistent one-line subagents status + compact widge
   - Test evidence:
     - Task tool tests covering UI vs non-UI `onUpdate` emission policy.
 
-- [ ] **E5-T4: Live UI verbosity toggle command (`/ohm-subagents-live`)**
+- [x] **E5-T4: Live UI verbosity toggle command (`/ohm-subagents-live`)**
   - Requirements:
     - Add command to set `off | compact | verbose` live UI mode at runtime.
     - Keep defaults/environment behavior deterministic.

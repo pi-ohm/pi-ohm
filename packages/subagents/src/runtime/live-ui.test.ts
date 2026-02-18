@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { TaskRuntimePresentation } from "./ui";
-import { createTaskLiveUiCoordinator } from "./live-ui";
+import { createTaskLiveUiCoordinator, getTaskLiveUiMode, setTaskLiveUiMode } from "./live-ui";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
@@ -118,4 +118,60 @@ defineTest("live UI coordinator clears status/widget after idle grace", async ()
   );
 
   coordinator.dispose();
+});
+
+defineTest("live UI coordinator respects off/compact/verbose mode changes", async () => {
+  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const statusCalls: (string | undefined)[] = [];
+
+  const priorMode = getTaskLiveUiMode();
+  setTaskLiveUiMode("compact");
+
+  try {
+    const coordinator = createTaskLiveUiCoordinator(
+      {
+        setStatus: (_key, text) => {
+          statusCalls.push(text);
+        },
+        setWidget: (_key, content) => {
+          widgetCalls.push(content);
+        },
+      },
+      {
+        updateIntervalMs: 10,
+        idleGraceMs: 200,
+      },
+    );
+
+    const activePresentation = makePresentation({
+      statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
+      widgetLines: ["⠋ [finder] Auth flow scan", "  Tools 1/3 · Elapsed 00:01"],
+      compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+      hasActiveTasks: true,
+    });
+
+    coordinator.publish(activePresentation);
+    await sleep(20);
+
+    const compactFrame = widgetCalls.at(-1);
+    assert.deepEqual(compactFrame, ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"]);
+
+    setTaskLiveUiMode("off");
+    coordinator.publish(activePresentation);
+    await sleep(20);
+
+    assert.equal(statusCalls.at(-1), undefined);
+    assert.equal(widgetCalls.at(-1), undefined);
+
+    setTaskLiveUiMode("verbose");
+    coordinator.publish(activePresentation);
+    await sleep(20);
+
+    const verboseFrame = widgetCalls.at(-1);
+    assert.deepEqual(verboseFrame, ["⠋ [finder] Auth flow scan", "  Tools 1/3 · Elapsed 00:01"]);
+
+    coordinator.dispose();
+  } finally {
+    setTaskLiveUiMode(priorMode);
+  }
 });

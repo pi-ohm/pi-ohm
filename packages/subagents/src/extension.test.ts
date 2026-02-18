@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import { getSubagentById } from "./catalog";
+import { getTaskLiveUiMode, setTaskLiveUiMode } from "./runtime/live-ui";
 import {
   buildSubagentDetailText,
+  resolveSubagentsLiveUiModeCommand,
   buildSubagentsOverviewText,
   getSubagentInvocationMode,
   normalizeCommandArgs,
@@ -134,4 +136,24 @@ defineTest("buildSubagentDetailText preserves detailed subagent view", () => {
   assert.match(text, /Subagent: Librarian/);
   assert.match(text, /When to use:/);
   assert.match(text, /Scaffold prompt:/);
+});
+
+defineTest("resolveSubagentsLiveUiModeCommand sets requested mode", () => {
+  setTaskLiveUiMode("compact");
+
+  const result = resolveSubagentsLiveUiModeCommand(["verbose"]);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, "verbose");
+  assert.equal(getTaskLiveUiMode(), "verbose");
+});
+
+defineTest("resolveSubagentsLiveUiModeCommand rejects invalid mode values", () => {
+  setTaskLiveUiMode("compact");
+
+  const result = resolveSubagentsLiveUiModeCommand(["loud"]);
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /off\|compact\|verbose/);
+  assert.equal(getTaskLiveUiMode(), "compact");
 });
