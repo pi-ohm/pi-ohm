@@ -58,30 +58,3 @@ reasoningEffort: high
 
 You are the librarian. Build architecture maps and answer deep codebase questions.
 ```
-
-## Architecture
-
-Runtime should support two invocation paths:
-
-1. **Delegated subagent path** (`primary: false`, default)
-   - Called by orchestration/delegation flow.
-   - Runs in isolated context as a delegated task.
-
-2. **Primary-tool path** (`primary: true`)
-   - Registered as a direct top-level tool entrypoint.
-   - Callable without delegation handoff.
-   - Still uses the same agent prompt/model/options schema.
-
-Default package behavior:
-
-- `librarian`: `primary: true`
-- `finder`: delegated
-- `oracle`: delegated
-
-Resolution order for definitions should remain:
-
-1. package defaults
-2. global `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
-3. project `.pi/ohm.json`
-
-Last writer wins for scalar fields (`model`, `primary`, etc), with additive merge for optional metadata arrays.
