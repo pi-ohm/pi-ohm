@@ -19,6 +19,50 @@ Current runtime feedback is useful but noisy:
 
 ## Pi/TUI references reviewed
 
+### Direct `@mariozechner/pi-tui` package references (actual files)
+
+Core exports/signatures:
+
+- `node_modules/@mariozechner/pi-tui/dist/index.d.ts`
+  - confirms exported building blocks: `Text`, `TruncatedText`, `Container`, `Box`, `Loader`, `SelectList`, `SettingsList`, `matchesKey`, `Key`, `truncateToWidth`, `visibleWidth`
+
+TUI core + overlay/focus contracts:
+
+- `node_modules/@mariozechner/pi-tui/dist/tui.d.ts`
+  - `Component` contract (`render`, `handleInput`, `invalidate`)
+  - `TUI.showOverlay(...)`, `hideOverlay()`, `hasOverlay()`
+  - `Container` behavior
+  - `Focusable` + `CURSOR_MARKER`
+
+Single-line + multiline render components:
+
+- `node_modules/@mariozechner/pi-tui/dist/components/truncated-text.js`
+  - one-line-safe rendering (first line only + truncation to viewport)
+- `node_modules/@mariozechner/pi-tui/dist/components/text.js`
+  - wrapped multiline rendering + internal cache invalidation pattern
+
+Width-safe helpers:
+
+- `node_modules/@mariozechner/pi-tui/dist/utils.d.ts`
+  - `truncateToWidth(...)`
+  - `visibleWidth(...)`
+  - `wrapTextWithAnsi(...)`
+
+Input/key handling:
+
+- `node_modules/@mariozechner/pi-tui/dist/keys.d.ts`
+  - `matchesKey(...)`, `Key.*`, kitty key event support
+
+Optional interactive list components (for future live panel toggles):
+
+- `node_modules/@mariozechner/pi-tui/dist/components/select-list.d.ts`
+- `node_modules/@mariozechner/pi-tui/dist/components/settings-list.d.ts`
+
+Optional spinner component (if we promote to fully custom TUI component later):
+
+- `node_modules/@mariozechner/pi-tui/dist/components/loader.js`
+- `node_modules/@mariozechner/pi-tui/dist/components/cancellable-loader.d.ts`
+
 ### Docs
 
 - `node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
@@ -240,6 +284,18 @@ Files:
 5. **Width-safe rendering for any custom component path**
    - APIs: `truncateToWidth`, `visibleWidth`
    - Ref: `@mariozechner/pi-tui/README.md`
+
+6. **If we implement a custom sticky one-line component instead of plain status text**
+   - Component to mirror: `TruncatedText`
+   - Ref: `node_modules/@mariozechner/pi-tui/dist/components/truncated-text.js`
+
+7. **If we need custom render loop/caching in a bespoke live panel**
+   - Component cache pattern: `Text` implementation
+   - Ref: `node_modules/@mariozechner/pi-tui/dist/components/text.js`
+
+8. **If we need keyboard-toggle UI in-terminal (live mode switcher)**
+   - key matching: `node_modules/@mariozechner/pi-tui/dist/keys.d.ts`
+   - selection list: `node_modules/@mariozechner/pi-tui/dist/components/select-list.d.ts`
 
 ---
 
