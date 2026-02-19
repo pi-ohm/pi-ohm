@@ -893,3 +893,37 @@ Interactive sessions show a persistent one-line subagents status + compact widge
   - Test evidence:
     - Extension command tests for mode switching.
     - Live coordinator tests for per-mode render behavior.
+
+---
+
+## Epic 6 — Task result history ergonomics + collapsed transcript parity
+
+### Epic goal
+
+Keep subagent outputs in tool-call history while using Ctrl+O-expandable visual truncation in collapsed mode.
+
+### Demo outcome
+
+Task tool results show subagent output in chat history; collapsed view uses `... (N earlier lines, ctrl+o to expand)` and expanded view reveals full output.
+
+### Tickets
+
+- [x] **E6-T1: Collapsed tool-result visual truncation with Ctrl+O hint**
+  - Requirements:
+    - Task tool custom `renderResult` must honor `expanded` flag.
+    - Collapsed mode should show tail visual lines with explicit `ctrl+o` expansion hint.
+    - Expanded mode must show full output.
+  - Acceptance criteria:
+    - Long task outputs no longer flood collapsed chat history.
+    - Ctrl+O-expanded view reveals full task output without data loss.
+  - Test evidence:
+    - Tool renderer tests for collapsed truncation hint + expanded full output.
+
+- [x] **E6-T2: Subagent output retention in task history rendering**
+  - Requirements:
+    - Collapsed/expanded renderer should preserve task output lines from item/detail payloads.
+    - Ensure render path remains compatible with task.v1 details envelope.
+  - Acceptance criteria:
+    - Users can inspect subagent message/tool-call output directly in task tool history entries.
+  - Test evidence:
+    - Regression tests around multiline item output visibility in renderer.

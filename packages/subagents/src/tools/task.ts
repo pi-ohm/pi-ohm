@@ -5,7 +5,7 @@ import type {
   AgentToolUpdateCallback,
   ExtensionAPI,
 } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, type Component } from "@mariozechner/pi-tui";
 import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { loadOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
@@ -149,6 +149,12 @@ function resolveOutputMaxChars(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_OUTPUT_MAX_CHARS");
   if (fromEnv !== undefined) return fromEnv;
   return 8_000;
+}
+
+function resolveCollapsedResultPreviewVisualLines(): number {
+  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_RESULT_PREVIEW_LINES");
+  if (fromEnv !== undefined) return fromEnv;
+  return 12;
 }
 
 function resolveDefaultTaskPersistencePath(): string {
@@ -536,6 +542,50 @@ export function formatTaskToolCall(args: TaskToolParameters): string {
 
 export function formatTaskToolResult(details: TaskToolResultDetails, expanded: boolean): string {
   return detailsToText(details, expanded);
+}
+
+export function createCollapsedTaskToolResultComponent(
+  text: string,
+  maxVisualLines: number,
+): Component {
+  let cachedWidth: number | undefined;
+  let cachedVisualLines: string[] | undefined;
+  let cachedSkippedCount: number | undefined;
+
+  return {
+    render(width: number): string[] {
+      if (
+        cachedVisualLines === undefined ||
+        cachedSkippedCount === undefined ||
+        cachedWidth !== width
+      ) {
+        const visualLines = new Text(text, 0, 0).render(width);
+        const hasOverflow = visualLines.length > maxVisualLines;
+
+        cachedVisualLines = hasOverflow
+          ? visualLines.slice(-Math.max(maxVisualLines, 0))
+          : visualLines;
+        cachedSkippedCount = hasOverflow ? visualLines.length - maxVisualLines : 0;
+        cachedWidth = width;
+      }
+
+      if (cachedSkippedCount > 0) {
+        const hint = truncateToWidth(
+          `... (${cachedSkippedCount} earlier lines, ctrl+o to expand)`,
+          width,
+          "...",
+        );
+        return [hint, ...cachedVisualLines];
+      }
+
+      return cachedVisualLines;
+    },
+    invalidate(): void {
+      cachedWidth = undefined;
+      cachedVisualLines = undefined;
+      cachedSkippedCount = undefined;
+    },
+  };
 }
 
 function toAgentToolResult(details: TaskToolResultDetails): AgentToolResult<TaskToolResultDetails> {
@@ -2197,7 +2247,15 @@ export function registerTaskTool(
       );
       const joined = textBlocks.map((part) => part.text).join("\n\n");
       const text = joined.length > 0 ? joined : "task tool result unavailable";
-      return new Text(text, 0, 0);
+
+      if (_options.expanded) {
+        return new Text(text, 0, 0);
+      }
+
+      return createCollapsedTaskToolResultComponent(
+        text,
+        resolveCollapsedResultPreviewVisualLines(),
+      );
     },
   });
 }

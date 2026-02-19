@@ -12,6 +12,7 @@ import type {
 } from "../runtime/backend";
 import { createInMemoryTaskRuntimeStore } from "../runtime/tasks";
 import {
+  createCollapsedTaskToolResultComponent,
   createTaskId,
   formatTaskToolCall,
   formatTaskToolResult,
@@ -371,6 +372,35 @@ defineTest("formatTaskToolResult preserves multiline output in compact text", ()
   assert.match(compact, /line one/);
   assert.match(compact, /line two/);
   assert.match(compact, /line three/);
+});
+
+defineTest("formatTaskToolResult preserves per-item output in compact collection rendering", () => {
+  const compact = formatTaskToolResult(
+    {
+      op: "status",
+      status: "succeeded",
+      summary: "status for 1 task(s)",
+      backend: "test-backend",
+      items: [
+        {
+          id: "task_1",
+          found: true,
+          status: "succeeded",
+          subagent_type: "finder",
+          description: "Chat transcript",
+          summary: "Finder completed",
+          output_available: true,
+          output: "tool_call: read\nassistant: done",
+        },
+      ],
+    },
+    false,
+  );
+
+  assert.match(compact, /items:/);
+  assert.match(compact, /output:/);
+  assert.match(compact, /tool_call: read/);
+  assert.match(compact, /assistant: done/);
 });
 
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
@@ -1668,3 +1698,27 @@ defineTest("registerTaskTool hides internal profiles from model-visible roster d
   assert.match(description, /finder/);
   assert.doesNotMatch(description, /oracle/);
 });
+
+defineTest("createCollapsedTaskToolResultComponent shows ctrl+o hint for long output", () => {
+  const text = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join("\n");
+  const component = createCollapsedTaskToolResultComponent(text, 5);
+
+  const rendered = component.render(80);
+  assert.equal(rendered.length, 6);
+  assert.match(rendered[0] ?? "", /ctrl\+o to expand/);
+  assert.match(rendered.at(-1) ?? "", /line 30/);
+});
+
+defineTest(
+  "createCollapsedTaskToolResultComponent returns full lines when within preview budget",
+  () => {
+    const text = ["line 1", "line 2", "line 3"].join("\n");
+    const component = createCollapsedTaskToolResultComponent(text, 5);
+
+    const rendered = component.render(80);
+    assert.deepEqual(
+      rendered.map((line) => line.trimEnd()),
+      ["line 1", "line 2", "line 3"],
+    );
+  },
+);
