@@ -599,6 +599,92 @@ defineTest(
   },
 );
 
+defineTest(
+  "PiCliTaskExecutionBackend keeps sdk error taxonomy when fallback is disabled",
+  async () => {
+    const previous = process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+    delete process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+
+    try {
+      let cliCalls = 0;
+      const cliRunner: PiCliRunner = async () => {
+        cliCalls += 1;
+        return {
+          exitCode: 0,
+          stdout: "cli output",
+          stderr: "",
+          timedOut: false,
+          aborted: false,
+        };
+      };
+
+      const sdkBackend: TaskExecutionBackend = {
+        id: "interactive-sdk",
+        async executeStart() {
+          return Result.err(
+            new SubagentRuntimeError({
+              code: "task_backend_timeout",
+              stage: "execute_start",
+              message: "sdk timed out",
+            }),
+          );
+        },
+        async executeSend() {
+          return Result.err(
+            new SubagentRuntimeError({
+              code: "task_aborted",
+              stage: "execute_send",
+              message: "sdk aborted",
+            }),
+          );
+        },
+      };
+
+      const backend = new PiCliTaskExecutionBackend(cliRunner, 1_000, sdkBackend);
+      const started = await backend.executeStart({
+        taskId: "task_sdk_no_fallback",
+        subagent: subagentFixture,
+        description: "No fallback start",
+        prompt: "start",
+        cwd: "/tmp/project",
+        config: makeConfig("interactive-sdk"),
+        signal: undefined,
+      });
+
+      assert.equal(Result.isError(started), true);
+      if (Result.isOk(started)) {
+        assert.fail("Expected sdk start failure without fallback");
+      }
+      assert.equal(started.error.code, "task_backend_timeout");
+
+      const sent = await backend.executeSend({
+        taskId: "task_sdk_no_fallback",
+        subagent: subagentFixture,
+        description: "No fallback send",
+        initialPrompt: "initial",
+        followUpPrompts: [],
+        prompt: "send",
+        cwd: "/tmp/project",
+        config: makeConfig("interactive-sdk"),
+        signal: undefined,
+      });
+
+      assert.equal(Result.isError(sent), true);
+      if (Result.isOk(sent)) {
+        assert.fail("Expected sdk send failure without fallback");
+      }
+      assert.equal(sent.error.code, "task_aborted");
+      assert.equal(cliCalls, 0);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+      } else {
+        process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI = previous;
+      }
+    }
+  },
+);
+
 defineTest("PiCliTaskExecutionBackend reports timeout and backend execution failures", async () => {
   const timeoutRunner: PiCliRunner = async () => ({
     exitCode: 124,
@@ -649,6 +735,58 @@ defineTest("PiCliTaskExecutionBackend reports timeout and backend execution fail
     assert.fail("Expected backend execution failure");
   }
   assert.equal(failed.error.code, "task_backend_execution_failed");
+});
+
+defineTest("PiSdkTaskExecutionBackend maps send timeout and abort", async () => {
+  const timeoutBackend = new PiSdkTaskExecutionBackend(async () => ({
+    output: "",
+    events: [],
+    timedOut: true,
+    aborted: false,
+  }));
+
+  const timedOut = await timeoutBackend.executeSend({
+    taskId: "task_sdk_send_timeout",
+    subagent: subagentFixture,
+    description: "send timeout",
+    initialPrompt: "initial",
+    followUpPrompts: [],
+    prompt: "follow-up",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isError(timedOut), true);
+  if (Result.isOk(timedOut)) {
+    assert.fail("Expected send timeout error");
+  }
+  assert.equal(timedOut.error.code, "task_backend_timeout");
+
+  const abortedBackend = new PiSdkTaskExecutionBackend(async () => ({
+    output: "",
+    events: [],
+    timedOut: false,
+    aborted: true,
+  }));
+
+  const aborted = await abortedBackend.executeSend({
+    taskId: "task_sdk_send_abort",
+    subagent: subagentFixture,
+    description: "send abort",
+    initialPrompt: "initial",
+    followUpPrompts: [],
+    prompt: "follow-up",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isError(aborted), true);
+  if (Result.isOk(aborted)) {
+    assert.fail("Expected send aborted error");
+  }
+  assert.equal(aborted.error.code, "task_aborted");
 });
 
 defineTest("PiCliTaskExecutionBackend resolves backend IDs from runtime config", () => {
