@@ -135,8 +135,43 @@ defineTest("buildSubagentDetailText preserves detailed subagent view", () => {
   });
 
   assert.match(text, /Subagent: Librarian/);
+  assert.match(text, /model: runtime default/);
+  assert.match(text, /thinking: runtime default/);
   assert.match(text, /When to use:/);
   assert.match(text, /Scaffold prompt:/);
+});
+
+defineTest("buildSubagentDetailText shows configured model + thinking override", () => {
+  const librarian = getSubagentById("librarian");
+  assert.notEqual(librarian, undefined);
+  if (!librarian) {
+    assert.fail("Expected librarian profile");
+  }
+
+  const subagents = configFixture.subagents;
+  assert.notEqual(subagents, undefined);
+  if (!subagents) {
+    assert.fail("Expected subagents config");
+  }
+
+  const text = buildSubagentDetailText({
+    config: {
+      ...configFixture,
+      subagents: {
+        ...subagents,
+        profiles: {
+          librarian: {
+            model: "openai-codex/gpt-5.2-codex:xhigh",
+          },
+        },
+      },
+    },
+    subagent: librarian,
+  });
+
+  assert.match(text, /model: openai-codex\/gpt-5.2-codex/);
+  assert.match(text, /thinking: xhigh/);
+  assert.match(text, /modelPattern: openai-codex\/gpt-5.2-codex:xhigh/);
 });
 
 defineTest("resolveSubagentsLiveUiModeCommand sets requested mode", () => {

@@ -1,5 +1,10 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings, type OhmRuntimeConfig } from "@pi-ohm/config";
+import {
+  getSubagentConfiguredModel,
+  loadOhmRuntimeConfig,
+  registerOhmSettings,
+  type OhmRuntimeConfig,
+} from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
 import { isSubagentVisibleInTaskRoster } from "./policy";
 import {
@@ -95,12 +100,21 @@ export function buildSubagentDetailText(input: {
   readonly subagent: (typeof OHM_SUBAGENT_CATALOG)[number];
 }): string {
   const isAvailable = input.subagent.id !== "painter" || input.config.features.painterImagegen;
+  const configuredModelPattern = getSubagentConfiguredModel(input.config, input.subagent.id);
+  const configuredThinking = parseConfiguredSubagentThinking(configuredModelPattern);
+  const resolvedModel =
+    configuredThinking !== undefined && configuredModelPattern
+      ? configuredModelPattern.slice(0, configuredModelPattern.lastIndexOf(":"))
+      : configuredModelPattern;
 
   return [
     `Subagent: ${input.subagent.name}`,
     `id: ${input.subagent.id}`,
     `available: ${isAvailable ? "yes" : "no"}`,
     `invocation: ${getSubagentInvocationMode(input.subagent.primary)}`,
+    `model: ${resolvedModel ?? "runtime default"}`,
+    `thinking: ${configuredThinking ?? "runtime default"}`,
+    `modelPattern: ${configuredModelPattern ?? "runtime default"}`,
     input.subagent.requiresPackage
       ? `requiresPackage: ${input.subagent.requiresPackage}`
       : "requiresPackage: none",
@@ -111,6 +125,30 @@ export function buildSubagentDetailText(input: {
     "Scaffold prompt:",
     input.subagent.scaffoldPrompt,
   ].join("\n");
+}
+
+function parseConfiguredSubagentThinking(modelPattern: string | undefined): string | undefined {
+  if (!modelPattern) return undefined;
+
+  const suffixIndex = modelPattern.lastIndexOf(":");
+  if (suffixIndex <= 0 || suffixIndex >= modelPattern.length - 1) return undefined;
+
+  const candidate = modelPattern
+    .slice(suffixIndex + 1)
+    .trim()
+    .toLowerCase();
+  if (
+    candidate !== "off" &&
+    candidate !== "minimal" &&
+    candidate !== "low" &&
+    candidate !== "medium" &&
+    candidate !== "high" &&
+    candidate !== "xhigh"
+  ) {
+    return undefined;
+  }
+
+  return candidate;
 }
 
 export interface ResolveSubagentsLiveUiModeResult {
