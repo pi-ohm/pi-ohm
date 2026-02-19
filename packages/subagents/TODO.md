@@ -1017,3 +1017,44 @@ Replace current sticky subagent runtime text with an Amp-like tree widget: promp
     - Tree format remains readable even with sparse output.
   - Test evidence:
     - Formatter tests for parsed tool rows + fallback behavior.
+
+---
+
+## Epic 9 — Inline task result message tree format (non-debug)
+
+### Epic goal
+
+Render task tool history/results as Amp-style inline message trees (not footer/sticky only).
+
+### Demo outcome
+
+Collapsed/expanded task tool results render as prompt/tool/result trees in chat history, replacing the current `items:/output:` transcript block style when `OHM_DEBUG` is off.
+
+### Tickets
+
+- [x] **E9-T1: Replace non-debug task result formatter with tree-style inline rendering**
+  - Requirements:
+    - Non-debug `formatTaskToolResult` should render Amp-style tree blocks.
+    - Remove default `items:` / `output:` scaffolding in compact mode.
+  - Acceptance criteria:
+    - Single-task and collection responses look like message trees.
+  - Test evidence:
+    - Formatter tests for single + collection outputs.
+
+- [x] **E9-T2: Include prompt/tool/result mapping in inline message renderer**
+  - Requirements:
+    - Include prompt row from task details where available.
+    - Parse tool-call-like lines from output and show final result as tree leaf.
+  - Acceptance criteria:
+    - Inline history mirrors Amp-like sequencing: prompt -> tool calls -> result.
+  - Test evidence:
+    - Tests for parsed tool rows + result leaf fallback.
+
+- [x] **E9-T3: Keep verbose metadata format behind `OHM_DEBUG` and preserve Ctrl+O behavior**
+  - Requirements:
+    - Debug mode still renders full contract metadata.
+    - Expanded rendering keeps full body availability.
+  - Acceptance criteria:
+    - No contract regression for debug-mode consumers.
+  - Test evidence:
+    - Existing debug-gating tests remain green.

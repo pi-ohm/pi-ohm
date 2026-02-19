@@ -369,9 +369,10 @@ defineTest("formatTaskToolResult renders collection items", () => {
     false,
   );
 
-  assert.match(compact, /items:/);
-  assert.match(compact, /- ⠋ task_1 finder · Auth flow scan/);
-  assert.match(compact, /- \? task_missing · Unknown task id/);
+  assert.doesNotMatch(compact, /items:/);
+  assert.match(compact, /⠋ Finder · Auth flow scan/);
+  assert.match(compact, /✕ Task task_missing/);
+  assert.match(compact, /Unknown task id/);
 });
 
 defineTest("formatTaskToolResult preserves multiline output in compact text", () => {
@@ -390,10 +391,31 @@ defineTest("formatTaskToolResult preserves multiline output in compact text", ()
     false,
   );
 
-  assert.match(compact, /output:/);
-  assert.match(compact, /line one/);
-  assert.match(compact, /line two/);
-  assert.match(compact, /line three/);
+  assert.match(compact, /✓ Finder · Auth flow scan/);
+  assert.match(compact, /├── Auth flow scan/);
+  assert.doesNotMatch(compact, /line one/);
+  assert.match(compact, /╰── line three/);
+});
+
+defineTest("formatTaskToolResult expanded view keeps multiline body", () => {
+  const expanded = formatTaskToolResult(
+    {
+      op: "start",
+      status: "succeeded",
+      task_id: "task_1",
+      subagent_type: "finder",
+      description: "Auth flow scan",
+      summary: "Finder: Auth flow scan",
+      output: "line one\nline two\nline three",
+      output_available: true,
+      backend: "test-backend",
+    },
+    true,
+  );
+
+  assert.match(expanded, /line one/);
+  assert.match(expanded, /line two/);
+  assert.match(expanded, /line three/);
 });
 
 defineTest("formatTaskToolResult preserves per-item output in compact collection rendering", () => {
@@ -419,10 +441,9 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
     false,
   );
 
-  assert.match(compact, /items:/);
-  assert.match(compact, /output:/);
-  assert.match(compact, /tool_call: read/);
-  assert.match(compact, /assistant> done/);
+  assert.match(compact, /✓ Finder · Chat transcript/);
+  assert.match(compact, /✓ tool_call: read/);
+  assert.match(compact, /╰── done/);
 });
 
 defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabled", () => {
@@ -447,7 +468,7 @@ defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabl
     assert.doesNotMatch(compact, /backend:/);
     assert.doesNotMatch(compact, /provider:/);
     assert.doesNotMatch(compact, /runtime:/);
-    assert.match(compact, /^✓ wait for 1 task\(s\) · done/);
+    assert.match(compact, /✓ wait for 1 task\(s\)/);
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_DEBUG;
@@ -624,7 +645,7 @@ defineTest(
     assert.equal(updates.length, 1);
     for (const update of updates) {
       assert.equal(update.includes("[finder]"), false);
-      assert.match(update, /^✓/);
+      assert.match(update, /✓ Finder/);
     }
   },
 );
@@ -749,9 +770,9 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
     assert.fail("Expected text content block");
   }
 
-  assert.match(textBlock.text, /output:/);
-  assert.match(textBlock.text, /alpha/);
-  assert.match(textBlock.text, /beta/);
+  assert.match(textBlock.text, /✓ Finder · Multiline/);
+  assert.match(textBlock.text, /├── Return multiple lines/);
+  assert.doesNotMatch(textBlock.text, /alpha/);
   assert.match(textBlock.text, /gamma/);
 });
 
@@ -801,8 +822,7 @@ defineTest("runTaskToolMvp exposes truncation metadata for long output", async (
       assert.fail("Expected text content block");
     }
 
-    assert.match(textBlock.text, /output_truncated: true/);
-    assert.match(textBlock.text, /output_total_chars: 36/);
+    assert.match(textBlock.text, /truncated 24\/36 chars/);
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;

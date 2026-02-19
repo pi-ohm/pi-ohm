@@ -26,6 +26,11 @@ import {
 import { createTaskLiveUiCoordinator, type TaskLiveUiCoordinator } from "../runtime/live-ui";
 import { createTaskRuntimePresentation } from "../runtime/ui";
 import {
+  renderSubagentTaskTreeLines,
+  type SubagentTaskTreeEntry,
+  type SubagentTaskTreeStatus,
+} from "@pi-ohm/tui";
+import {
   parseTaskToolParameters,
   TaskToolRegistrationParametersSchema,
   type TaskToolParameters,
@@ -42,6 +47,7 @@ export interface TaskToolItemDetails {
   readonly found: boolean;
   readonly status?: TaskToolStatus;
   readonly subagent_type?: string;
+  readonly prompt?: string;
   readonly description?: string;
   readonly summary: string;
   readonly invocation?: SubagentInvocationMode;
@@ -68,6 +74,7 @@ export interface TaskToolResultDetails {
   readonly status: TaskToolStatus;
   readonly task_id?: string;
   readonly subagent_type?: string;
+  readonly prompt?: string;
   readonly description?: string;
   readonly summary: string;
   readonly output?: string;
@@ -427,22 +434,6 @@ function resolveCollapsedTranscriptTailLines(): number {
   return 4;
 }
 
-function statusIcon(status: TaskToolStatus): string {
-  if (status === "succeeded") return "✓";
-  if (status === "failed") return "✕";
-  if (status === "cancelled") return "○";
-  if (status === "running") return "⠋";
-  return "…";
-}
-
-function statusLabel(details: TaskToolResultDetails): string {
-  if (details.status === "succeeded") return "done";
-  if (details.status === "failed") return "failed";
-  if (details.status === "cancelled") return "cancelled";
-  if (details.status === "running") return "running";
-  return "queued";
-}
-
 function classifyTranscriptLine(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "";
@@ -474,106 +465,294 @@ function transcriptLines(output: string): readonly string[] {
     .filter((line) => line.length > 0);
 }
 
-function appendTranscriptBlock(
-  lines: string[],
-  input: {
-    readonly output: string;
-    readonly expanded: boolean;
-    readonly indent: string;
-  },
-): void {
-  const transcript = transcriptLines(input.output);
-  if (transcript.length === 0) return;
+function toTreeStatus(status: TaskToolStatus): SubagentTaskTreeStatus {
+  if (status === "queued") return "queued";
+  if (status === "running") return "running";
+  if (status === "succeeded") return "succeeded";
+  if (status === "failed") return "failed";
+  return "cancelled";
+}
 
-  const tailLines = resolveCollapsedTranscriptTailLines();
-  const visible = input.expanded ? transcript : transcript.slice(-tailLines);
+function capitalize(value: string): string {
+  if (value.length === 0) return value;
+  return `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
+}
 
-  for (const line of visible) {
-    lines.push(`${input.indent}${line}`);
+function stripTranscriptPrefix(line: string): string {
+  const roleTrimmed = line.replace(/^(assistant|user|system)\s*>\s*/iu, "").trim();
+  const toolTrimmed = roleTrimmed.replace(/^tool(?:\([^)]+\))?\s*>\s*/iu, "").trim();
+  return toolTrimmed;
+}
+
+function isToolCallLikeLine(line: string): boolean {
+  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
+    return true;
   }
 
-  if (!input.expanded && transcript.length > visible.length) {
-    lines.push(
-      `${input.indent}... (${transcript.length - visible.length} earlier lines, ctrl+o to expand)`,
-    );
+  if (/^(Read|Glob|Grep|Find|Search|Bash|Edit|Write|Ls)\b/u.test(line)) {
+    return true;
   }
+
+  if (/^tool_call\s*[:>]/iu.test(line)) {
+    return true;
+  }
+
+  if (/^\$\s+.+/u.test(line)) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeToolCallLine(line: string): string {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return "✓ (empty tool line)";
+  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(trimmed)) {
+    return trimmed;
+  }
+  return `✓ ${trimmed}`;
+}
+
+function parseTreeSectionsFromOutput(output: string): {
+  readonly toolCalls: readonly string[];
+  readonly narrativeLines: readonly string[];
+} {
+  const normalized = transcriptLines(output)
+    .map((line) => stripTranscriptPrefix(line))
+    .filter((line) => line.length > 0);
+
+  if (normalized.length === 0) {
+    return {
+      toolCalls: [],
+      narrativeLines: [],
+    };
+  }
+
+  const toolCalls: string[] = [];
+  const narrative: string[] = [];
+
+  for (const line of normalized) {
+    if (isToolCallLikeLine(line)) {
+      toolCalls.push(normalizeToolCallLine(line));
+      continue;
+    }
+
+    narrative.push(line);
+  }
+
+  return {
+    toolCalls,
+    narrativeLines: narrative,
+  };
+}
+
+function resolveTreeResultFromSections(input: {
+  readonly sections: {
+    readonly toolCalls: readonly string[];
+    readonly narrativeLines: readonly string[];
+  };
+  readonly expanded: boolean;
+}): string {
+  if (input.sections.narrativeLines.length > 0) {
+    if (input.expanded) {
+      return input.sections.narrativeLines.join("\n");
+    }
+
+    return input.sections.narrativeLines[input.sections.narrativeLines.length - 1] ?? "(no output)";
+  }
+
+  return input.sections.toolCalls[input.sections.toolCalls.length - 1] ?? "(no output)";
+}
+
+function appendTruncationSuffix(input: {
+  readonly result: string;
+  readonly outputTruncated: boolean | undefined;
+  readonly outputReturnedChars: number | undefined;
+  readonly outputTotalChars: number | undefined;
+}): string {
+  if (!input.outputTruncated) {
+    return input.result;
+  }
+
+  if (typeof input.outputReturnedChars === "number" && typeof input.outputTotalChars === "number") {
+    return `${input.result} (truncated ${input.outputReturnedChars}/${input.outputTotalChars} chars)`;
+  }
+
+  return `${input.result} (truncated)`;
+}
+
+function defaultTreeResult(input: {
+  readonly status: TaskToolStatus;
+  readonly summary: string;
+  readonly errorMessage: string | undefined;
+}): string {
+  if (input.status === "running" || input.status === "queued") {
+    return "Working...";
+  }
+
+  if (input.status === "failed") {
+    return input.errorMessage ?? "Task failed.";
+  }
+
+  if (input.status === "cancelled") {
+    return input.errorMessage ?? "Task cancelled.";
+  }
+
+  return input.errorMessage ?? input.summary;
+}
+
+function buildTitle(input: {
+  readonly subagentType: string | undefined;
+  readonly description: string | undefined;
+  readonly summary: string;
+}): string {
+  if (input.subagentType && input.description) {
+    return `${capitalize(input.subagentType)} · ${input.description}`;
+  }
+
+  if (input.subagentType) {
+    return capitalize(input.subagentType);
+  }
+
+  return input.description ?? input.summary;
+}
+
+function buildTreeEntryFromDetails(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+): SubagentTaskTreeEntry {
+  const sections =
+    details.output_available && details.output
+      ? parseTreeSectionsFromOutput(details.output)
+      : undefined;
+
+  const result = appendTruncationSuffix({
+    result:
+      (sections
+        ? resolveTreeResultFromSections({
+            sections,
+            expanded,
+          })
+        : undefined) ??
+      defaultTreeResult({
+        status: details.status,
+        summary: details.summary,
+        errorMessage: details.error_message,
+      }),
+    outputTruncated: details.output_truncated,
+    outputReturnedChars: details.output_returned_chars,
+    outputTotalChars: details.output_total_chars,
+  });
+
+  return {
+    id: details.task_id ?? `${details.op}_task`,
+    status: toTreeStatus(details.status),
+    title: buildTitle({
+      subagentType: details.subagent_type,
+      description: details.description,
+      summary: details.summary,
+    }),
+    prompt: details.prompt ?? details.description ?? details.summary,
+    toolCalls: sections?.toolCalls ?? [],
+    result,
+  };
+}
+
+function buildTreeEntryFromItem(
+  item: TaskToolItemDetails,
+  expanded: boolean,
+): SubagentTaskTreeEntry {
+  if (!item.found) {
+    return {
+      id: item.id,
+      status: "failed",
+      title: `Task ${item.id}`,
+      prompt: `Resolve task ${item.id}`,
+      toolCalls: [],
+      result: item.error_message ?? "Unknown task id.",
+    };
+  }
+
+  const status = item.status ?? "failed";
+  const sections =
+    item.output_available && item.output ? parseTreeSectionsFromOutput(item.output) : undefined;
+  const result = appendTruncationSuffix({
+    result:
+      (sections
+        ? resolveTreeResultFromSections({
+            sections,
+            expanded,
+          })
+        : undefined) ??
+      defaultTreeResult({
+        status,
+        summary: item.summary,
+        errorMessage: item.error_message,
+      }),
+    outputTruncated: item.output_truncated,
+    outputReturnedChars: item.output_returned_chars,
+    outputTotalChars: item.output_total_chars,
+  });
+
+  return {
+    id: item.id,
+    status: toTreeStatus(status),
+    title: buildTitle({
+      subagentType: item.subagent_type,
+      description: item.description,
+      summary: item.summary,
+    }),
+    prompt: item.prompt ?? item.description ?? item.summary,
+    toolCalls: sections?.toolCalls ?? [],
+    result,
+  };
+}
+
+function treeRenderOptions(expanded: boolean): {
+  readonly compact: boolean;
+  readonly maxPromptLines: number;
+  readonly maxToolCalls: number;
+  readonly maxResultLines: number;
+} {
+  const collapsedMax = resolveCollapsedTranscriptTailLines();
+
+  if (expanded) {
+    return {
+      compact: false,
+      maxPromptLines: 8,
+      maxToolCalls: 20,
+      maxResultLines: 6,
+    };
+  }
+
+  return {
+    compact: true,
+    maxPromptLines: 2,
+    maxToolCalls: collapsedMax,
+    maxResultLines: 2,
+  };
 }
 
 function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
-  const lines: string[] = [
-    `${statusIcon(details.status)} ${details.summary} · ${statusLabel(details)}`,
+  const entries =
+    details.items && details.items.length > 0
+      ? details.items.map((item) => buildTreeEntryFromItem(item, expanded))
+      : [buildTreeEntryFromDetails(details, expanded)];
+
+  const lines = [
+    ...renderSubagentTaskTreeLines({
+      entries,
+      width: 120,
+      options: treeRenderOptions(expanded),
+    }),
   ];
 
-  if (details.task_id) lines.push(`task_id: ${details.task_id}`);
-  if (details.wait_status) {
+  if (details.wait_status && details.wait_status !== "completed") {
     lines.push(`wait: ${details.wait_status}${details.done ? " (done)" : ""}`);
   }
 
   if (typeof details.accepted_count === "number" && typeof details.total_count === "number") {
     lines.push(`batch: accepted ${details.accepted_count}/${details.total_count}`);
-  }
-
-  if (details.error_message) {
-    lines.push(`error> ${details.error_message}`);
-  }
-
-  if (details.output_available && details.output) {
-    lines.push("", "output:");
-    appendTranscriptBlock(lines, {
-      output: details.output,
-      expanded,
-      indent: "  ",
-    });
-
-    if (details.output_truncated) {
-      lines.push("  output_truncated: true");
-      if (typeof details.output_total_chars === "number") {
-        lines.push(`  output_total_chars: ${details.output_total_chars}`);
-      }
-      if (typeof details.output_returned_chars === "number") {
-        lines.push(`  output_returned_chars: ${details.output_returned_chars}`);
-      }
-    }
-  }
-
-  if (details.items && details.items.length > 0) {
-    lines.push("", "items:");
-
-    for (const item of details.items) {
-      if (!item.found) {
-        lines.push(`- ? ${item.id} · ${item.error_message ?? "unknown task"}`);
-        continue;
-      }
-
-      const itemStatus = item.status ?? "failed";
-      const subject = item.description ?? item.summary;
-      lines.push(
-        `- ${statusIcon(itemStatus)} ${item.id} ${item.subagent_type ?? "unknown"} · ${subject}`,
-      );
-
-      if (item.error_message) {
-        lines.push(`  error> ${item.error_message}`);
-      }
-
-      if (item.output_available && item.output) {
-        lines.push("  output:");
-        appendTranscriptBlock(lines, {
-          output: item.output,
-          expanded,
-          indent: "    ",
-        });
-
-        if (item.output_truncated) {
-          lines.push("    output_truncated: true");
-          if (typeof item.output_total_chars === "number") {
-            lines.push(`    output_total_chars: ${item.output_total_chars}`);
-          }
-          if (typeof item.output_returned_chars === "number") {
-            lines.push(`    output_returned_chars: ${item.output_returned_chars}`);
-          }
-        }
-      }
-    }
   }
 
   return lines.join("\n");
@@ -584,6 +763,7 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
 
   if (details.task_id) lines.push(`task_id: ${details.task_id}`);
   if (details.subagent_type) lines.push(`subagent_type: ${details.subagent_type}`);
+  if (details.prompt) lines.push(`prompt: ${details.prompt}`);
   if (details.description) lines.push(`description: ${details.description}`);
   lines.push(`status: ${details.status}`);
   lines.push(`backend: ${details.backend}`);
@@ -652,6 +832,7 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
         if (item.model) lines.push(`  model: ${item.model}`);
         if (item.runtime) lines.push(`  runtime: ${item.runtime}`);
         if (item.route) lines.push(`  route: ${item.route}`);
+        if (item.prompt) lines.push(`  prompt: ${item.prompt}`);
         if (item.output_available && item.output) {
           lines.push("  output:");
           for (const outputLine of item.output.split("\n")) {
@@ -912,6 +1093,7 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     found: true,
     status: snapshot.state,
     subagent_type: snapshot.subagentType,
+    prompt: snapshot.prompt,
     description: snapshot.description,
     summary: snapshot.summary,
     invocation: snapshot.invocation,
@@ -947,6 +1129,7 @@ function snapshotToTaskResultDetails(
     status: snapshot.state,
     task_id: snapshot.id,
     subagent_type: snapshot.subagentType,
+    prompt: snapshot.prompt,
     description: snapshot.description,
     summary: snapshot.summary,
     output: resolvedOutput.output,
