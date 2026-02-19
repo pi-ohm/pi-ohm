@@ -356,6 +356,39 @@ defineTest("setExecutionPromise and getExecutionPromise round-trip", async () =>
   assert.equal(resolved, true);
 });
 
+defineTest("terminal transitions clear abort/execution references", () => {
+  const { store, tick } = makeStoreWithClock();
+
+  const created = store.createTask({
+    taskId: "task_1",
+    subagent: finderSubagent,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+  assert.equal(Result.isOk(created), true);
+
+  const controller = new AbortController();
+  const boundAbort = store.setAbortController("task_1", controller);
+  assert.equal(Result.isOk(boundAbort), true);
+
+  const execution = Promise.resolve();
+  const boundExecution = store.setExecutionPromise("task_1", execution);
+  assert.equal(Result.isOk(boundExecution), true);
+
+  tick(10);
+  const running = store.markRunning("task_1", "Running Finder");
+  assert.equal(Result.isOk(running), true);
+
+  tick(10);
+  const succeeded = store.markSucceeded("task_1", "Done", "output");
+  assert.equal(Result.isOk(succeeded), true);
+
+  assert.equal(store.getAbortController("task_1"), undefined);
+  assert.equal(store.getExecutionPromise("task_1"), undefined);
+});
+
 defineTest("appendEvents keeps event ordering with bounded retention", () => {
   const { store } = makeStoreWithClock();
 

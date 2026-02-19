@@ -978,6 +978,8 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       return Result.ok(toTaskRuntimeSnapshot(current));
     }
 
+    const controller = current.abortController;
+
     const transition = this.transition(taskId, "cancelled", {
       summary,
       activeToolCalls: 0,
@@ -986,7 +988,6 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
 
     if (Result.isError(transition)) return transition;
 
-    const controller = this.tasks.get(taskId)?.abortController;
     controller?.abort();
 
     return transition;
@@ -1187,6 +1188,8 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       }),
       errorCode: options.errorCode,
       errorMessage: options.errorMessage,
+      abortController: isTerminalState(nextState) ? undefined : current.abortController,
+      executionPromise: isTerminalState(nextState) ? undefined : current.executionPromise,
     };
 
     this.tasks.set(taskId, nextEntry);
