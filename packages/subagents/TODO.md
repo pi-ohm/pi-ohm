@@ -1,1100 +1,264 @@
-# `@pi-ohm/subagents` Delivery Backlog
+# TODO — `@pi-ohm/subagents`
 
-This backlog is organized into demoable sprints with **atomic, commit-ready tasks**.
+## 0) Completed work summary (through E10)
 
-## Product Rules (applies to all sprints)
+This replaces prior ticket-by-ticket log with a technical summary of what is already done.
 
-1. The orchestration tool name is **`task`**.
-2. The package must work without third-party extensions (no required `interactive_shell`).
-3. Tool boundary schemas must be compatible with Pi extension APIs.
-4. Internal validation/state schemas must use **Zod v4**.
-5. Every ticket must ship with automated tests for its acceptance criteria.
-6. Live subagent visual feedback must use `@mariozechner/pi-tui` (with plain-text fallback when UI is unavailable).
-7. Recoverable errors must be modeled with **`better-result`** (`Result<T, E>` + `TaggedError`), not ad-hoc try/catch throws.
-8. Every implementation iteration must run an interactive extension smoke check via `interactive_shell` using `pi -e ./packages/subagents/src/extension.ts`.
+### Runtime + contract foundations
+
+- Task lifecycle implemented end-to-end: `start | status | wait | send | cancel`.
+- Strong payload boundary normalization exists (`id|ids`, `op:"result" -> status`, strict validation envelopes).
+- Stable machine contract exists (`contract_version: "task.v1"`) with explicit fields for wait/cancel/batch ergonomics.
+- Structured observability propagated (`backend/provider/model/runtime/route`) and aggregated across collections.
+- Persistence/hydration implemented, including stale non-terminal recovery (`task_rehydrated_incomplete`).
+- Typed recoverable error strategy established with `better-result` + tagged domain errors.
+
+### Execution backends
+
+- Default execution no longer scaffold-only; nested pi execution backend exists.
+- Current default backend path uses CLI subprocess (`pi --print ...`), including timeout + abort handling.
+- Backend identity normalization + explicit backend failure taxonomy implemented.
+
+### Invocation model + schema
+
+- Task-routed + primary-tool dual invocation exists.
+- Primary schema specialization exists by subagent (`librarian`, `oracle`, `finder`) with deterministic prompt normalization.
+
+### UI + result rendering
+
+- Live surfaces and coordinator exist; sticky widget placement/heartbeat/idle clear implemented.
+- Task history rendering supports collapsed default + `Ctrl+O` expand.
+- Non-debug rendering moved to inline Amp-style tree messaging.
+- Debug mode preserves verbose contract view (`OHM_DEBUG=1|true`).
+- Sync-first guidance added; async remains opt-in.
+- Live bottom widget default switched off; inline updates now primary UX path.
 
 ---
 
-## Sprint 1 — Task Tool Contract + Validation Baseline
+## 1) Current technical gap (root cause)
 
-### Sprint goal
+We still cannot guarantee full per-tool-call fidelity in inline messages.
 
-Establish the canonical Task tool contract and schema validation foundation.
+### Why
 
-### Demo outcome
+Current task backend is CLI-capture based (`packages/subagents/src/runtime/backend.ts`):
 
-`/ohm-subagents` and `/ohm-subagent <id>` show task terminology and invocation modes; schema package validates task requests and catalog config.
+- spawns nested `pi --print --no-session --no-extensions --tools ...`.
+- receives only final stdout/stderr text payload.
+- tool-call rows are inferred from freeform text heuristics.
+
+That means:
+
+- if nested output doesn’t explicitly print each tool call, we cannot display each call.
+- inline message stream is best-effort reconstruction, not event-accurate telemetry.
+
+---
+
+## 2) Program goal — SDK-native execution + true inline live transcript
+
+Migrate subagent execution from nested CLI text capture to SDK session streaming so inline tool results become an actual live-updating message driven by structured events.
+
+### Desired end-state
+
+- `task` stays sync-by-default; async opt-in.
+- Inline task message is authoritative live surface.
+- Bottom sticky widget remains optional/off by default.
+- Tool-call rows come from real SDK tool events (`tool_execution_start/update/end`), not output parsing.
+
+---
+
+## 3) Sprint roadmap (SDK deep plan)
+
+## Sprint 11 — SDK backend spike + adapter contract
+
+### Goal
+
+Prove we can execute subagent tasks via `createAgentSession()` safely in-process with deterministic event capture.
+
+### Deep SDK focus
+
+- Build nested session using:
+  - `createAgentSession(...)`
+  - `SessionManager.inMemory()` (no disk session churn)
+  - `SettingsManager.inMemory(...)` (disable compaction/retry variance in spike)
+  - explicit tool factories (`createReadTool(cwd)`, `createBashTool(cwd)`, etc.)
+- Use `resourceLoader` override to avoid unintended extension recursion.
 
 ### Tickets
 
-- [x] **S1-T1: Canonical terminology alignment (`task`) across package docs**
-  - Requirements:
-    - Remove “delegate tool” naming from package docs.
-    - Use “Task tool” for orchestration API references.
-  - Acceptance criteria:
-    - `ARCH.md`, `README.md`, `AGENTS.md`, `TODO.md` are consistent.
-    - No references to a `delegate` tool as the canonical orchestration tool.
-  - Test evidence:
-    - Doc lint/check command passes.
+- [ ] **S11-T1: Implement `PiSdkTaskExecutionBackend` spike class (opt-in only)**
+  - Add backend alongside existing CLI backend; no default switch yet.
+- [ ] **S11-T2: SDK session boot profile for subagents**
+  - In-memory session/settings, isolated loader, deterministic model selection policy.
+- [ ] **S11-T3: Structured stream capture**
+  - Subscribe to SDK session events and capture:
+    - `message_update` deltas
+    - `tool_execution_start/update/end`
+    - `agent_end` finalization marker
+- [ ] **S11-T4: Abort/timeout parity**
+  - Map existing semantics to SDK path:
+    - timeout -> `task_backend_timeout`
+    - abort signal -> `task_aborted`
 
-- [x] **S1-T2: Define Task operation contract (op union)**
-  - Requirements:
-    - Formalize supported ops: `start`, `status`, `wait`, `send`, `cancel`.
-    - Define required/optional fields per op.
-  - Acceptance criteria:
-    - Contract is documented in `ARCH.md` and represented in code-level schemas.
-    - Invalid op-field combinations are rejected by validation.
-  - Test evidence:
-    - Unit tests for valid/invalid op payload matrices.
+### Acceptance
 
-- [x] **S1-T3: Add TypeBox parameter schemas for Task tool boundary**
-  - Requirements:
-    - Boundary schema supports all Task ops.
-    - Error messaging is deterministic and user-readable.
-  - Acceptance criteria:
-    - Tool boundary parser accepts contract-compliant payloads only.
-    - Error paths identify offending fields.
-  - Test evidence:
-    - Parameter schema tests including malformed arrays, missing required keys, wrong types.
+- SDK backend can run a single sync task and return terminal result parity with existing contract.
+- No extension recursion, no persistent nested session files.
 
-- [x] **S1-T4: Add Zod v4 internal schemas for task records + config fragments**
-  - Requirements:
-    - Internal task state model uses Zod v4.
-    - Subagent runtime config fragments use Zod v4 for normalization.
-  - Acceptance criteria:
-    - Internal parsing returns typed normalized objects.
-    - Invalid persisted records are safely rejected.
-  - Test evidence:
-    - Zod parse/transform tests for happy + failure paths.
+### Test evidence
 
-- [x] **S1-T5: Add schema-version guardrails**
-  - Requirements:
-    - Document and enforce Zod v4-only usage in this package.
-  - Acceptance criteria:
-    - Build/typecheck confirms no legacy Zod API usage in new schema modules.
-  - Test evidence:
-    - Typecheck/lint checks in CI pipeline pass.
-
-- [x] **S1-T6: Package metadata alignment for pi-tui usage**
-  - Requirements:
-    - Document dependency policy for `@mariozechner/pi-tui` in package metadata/docs according to Pi package guidance.
-  - Acceptance criteria:
-    - Subagents package declares and documents expected pi-tui integration contract for consumers.
-  - Test evidence:
-    - Package metadata validation/typecheck passes.
-
-- [x] **S1-T7: better-result baseline contract for subagents runtime**
-  - Requirements:
-    - Define package-level error handling contract using `Result<T, E>` for recoverable failures.
-    - Define initial `TaggedError` categories for validation/config, policy, runtime, persistence.
-    - Reuse shared error primitives from `@pi-ohm/core/errors` where applicable.
-  - Acceptance criteria:
-    - Architecture and code-facing contracts explicitly require typed Result error flows.
-    - No new runtime module in this package returns thrown recoverable errors as its public behavior.
-  - Test evidence:
-    - Type-level and runtime tests for Result error unions and error-tag mapping.
+- backend unit tests for success/error/timeout/abort parity.
+- smoke run with `subagentBackend=interactive-sdk` (new opt-in value).
 
 ---
 
-## Sprint 2 — Task Tool MVP (Single `start` Execution)
+## Sprint 12 — Event model + runtime storage for accurate tool transcript
 
-### Sprint goal
+### Goal
 
-Ship a runnable Task tool MVP that executes one task synchronously.
+Replace heuristic output parsing with structured runtime events captured from SDK stream.
 
-### Demo outcome
+### Deep SDK focus
 
-Model can call `task` with `op:start` + `{subagent_type, description, prompt}` and receive structured result payload.
-
-The `task` tool description/help text includes a current subagent roster so model routing has explicit context.
+- Normalize SDK events into a typed domain event ADT (no impossible states).
+- Persist per-task event timeline (bounded ring buffer) in task runtime store.
 
 ### Tickets
 
-- [x] **S2-T1: Register `task` tool in extension**
-  - Requirements:
-    - Tool appears in active tools with clear description.
-    - Existing extension commands remain functional.
-  - Acceptance criteria:
-    - Tool is discoverable and callable by name `task`.
-  - Test evidence:
-    - Extension integration test for tool registration.
+- [ ] **S12-T1: Add `TaskExecutionEvent` domain model**
+  - Discriminated union, e.g.:
+    - `assistant_text_delta`
+    - `tool_start`
+    - `tool_update`
+    - `tool_end`
+    - `task_terminal`
+- [ ] **S12-T2: Event sink wiring in SDK backend**
+  - Convert session events to domain events at boundary.
+- [ ] **S12-T3: Task store event timeline support**
+  - Add bounded `events[]` per task; enforce retention/size caps.
+- [ ] **S12-T4: Status/wait payload extension for event-derived rows**
+  - Expose deterministic tool row data without scraping `output` text.
 
-- [x] **S2-T2: Implement `start` op (single task, sync)**
-  - Requirements:
-    - Resolve requested subagent profile.
-    - Execute one task using current runtime backend abstraction.
-  - Acceptance criteria:
-    - Returns structured content + details with `task_id`, status, and summary text.
-    - Unknown `subagent_type` returns deterministic error result.
-  - Test evidence:
-    - Unit tests for successful start + invalid subagent type.
+### Acceptance
 
-- [x] **S2-T3: Enforce profile availability checks**
-  - Requirements:
-    - Respect package feature flags and profile requirements (e.g., optional packages/features).
-  - Acceptance criteria:
-    - Unavailable profiles fail with actionable reason.
-  - Test evidence:
-    - Tests for availability pass/fail conditions.
+- Tool rows in task details are sourced from structured events, not regex heuristics.
+- Timeline remains bounded + persisted safely.
 
-- [x] **S2-T4: Add minimal result renderer behavior for Task tool**
-  - Requirements:
-    - `renderCall` and `renderResult` show concise task identity + outcome.
-  - Acceptance criteria:
-    - Collapsed view contains subagent type + description + status.
-  - Test evidence:
-    - Snapshot tests for renderer outputs.
+### Test evidence
 
-- [x] **S2-T5: Add operational docs for MVP usage**
-  - Requirements:
-    - README includes basic `task` `start` usage.
-  - Acceptance criteria:
-    - New user can invoke one task from documented examples.
-  - Test evidence:
-    - Documentation example validation check (if available) or tested snippet scripts.
-
-- [ ] **S2-T6: Task tool roster prompt/context injection**
-  - Requirements:
-    - `task` tool description/help text must include active subagent roster from merged catalog/config.
-    - Roster entry fields: `id`, invocation mode, summary, and full `whenToUse` guidance.
-    - Roster must include primary profiles (e.g. `librarian`) in addition to task-routed-only profiles.
-  - Acceptance criteria:
-    - Model-visible `task` metadata always includes current active subagent list.
-    - `primary:true` profiles remain visible/selectable in task-tool roster.
-    - Roster updates after config/catalog changes and extension reload.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Tool registration/render tests validating roster content and update behavior.
+- event mapping unit tests from mocked SDK event stream.
+- runtime store tests for ordering, cap eviction, persistence restore.
 
 ---
 
-## Sprint 3 — Async Lifecycle (`start/status/wait/cancel`)
+## Sprint 13 — Inline live message renderer (sticky-updating, non-replaying)
 
-### Sprint goal
+### Goal
 
-Add async lifecycle controls with explicit task state transitions.
+Render one evolving inline task message per running task/tool call path (no spammy re-send behavior).
 
-### Demo outcome
+### Deep SDK focus
 
-User/model can start async task(s), query status, wait with timeout, and cancel in-flight task.
+- Use tool `onUpdate` partial result flow as the single live channel.
+- Keep updates idempotent/deduped so each task call updates one message stream.
 
 ### Tickets
 
-- [x] **S3-T1: Define task state machine**
-  - Requirements:
-    - States include at least: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
-    - State transitions are explicit and validated.
-  - Acceptance criteria:
-    - Illegal transitions are blocked.
-  - Test evidence:
-    - State transition unit tests.
+- [ ] **S13-T1: Inline live renderer model**
+  - Build rendering from structured event timeline:
+    - header
+    - prompt row
+    - tool rows (live append)
+    - terminal row
+- [ ] **S13-T2: Running-state minimal mode for async/background**
+  - For running/queued async tasks, render concise progress line(s).
+- [ ] **S13-T3: Terminal expansion mode**
+  - On completion/failure/cancel, expand to full tree snapshot.
+- [ ] **S13-T4: Keep bottom widget fully optional**
+  - Default off already; ensure no hidden reactivation paths.
 
-- [x] **S3-T2: Implement async `start` mode (`async:true`)**
-  - Requirements:
-    - Returns immediately with task IDs.
-  - Acceptance criteria:
-    - Background execution continues after response.
-  - Test evidence:
-    - Async start test with follow-up status reaching terminal state.
+### Acceptance
 
-- [x] **S3-T3: Implement `status` op**
-  - Requirements:
-    - Supports one or many task IDs.
-    - Includes state + high-level progress metadata.
-  - Acceptance criteria:
-    - Unknown IDs produce per-ID errors without failing whole request.
-  - Test evidence:
-    - Multi-ID status tests with mixed known/unknown IDs.
+- In UI mode, task progress is primarily inline and updates in-place via tool updates.
+- Async background tasks remain simple during run, rich on terminal.
 
-- [x] **S3-T4: Implement `wait` op with timeout**
-  - Requirements:
-    - Wait can return early on timeout with partial completion report.
-  - Acceptance criteria:
-    - Timeout behavior deterministic and documented.
-  - Test evidence:
-    - Wait timeout tests + all-complete tests.
+### Test evidence
 
-- [x] **S3-T5: Implement `cancel` op**
-  - Requirements:
-    - Cancel marks task terminal and halts further work.
-  - Acceptance criteria:
-    - Re-canceling terminal tasks is idempotent.
-  - Test evidence:
-    - Cancel mid-flight + cancel terminal-state tests.
+- task tool tests for update sequence, dedupe behavior, running vs terminal rendering.
+- interaction smoke showing no sticky bottom dependency.
 
 ---
 
-## Sprint 4 — Resume + Follow-up (`send`) + Persistence
+## Sprint 14 — Contract hardening + migration safety
 
-### Sprint goal
+### Goal
 
-Enable resumable task threads and persisted task registry across turns/sessions.
+Ship SDK path safely with explicit migration and fallback controls.
 
-### Demo outcome
+### Deep SDK focus
 
-A task started earlier can be continued via `send`, even after session switch/reload (subject to retained state).
+- Feature-flag default backend transition and fallback to CLI backend on controlled failure classes.
 
 ### Tickets
 
-- [x] **S4-T1: Persist task registry snapshots**
-  - Requirements:
-    - Persist minimal task metadata needed for lifecycle and resume operations.
-  - Acceptance criteria:
-    - Registry restores across extension/session restart flow.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Serialization/deserialization tests + restore flow integration test.
+- [ ] **S14-T1: Config + backend selection policy**
+  - Add `interactive-sdk` backend option docs + validation.
+  - Add optional fallback policy (`sdk->cli`) for recoverable bootstrap failures.
+- [ ] **S14-T2: Error taxonomy parity matrix**
+  - Ensure SDK path maps to existing stable error codes/categories.
+- [ ] **S14-T3: Throughput + memory guardrails**
+  - Enforce timeline caps, update throttles, and runtime cleanup for async-heavy runs.
+- [ ] **S14-T4: Docs + operator cookbook**
+  - Sync-vs-async recommendation matrix, backend tradeoffs, troubleshooting.
 
-- [x] **S4-T2: Implement `send` op for follow-up prompts**
-  - Requirements:
-    - Continue an existing task context by ID.
-  - Acceptance criteria:
-    - `send` to terminal task fails with clear reason.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Send-to-running and send-to-terminal tests.
+### Acceptance
 
-- [x] **S4-T3: Add task retention policy requirements**
-  - Requirements:
-    - Configurable retention window / cleanup behavior documented and enforced.
-  - Acceptance criteria:
-    - Expired tasks become non-resumable with explicit error reason.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Retention and expiry tests.
+- SDK backend can be enabled confidently with no contract break for existing consumers.
+- Rollback path is immediate via config.
 
-- [x] **S4-T4: Add corruption-safe persistence handling**
-  - Requirements:
-    - Corrupt state file does not crash extension startup.
-  - Acceptance criteria:
-    - Safe fallback to empty state + diagnostic log path.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Corrupt-file recovery test.
+### Test evidence
+
+- full subagents suite + targeted stress tests.
+- smoke matrix: sync single, async single, wait, cancel, batch partial, timeout.
 
 ---
 
-## Sprint 5 — Parallel Task Batches + Determinism
+## Sprint 15 — Default flip (optional, gated)
 
-### Sprint goal
+### Goal
 
-Support robust batched parallel execution through Task tool while preserving deterministic responses.
-
-### Demo outcome
-
-`task op:start` with `tasks[]` + `parallel:true` executes many tasks concurrently with stable output ordering.
+If S11-S14 metrics are good, make SDK backend default.
 
 ### Tickets
 
-- [x] **S5-T1: Add batched `start` contract for `tasks[]`**
-  - Requirements:
-    - Validate each task item independently.
-  - Acceptance criteria:
-    - Invalid task entry returns scoped validation error.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Batch validation tests (all valid, mixed invalid, all invalid).
+- [ ] **S15-T1: Flip default backend to SDK**
+- [ ] **S15-T2: Keep CLI backend as explicit fallback mode**
+- [ ] **S15-T3: Release notes + migration callouts**
 
-- [x] **S5-T2: Add bounded concurrency requirement + config key**
-  - Requirements:
-    - Global/default max concurrency must be enforced.
-  - Acceptance criteria:
-    - Active running tasks never exceed configured cap.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Concurrency cap tests with instrumentation counters.
+### Gate criteria (must all pass)
 
-- [x] **S5-T3: Deterministic aggregate ordering**
-  - Requirements:
-    - Batch result ordering must be deterministic (input order unless otherwise documented).
-  - Acceptance criteria:
-    - Ordering stable across repeated runs.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Determinism tests with randomized completion timing.
-
-- [x] **S5-T4: Batch wait/status coverage**
-  - Requirements:
-    - `status` and `wait` support parallel batch IDs naturally.
-  - Acceptance criteria:
-    - Partial completion reports contain per-task terminal/non-terminal state.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Batch status/wait tests.
-
-- [x] **S5-T5: Failure isolation in parallel mode**
-  - Requirements:
-    - One task failure must not abort sibling tasks unless explicitly configured.
-  - Acceptance criteria:
-    - Aggregate result includes per-task success/failure details.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Mixed outcome batch tests.
+- parity tests green
+- no regression in task.v1 fields
+- async inline UX validated in manual smoke + automated tests
+- memory/runtime telemetry acceptable under batch stress
 
 ---
 
-## Sprint 6 — Primary Tools (`primary:true`) on Shared Runtime
+## 4) Engineering constraints for this migration
 
-### Sprint goal
-
-Expose primary profiles as direct top-level tools while preserving unified task runtime behavior.
-
-### Demo outcome
-
-`librarian` (primary profile) is callable directly as its own tool and produces the same lifecycle-quality outputs as task-routed execution.
-
-### Tickets
-
-- [x] **S6-T1: Primary profile discovery + registration rules**
-  - Requirements:
-    - Profiles marked `primary:true` are registered as direct tools.
-  - Acceptance criteria:
-    - Direct tool list reflects active primary profiles.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Tool registration tests for profile toggle scenarios.
-
-- [x] **S6-T2: Shared execution contract between direct-tool and Task-tool entrypoints**
-  - Requirements:
-    - Same result envelope semantics for success/failure metadata.
-    - Primary profiles remain callable through `task` by `subagent_type` even when direct tool is registered.
-  - Acceptance criteria:
-    - Comparable outputs for equivalent prompts through both paths.
-    - Direct-tool registration never removes task-path access for the same profile.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Parity tests (task-routed vs direct primary tool) + dual-path accessibility tests.
-
-- [x] **S6-T3: Naming/collision policy for primary tools**
-  - Requirements:
-    - Deterministic behavior for name collisions with existing tools.
-  - Acceptance criteria:
-    - Collision conflict surfaces explicit startup/runtime diagnostics.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Collision tests.
-
-- [x] **S6-T4: Primary profile disable/availability behavior**
-  - Requirements:
-    - Runtime feature toggles cleanly add/remove primary tools.
-  - Acceptance criteria:
-    - No stale tool entries after configuration changes/reload.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Reload + registration/unregistration tests.
-
-- [x] **S6-T5: Primary tool descriptions from profile definitions**
-  - Requirements:
-    - Generated primary tools must derive description/help text from profile metadata (`summary`, `whenToUse`, prompt summary).
-  - Acceptance criteria:
-    - `librarian` and other primary tools expose model-facing guidance equivalent to profile definitions.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Tool registration snapshot tests asserting metadata mapping from profile definitions.
-
-- [x] **S6-T6: Primary-tool registration for all active `primary:true` profiles**
-  - Requirements:
-    - Active `primary:true` profiles are auto-registered as direct tools at startup/reload.
-  - Acceptance criteria:
-    - `librarian` appears as a direct top-level tool when active.
-    - Non-primary profiles are not registered as direct tools.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Integration tests for startup/reload registration matrix.
+- Keep type safety strict (no `any`, no non-null assertions, no type assertions).
+- Parse SDK stream events at boundary into discriminated unions.
+- Make illegal states unrepresentable in event timeline model.
+- Preserve current `task.v1` contract compatibility; only additive fields unless explicitly versioned.
+- Keep current CLI backend until SDK path is proven and gated.
 
 ---
 
-## Sprint 7 — Live TUI Feedback (`@mariozechner/pi-tui`)
-
-### Sprint goal
-
-Deliver high-signal, basic runtime feedback using pi-tui primitives.
-
-### Demo outcome
-
-During task execution, UI displays a two-line block per running task:
-
-- line 1: spinner + `[subagent_type]` + description
-- line 2: `Tools X/Y · Elapsed mm:ss`
-
-Terminal states replace spinner with success/failure marker and preserve summary fields.
-
-### Tickets
-
-- [x] **S7-T1: Define TUI task snapshot contract**
-  - Requirements:
-    - Canonical snapshot fields include `task_id`, `subagent_type`, `description`, `state`, `active_tool_calls`, `started_at`, `ended_at`, `elapsed_ms`.
-  - Acceptance criteria:
-    - All UI formatters consume one normalized snapshot shape.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Snapshot schema/formatter contract tests.
-
-- [x] **S7-T2: Spinner and terminal marker policy**
-  - Requirements:
-    - Running states render spinner frames; terminal states render deterministic success/failure/cancel markers.
-  - Acceptance criteria:
-    - Spinner never appears for terminal tasks.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - State-to-marker mapping tests.
-
-- [x] **S7-T3: Description propagation to TUI**
-  - Requirements:
-    - TUI line description must be sourced from `task start` request payload.
-    - Missing description falls back to deterministic placeholder.
-  - Acceptance criteria:
-    - UI consistently shows the expected description for each task.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Description propagation tests.
-
-- [x] **S7-T4: In-flight tool-call counter integration**
-  - Requirements:
-    - Per-task active tool-call count is updated from lifecycle events/runtime tracker.
-  - Acceptance criteria:
-    - Counters are accurate under parallel execution.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Concurrent counter correctness tests.
-
-- [x] **S7-T5: Elapsed time semantics and formatting**
-  - Requirements:
-    - Elapsed time starts when task is accepted and stops at terminal state.
-    - Display format is `mm:ss` for UI lines.
-  - Acceptance criteria:
-    - Elapsed values are monotonic while running and frozen after completion.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Time progression/freeze tests with controlled clock.
-
-- [x] **S7-T6: Basic pi-tui line renderer for task list**
-  - Requirements:
-    - Render baseline two-line format:
-      - line 1: `spinner/marker + [subagent_type] + description`
-      - line 2: `Tools X/Y · Elapsed mm:ss`
-    - Keep rendering compact and stable for narrow terminal widths.
-  - Acceptance criteria:
-    - Line output remains readable with truncation policy documented.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Renderer snapshot tests across widths.
-
-- [x] **S7-T7: Footer and widget synchronization**
-  - Requirements:
-    - Footer summary and widget/task lines reflect the same underlying task snapshot state.
-  - Acceptance criteria:
-    - No contradictory counts or state labels across UI surfaces.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Integration tests validating synchronized UI snapshots.
-
-- [x] **S7-T8: Non-UI fallback parity**
-  - Requirements:
-    - When TUI is unavailable, `onUpdate` plain text must include description, tool count, and elapsed time.
-  - Acceptance criteria:
-    - Headless mode preserves observability parity for core runtime metrics.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Headless update format tests.
-
----
-
-## Sprint 8 — Policy, Permissions, and Hardening
-
-### Sprint goal
-
-Make task orchestration safe-by-default with clear policy controls and robust edge-case handling.
-
-### Demo outcome
-
-Task orchestration respects policy filters, handles malformed/hostile inputs safely, and remains stable under cancellation/failure scenarios.
-
-### Tickets
-
-- [x] **S8-T1: Task permission policy requirements**
-  - Requirements:
-    - Support allow/deny semantics for subagent invocation scope.
-  - Acceptance criteria:
-    - Denied subagents cannot be invoked through task orchestration.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Policy evaluation tests.
-
-- [x] **S8-T2: Hidden/internal profile behavior in Task tool exposure**
-  - Requirements:
-    - Internal/hidden profiles are not surfaced in user-facing suggestions unless policy allows internal routing.
-  - Acceptance criteria:
-    - Discovery output matches visibility rules.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Visibility and listing tests.
-
-- [x] **S8-T3: Cancellation and timeout hardening**
-  - Requirements:
-    - Cancellation and timeout states are explicit and non-ambiguous.
-  - Acceptance criteria:
-    - No zombie running states after timeout/cancel.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Stress tests for rapid cancel/timeout sequences.
-
-- [x] **S8-T4: Error taxonomy and stable error surface**
-  - Requirements:
-    - Runtime emits stable error codes/categories for validation, policy, runtime, persistence failures.
-    - Categories are implemented as `better-result` `TaggedError` variants and surfaced through `Result` mapping.
-  - Acceptance criteria:
-    - Errors are machine-parseable and human-readable.
-    - Tool boundary error payloads map deterministically from TaggedError tags.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Error contract tests + TaggedError-to-tool-payload mapping tests.
-
-- [x] **S8-T5: Backward compatibility and migration notes**
-  - Requirements:
-    - Document and test migration from scaffold-only behavior to full task lifecycle behavior.
-  - Acceptance criteria:
-    - Existing commands remain functional and documented.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Regression suite for existing `/ohm-subagents` and `/ohm-subagent` flows.
-
----
-
-## Sprint 9 — Release Readiness + Acceptance Pack
-
-### Sprint goal
-
-Ship production-ready package quality with clear operational documentation and confidence checks.
-
-### Demo outcome
-
-`@pi-ohm/subagents` can be installed, configured, invoked (`task` + primary tools), and validated end-to-end in a repeatable smoke scenario.
-
-### Tickets
-
-- [ ] **S9-T1: End-to-end smoke script (sync, async, batch, primary)**
-  - Requirements:
-    - Script exercises core happy paths and one representative failure path.
-  - Acceptance criteria:
-    - Smoke script passes in CI/local documented environment.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - E2E smoke test output artifacts.
-
-- [ ] **S9-T2: Config cookbook docs**
-  - Requirements:
-    - Examples for model overrides, `primary:true`, task permissions, parallel settings.
-  - Acceptance criteria:
-    - Docs cover minimal, typical, and advanced setups.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Doc snippets validated by tests or fixture parsing.
-
-- [ ] **S9-T3: Observability docs for live feedback surfaces**
-  - Requirements:
-    - Explain footer counters, widget semantics, and renderer states.
-  - Acceptance criteria:
-    - Operator can interpret runtime state from UI surfaces alone.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - Snapshot references and expected-state matrix included.
-
-- [ ] **S9-T4: Final regression gate**
-  - Requirements:
-    - Full test matrix for schema, lifecycle, parallel, UI renderers, and policies.
-  - Acceptance criteria:
-    - All tests green under repository standard checks.
-  - Test evidence:
-    - Required interactive extension smoke run (interactive_shell): `pi -e ./packages/subagents/src/extension.ts`
-    - CI check bundle documented in release notes.
-
----
-
-## Epic 2 — Bug Fixes (interactive-shell runtime + result contract)
-
-### Epic goal
-
-Fix correctness/usability issues found in live testing of task orchestration with `subagentBackend=interactive-shell`.
-
-### Demo outcome
-
-Task lifecycle calls return consistent, machine-parseable payloads with full subagent outputs preserved (including multiline text), stable backend identity, and documented invocation behavior.
-
-### Tickets
-
-- [x] **E2-T1: Async batch output retrieval contract**
-  - Requirements:
-    - `start` with `async:true` + batch must expose a deterministic path to retrieve final subagent outputs.
-    - `status`/`wait` responses must include output availability semantics per task item.
-  - Acceptance criteria:
-    - No “state-only” dead-end where output cannot be retrieved after async completion.
-    - Async + batch flow has explicit documented retrieval examples.
-  - Test evidence:
-    - Integration tests for async batch (`start` -> `wait` -> output retrieval).
-    - Required interactive smoke run showing async batch outputs surfaced without sync rerun.
-
-- [x] **E2-T2: Preserve multiline output fidelity**
-  - Requirements:
-    - Task result payload must preserve newline content from backend responses.
-    - Renderer may collapse visually, but canonical `details.output` must remain full multiline text.
-  - Acceptance criteria:
-    - Multi-line responses are not reduced to first line in returned payload.
-  - Test evidence:
-    - Unit/integration test with known multiline fixture response.
-    - Smoke run with multiline prompt (e.g., poem/list) validating full output in details.
-
-- [x] **E2-T3: Truncation policy hardening and disclosure**
-  - Requirements:
-    - Define/implement explicit truncation behavior for long single-line outputs.
-    - Include deterministic truncation metadata in result details when truncation occurs.
-  - Acceptance criteria:
-    - No silent ellipsis-only shortening in canonical result payload.
-    - Consumers can detect truncation programmatically.
-  - Test evidence:
-    - Tests covering long-output truncation boundary and metadata flags.
-    - Doc update for truncation limits and retrieval strategy.
-
-- [x] **E2-T4: Backend identity normalization**
-  - Requirements:
-    - Standardize backend identity fields across task summary/details and nested subagent output metadata.
-    - Eliminate ambiguous/mixed backend labels for a single task execution.
-  - Acceptance criteria:
-    - One stable backend identity model is used across all task lifecycle responses.
-    - Model/provider identifiers are present or explicitly marked unavailable by contract.
-  - Test evidence:
-    - Tests asserting backend identity consistency in `start/status/wait/send`.
-    - Smoke run confirming no mixed backend labels for one task.
-
-- [x] **E2-T5: Stable machine payload contract for task results**
-  - Requirements:
-    - Define canonical structured fields for downstream parsing (beyond human-formatted text blocks).
-    - Ensure lifecycle ops expose stable task/item fields for automation.
-  - Acceptance criteria:
-    - Consumers can parse task outcomes without scraping formatted text.
-    - Contract documented in README/ARCH with examples.
-  - Test evidence:
-    - Contract tests asserting field presence/types for each op.
-    - Regression tests for backward-compatible text output.
-
-- [x] **E2-T6: Invocation mode behavior docs + parity checks**
-  - Requirements:
-    - Document expected differences between `task-routed` and `primary-tool` invocation paths.
-    - Validate parity expectations for shared result envelope fields.
-  - Acceptance criteria:
-    - `librarian` vs `finder/oracle` invocation-mode behavior is explicitly documented.
-    - Divergences are intentional, tested, and user-visible in docs.
-  - Test evidence:
-    - Parity tests comparing key fields across invocation modes.
-    - README/ARCH examples for both invocation paths.
-
----
-
-## Definition of Done (per ticket)
-
-A ticket is complete only if all are true:
-
-1. Scope is delivered without hidden partial work.
-2. Acceptance criteria are demonstrably met.
-3. Automated tests for the ticket are added/updated and passing.
-4. Docs are updated for any user-facing behavior changes.
-5. The change is small enough to be reviewed and merged as one atomic commit or a tightly scoped commit set.
-6. Recoverable error paths use `better-result` Result/TaggedError flows (no hidden try/catch swallowing).
-7. Interactive extension smoke run was executed via `interactive_shell` with `pi -e ./packages/subagents/src/extension.ts`.
-
----
-
-## Epic 4 — Primary tool schema specialization + observability consistency
-
-### Epic goal
-
-Support subagent-specific primary input schemas while keeping task-routed parity and deterministic lifecycle observability labels.
-
-### Demo outcome
-
-Primary tools accept role-specific inputs (`query`/`task`/`files`) and lifecycle `status`/`wait` no longer emit confusing top-level runtime labels that diverge from item metadata.
-
-### Tickets
-
-- [x] **E4-T1: Normalize collection-level observability aggregation**
-  - Requirements:
-    - `status`/`wait` top-level observability fields should be derived from item metadata when present.
-    - Avoid route/runtime conflation in collection envelopes.
-  - Acceptance criteria:
-    - Sync/async lifecycle responses do not flip between `runtime: pi-cli` and `runtime: interactive-shell` for the same execution path.
-  - Test evidence:
-    - Unit tests for collection aggregation with consistent + mixed item observability values.
-
-- [x] **E4-T2: Primary schema specialization per subagent profile**
-  - Requirements:
-    - Primary tool input schema can vary by subagent id.
-    - Preserve backward compatibility for existing `prompt` payloads.
-  - Acceptance criteria:
-    - Librarian primary accepts `query` + optional `context`.
-    - Oracle primary accepts `task` + optional `context` + optional `files[]`.
-    - Finder primary accepts `query`.
-  - Test evidence:
-    - Primary-tool unit tests for each schema path and normalization.
-
-- [x] **E4-T3: Structured context/file forwarding for primary routing**
-  - Requirements:
-    - Convert schema-specific fields into deterministic task prompt payloads.
-    - Forward oracle file list in machine-readable, stable prompt block.
-  - Acceptance criteria:
-    - Backend receives normalized prompt content containing context/files when provided.
-  - Test evidence:
-    - Tests asserting normalized prompt body for librarian/oracle/finder.
-
-- [x] **E4-T4: Primary schema docs + invocation contract updates**
-  - Requirements:
-    - README/ARCH document per-subagent primary input contract and compatibility aliases.
-  - Acceptance criteria:
-    - Integrators can call primary tools without guessing field names.
-  - Test evidence:
-    - Smoke run examples using librarian query/context and oracle task/context/files.
-
----
-
-## Epic 3 — Task UX + lifecycle contract ergonomics
-
-### Epic goal
-
-Reduce caller confusion in mixed/timeout/cancel flows while strengthening machine-contract observability for backend/runtime routing.
-
-### Demo outcome
-
-Task responses are easier for humans to read, safer for automation to parse, and explicit about partial acceptance, wait outcomes, cancellation effects, and runtime metadata.
-
-### Tickets
-
-- [x] **E3-T1: Resolve summary/output dual-read confusion**
-  - Requirements:
-    - Avoid misleading truncation-looking summaries when full `output` is present.
-    - Keep multiline `output` canonical for both humans and parsers.
-  - Acceptance criteria:
-    - Result text clearly distinguishes concise summary from canonical output body.
-    - No first-line summary appears to be the only returned result.
-  - Test evidence:
-    - Regression tests for summary + multiline output rendering behavior.
-    - Smoke run showing summary + full output clarity in one task response.
-
-- [x] **E3-T2: Batch partial-failure semantics (accepted vs rejected)**
-  - Requirements:
-    - Async batch start must expose accepted/rejected accounting when some items are invalid.
-    - Top-level status must not imply whole-batch failure when valid tasks were accepted.
-  - Acceptance criteria:
-    - Mixed async batch clearly signals partial acceptance and per-item outcomes.
-    - Callers can continue polling accepted tasks without ambiguity.
-  - Test evidence:
-    - Tests for mixed batch (valid + invalid) status/count contract.
-    - Smoke run demonstrating partial accept + later successful wait/status for accepted ids.
-
-- [x] **E3-T3: Explicit cancel semantics for terminal tasks**
-  - Requirements:
-    - `cancel` on terminal tasks must expose whether cancellation was applied.
-    - Response should include prior state to disambiguate no-op behavior.
-  - Acceptance criteria:
-    - Callers can detect cancel no-op vs real cancellation from fields alone.
-  - Test evidence:
-    - Tests covering running->cancelled and succeeded->cancel no-op behavior.
-
-- [x] **E3-T4: Backend/model/runtime observability fields**
-  - Requirements:
-    - Add stable metadata fields for provider/model/runtime/route in task lifecycle payloads.
-    - Explicitly mark unavailable values by contract (not implicit omission ambiguity).
-  - Acceptance criteria:
-    - Start/status/wait/send/cancel expose deterministic observability fields.
-    - Backend identity remains single-source and not inferred from model text.
-  - Test evidence:
-    - Contract tests asserting observability fields and fallback/unavailable semantics.
-
-- [x] **E3-T5: Invocation-path consistency docs + behavior contract**
-  - Requirements:
-    - Clearly document `task-routed` vs `primary-tool` behavior and expected parity fields.
-    - Ensure integration tests enforce intentional parity/divergence.
-  - Acceptance criteria:
-    - Integrators can predict response shape and differences per invocation path.
-  - Test evidence:
-    - Parity tests for shared fields, and explicit differences test for invocation marker.
-    - README/ARCH updates with unambiguous examples.
-
-- [x] **E3-T6: Wait timeout ergonomics contract**
-  - Requirements:
-    - Wait responses must include explicit terminality/wait-outcome fields (timeout vs completed vs aborted).
-    - Preserve compatibility while making timeout non-terminal outcome machine-obvious.
-  - Acceptance criteria:
-    - Callers can branch on wait outcome without parsing error text.
-  - Test evidence:
-    - Tests for timeout/aborted/completed wait outcomes.
-
-- [x] **E3-T7: Unknown task classification refinement**
-  - Requirements:
-    - Unknown/expired task ids should use explicit not-found category for retry strategy.
-    - Distinguish not-found from runtime backend failures in both top-level + item details.
-  - Acceptance criteria:
-    - Automation can classify retryability by stable category alone.
-  - Test evidence:
-    - Tests for unknown id + expired id category mapping.
-
----
-
-## Epic 5 — Sticky TUI runtime surfaces + low-noise lifecycle updates
-
-### Epic goal
-
-Replace spammy per-update runtime text with sticky TUI surfaces while preserving machine-contract details and non-UI compatibility.
-
-### Demo outcome
-
-Interactive sessions show a persistent one-line subagents status + compact widget, with throttled/deduped updates and lifecycle-only transcript events.
-
-### Tickets
-
-- [x] **E5-T1: Sticky status baseline from runtime presentation**
-  - Requirements:
-    - Runtime presentation exposes stable one-line status counts for running/tools/done/failed/cancelled.
-    - Task runtime updates write sticky status through `ctx.ui.setStatus("ohm-subagents", ...)` when UI is available.
-    - Frequent update bodies should no longer prepend runtime widget dump in interactive mode.
-  - Acceptance criteria:
-    - Running tasks are visible in footer status without scrolling transcript.
-    - Task details payload shape remains unchanged.
-  - Test evidence:
-    - Runtime UI formatter tests for status count composition.
-    - Task tool tests asserting `setStatus` usage and non-spam update body shape.
-
-- [x] **E5-T2: Compact widget + throttled/deduped live coordinator**
-  - Requirements:
-    - Add a live UI coordinator that applies throttling + text dedupe.
-    - Render compact (single-line) widget rows for active tasks below editor.
-    - Apply idle grace clear behavior for status + widget.
-  - Acceptance criteria:
-    - Widget updates do not flicker/churn when rendered frame is unchanged.
-    - Status/widget clear after idle grace with no active tasks.
-  - Test evidence:
-    - Coordinator unit tests for throttle/dedupe/idle-clear.
-    - Task tool tests confirming widget wiring in interactive path.
-
-- [x] **E5-T3: Interactive transition-only onUpdate policy**
-  - Requirements:
-    - In UI mode, emit `onUpdate` only for lifecycle transitions/errors (not every progress frame).
-    - Keep non-UI update behavior compatible for automation/print/json consumers.
-  - Acceptance criteria:
-    - Interactive mode transcript/tool stream is significantly less noisy.
-    - Non-UI mode still emits rich intermediate updates.
-  - Test evidence:
-    - Task tool tests covering UI vs non-UI `onUpdate` emission policy.
-
-- [x] **E5-T4: Live UI verbosity toggle command (`/ohm-subagents-live`)**
-  - Requirements:
-    - Add command to set `off | compact | verbose` live UI mode at runtime.
-    - Keep defaults/environment behavior deterministic.
-  - Acceptance criteria:
-    - Command updates mode and subsequent task updates follow selected verbosity.
-  - Test evidence:
-    - Extension command tests for mode switching.
-    - Live coordinator tests for per-mode render behavior.
-
----
-
-## Epic 6 — Task result history ergonomics + collapsed transcript parity
-
-### Epic goal
-
-Keep subagent outputs in tool-call history while using Ctrl+O-expandable visual truncation in collapsed mode.
-
-### Demo outcome
-
-Task tool results show subagent output in chat history; collapsed view uses `... (N earlier lines, ctrl+o to expand)` and expanded view reveals full output.
-
-### Tickets
-
-- [x] **E6-T1: Collapsed tool-result visual truncation with Ctrl+O hint**
-  - Requirements:
-    - Task tool custom `renderResult` must honor `expanded` flag.
-    - Collapsed mode should show tail visual lines with explicit `ctrl+o` expansion hint.
-    - Expanded mode must show full output.
-  - Acceptance criteria:
-    - Long task outputs no longer flood collapsed chat history.
-    - Ctrl+O-expanded view reveals full task output without data loss.
-  - Test evidence:
-    - Tool renderer tests for collapsed truncation hint + expanded full output.
-
-- [x] **E6-T2: Subagent output retention in task history rendering**
-  - Requirements:
-    - Collapsed/expanded renderer should preserve task output lines from item/detail payloads.
-    - Ensure render path remains compatible with task.v1 details envelope.
-  - Acceptance criteria:
-    - Users can inspect subagent message/tool-call output directly in task tool history entries.
-  - Test evidence:
-    - Regression tests around multiline item output visibility in renderer.
-
----
-
-## Epic 7 — Embedded transcript-style task result formatting + debug gating
-
-### Epic goal
-
-Make default task result history concise and chat-like while preserving full diagnostic visibility behind `OHM_DEBUG`.
-
-### Demo outcome
-
-With debug disabled, task results render as embedded transcript snippets (`assistant>`/`tool(...)>`) and hide backend metadata; with debug enabled, full contract diagnostics remain visible.
-
-### Tickets
-
-- [x] **E7-T1: Default non-debug formatter for task results**
-  - Requirements:
-    - Collapse verbose metadata in non-debug mode.
-    - Render output as transcript-style lines and include ctrl+o expandable omission hint for earlier lines.
-  - Acceptance criteria:
-    - wait/status/start/send/cancel text output is concise by default.
-    - history still shows subagent/tool transcript snippets.
-  - Test evidence:
-    - Formatter tests for non-debug concise output + transcript lines.
-
-- [x] **E7-T2: Preserve verbose format behind `OHM_DEBUG` and expanded renderer path**
-  - Requirements:
-    - Keep existing full metadata formatter when `OHM_DEBUG=1|true`.
-    - Ensure renderResult recomputes text from details per expanded state.
-  - Acceptance criteria:
-    - ctrl+o expanded task history shows full output body.
-    - debug mode keeps backend/provider/model/runtime/route fields in text output.
-  - Test evidence:
-    - tests toggling `OHM_DEBUG` env and expanded formatting behavior.
-
----
-
-## Epic 8 — Amp-style live subagent tree widget via dedicated `@pi-ohm/tui`
-
-### Epic goal
-
-Replace current sticky subagent runtime text with an Amp-like tree widget: prompt line, live tool-call rows, and terminal result row.
-
-### Demo outcome
-
-`task` live surface renders a tree block per active task (`✓/⠋ title`, `├── prompt`, `├── tool calls`, `╰── result`) using a reusable `@pi-ohm/tui` component, wired into `@pi-ohm/subagents`.
-
-### Tickets
-
-- [x] **E8-T1: Create dedicated `@pi-ohm/tui` package with reusable subagent tree component**
-  - Requirements:
-    - Add workspace package `packages/tui`.
-    - Export a pi-tui `Component` for Amp-style task tree rendering.
-    - Include deterministic line-wrapping/truncation behavior for narrow terminals.
-  - Acceptance criteria:
-    - Component can be imported from `@pi-ohm/tui` and rendered by extensions.
-  - Test evidence:
-    - Unit tests for tree rendering/wrapping/branch structure.
-
-- [x] **E8-T2: Add standalone extension preview for `@pi-ohm/tui` (`pi -e` smokeable)**
-  - Requirements:
-    - Register command(s) that render the tree widget with fixture data.
-    - Ensure package can be smoke-tested directly via `pi -e ./packages/tui/src/extension.ts`.
-  - Acceptance criteria:
-    - Preview command visibly renders Amp-style tree format.
-  - Test evidence:
-    - Extension tests for command registration/output shape.
-    - Required smoke run with `pi -e`.
-
-- [x] **E8-T3: Integrate `@pi-ohm/tui` component into subagents live surface**
-  - Requirements:
-    - Replace current string-line widget path with new tree component in live coordinator/runtime presentation.
-    - Preserve existing mode controls (`off|compact|verbose`) and idle clear semantics.
-  - Acceptance criteria:
-    - Sticky widget no longer uses legacy 2-line rows; renders tree blocks.
-    - Only active tasks appear in widget.
-  - Test evidence:
-    - Updated live-ui/runtime-ui tests validating component integration + active filtering.
-
-- [x] **E8-T4: Task output-to-tree mapping for prompt/tool/result rows**
-  - Requirements:
-    - Map runtime snapshot fields into tree sections:
-      - prompt (main-agent instruction)
-      - tool rows (best-effort parsed call lines)
-      - final result row
-    - Keep robust fallback when tool-call rows are unavailable.
-  - Acceptance criteria:
-    - Tree format remains readable even with sparse output.
-  - Test evidence:
-    - Formatter tests for parsed tool rows + fallback behavior.
-
----
-
-## Epic 9 — Inline task result message tree format (non-debug)
-
-### Epic goal
-
-Render task tool history/results as Amp-style inline message trees (not footer/sticky only).
-
-### Demo outcome
-
-Collapsed/expanded task tool results render as prompt/tool/result trees in chat history, replacing the current `items:/output:` transcript block style when `OHM_DEBUG` is off.
-
-### Tickets
-
-- [x] **E9-T1: Replace non-debug task result formatter with tree-style inline rendering**
-  - Requirements:
-    - Non-debug `formatTaskToolResult` should render Amp-style tree blocks.
-    - Remove default `items:` / `output:` scaffolding in compact mode.
-  - Acceptance criteria:
-    - Single-task and collection responses look like message trees.
-  - Test evidence:
-    - Formatter tests for single + collection outputs.
-
-- [x] **E9-T2: Include prompt/tool/result mapping in inline message renderer**
-  - Requirements:
-    - Include prompt row from task details where available.
-    - Parse tool-call-like lines from output and show final result as tree leaf.
-  - Acceptance criteria:
-    - Inline history mirrors Amp-like sequencing: prompt -> tool calls -> result.
-  - Test evidence:
-    - Tests for parsed tool rows + result leaf fallback.
-
-- [x] **E9-T3: Keep verbose metadata format behind `OHM_DEBUG` and preserve Ctrl+O behavior**
-  - Requirements:
-    - Debug mode still renders full contract metadata.
-    - Expanded rendering keeps full body availability.
-  - Acceptance criteria:
-    - No contract regression for debug-mode consumers.
-  - Test evidence:
-    - Existing debug-gating tests remain green.
-
----
-
-## Epic 10 — Sync-by-default guidance + minimal background async UI
-
-### Epic goal
-
-Keep task orchestration sync-first by default and simplify background async visual noise.
-
-### Demo outcome
-
-Tool guidance explicitly recommends non-async unless needed; async/running updates render minimal inline progress messages, while sticky bottom widget is off by default.
-
-### Tickets
-
-- [x] **E10-T1: Document and encode sync-first guidance in task tool description/docs**
-  - Requirements:
-    - Clarify that `async` is optional and defaults to sync.
-    - Recommend async only for long-running/background tasks.
-  - Acceptance criteria:
-    - Tool description + docs reflect sync-first behavior.
-  - Test evidence:
-    - Description snapshot/assertion updates.
-
-- [x] **E10-T2: Default live bottom widget mode to off**
-  - Requirements:
-    - Live widget should not render unless explicitly enabled.
-  - Acceptance criteria:
-    - No sticky bottom runtime widget in default mode.
-  - Test evidence:
-    - UI tests updated for default-off behavior.
-
-- [x] **E10-T3: Minimal inline rendering for running/background task updates**
-  - Requirements:
-    - Running/queued inline updates use concise message lines.
-    - Terminal output remains rich tree rendering.
-  - Acceptance criteria:
-    - Async progress is readable without large repeated trees.
-  - Test evidence:
-    - Formatter + runTask UI update tests.
+## 5) Definition of done (for each sprint ticket)
+
+1. Ticket scope is fully implemented (no hidden partials).
+2. Automated tests cover happy path + representative failure path.
+3. `yarn test:subagents`, `yarn typecheck`, `yarn lint` pass.
+4. Docs updated for user-visible changes.
+5. Interactive smoke run executed with `pi -e ./packages/subagents/src/extension.ts`.
+6. Error handling uses typed `better-result` flow end-to-end.
