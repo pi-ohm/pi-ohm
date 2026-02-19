@@ -3,6 +3,7 @@ import test from "node:test";
 import type { OhmRuntimeConfig, OhmSubagentBackend } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
+import { SubagentRuntimeError } from "../errors";
 import {
   applyPiSdkSessionEvent,
   createDefaultTaskExecutionBackend,
@@ -527,6 +528,76 @@ defineTest("PiCliTaskExecutionBackend delegates to sdk backend when configured",
   assert.equal(result.value.output, "sdk output");
   assert.equal(result.value.route, "interactive-sdk");
 });
+
+defineTest(
+  "PiCliTaskExecutionBackend falls back to cli when sdk fails and fallback is enabled",
+  async () => {
+    const previous = process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+    process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI = "true";
+
+    try {
+      let cliCalls = 0;
+      const cliRunner: PiCliRunner = async () => {
+        cliCalls += 1;
+        return {
+          exitCode: 0,
+          stdout: "cli fallback output",
+          stderr: "",
+          timedOut: false,
+          aborted: false,
+        };
+      };
+
+      const sdkBackend: TaskExecutionBackend = {
+        id: "interactive-sdk",
+        async executeStart() {
+          return Result.err(
+            new SubagentRuntimeError({
+              code: "task_backend_execution_failed",
+              stage: "execute_start",
+              message: "sdk bootstrap failed",
+            }),
+          );
+        },
+        async executeSend() {
+          return Result.err(
+            new SubagentRuntimeError({
+              code: "task_backend_execution_failed",
+              stage: "execute_send",
+              message: "sdk bootstrap failed",
+            }),
+          );
+        },
+      };
+
+      const backend = new PiCliTaskExecutionBackend(cliRunner, 1_000, sdkBackend);
+      const result = await backend.executeStart({
+        taskId: "task_sdk_fallback",
+        subagent: subagentFixture,
+        description: "Fallback run",
+        prompt: "Use cli fallback",
+        cwd: "/tmp/project",
+        config: makeConfig("interactive-sdk"),
+        signal: undefined,
+      });
+
+      assert.equal(Result.isOk(result), true);
+      if (Result.isError(result)) {
+        assert.fail("Expected sdk->cli fallback success");
+      }
+
+      assert.equal(cliCalls, 1);
+      assert.equal(result.value.output, "cli fallback output");
+      assert.equal(result.value.route, "interactive-shell");
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+      } else {
+        process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI = previous;
+      }
+    }
+  },
+);
 
 defineTest("PiCliTaskExecutionBackend reports timeout and backend execution failures", async () => {
   const timeoutRunner: PiCliRunner = async () => ({

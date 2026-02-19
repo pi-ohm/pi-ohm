@@ -201,7 +201,7 @@ Ship SDK path safely with explicit migration and fallback controls.
 
 ### Tickets
 
-- [ ] **S14-T1: Config + backend selection policy**
+- [x] **S14-T1: Config + backend selection policy**
   - Add `interactive-sdk` backend option docs + validation.
   - Add optional fallback policy (`sdk->cli`) for recoverable bootstrap failures.
 - [ ] **S14-T2: Error taxonomy mapping matrix**

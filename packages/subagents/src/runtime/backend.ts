@@ -144,6 +144,14 @@ function getTimeoutMsFromEnv(): number {
   return parsed;
 }
 
+function isSdkFallbackToCliEnabled(): boolean {
+  const raw = process.env.OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI;
+  if (!raw) return false;
+
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 export interface PiCliRunnerInput {
   readonly cwd: string;
   readonly prompt: string;
@@ -771,25 +779,15 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     return this.id;
   }
 
-  async executeStart(
+  private shouldFallbackToCli(error: SubagentRuntimeError): boolean {
+    if (!isSdkFallbackToCliEnabled()) return false;
+    if (error.code !== "task_backend_execution_failed") return false;
+    return true;
+  }
+
+  private async executeCliStart(
     input: TaskBackendStartInput,
   ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>> {
-    if (input.signal?.aborted) {
-      return Result.err(toAbortedError(input.taskId, "execute_start"));
-    }
-
-    if (input.config.subagentBackend === "interactive-sdk") {
-      return this.sdkBackend.executeStart(input);
-    }
-
-    if (input.config.subagentBackend === "none") {
-      return this.scaffoldBackend.executeStart(input);
-    }
-
-    if (input.config.subagentBackend === "custom-plugin") {
-      return Result.err(toUnsupportedBackendError(input.taskId, "execute_start"));
-    }
-
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildStartPrompt(input),
@@ -828,25 +826,9 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     });
   }
 
-  async executeSend(
+  private async executeCliSend(
     input: TaskBackendSendInput,
   ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>> {
-    if (input.signal?.aborted) {
-      return Result.err(toAbortedError(input.taskId, "execute_send"));
-    }
-
-    if (input.config.subagentBackend === "interactive-sdk") {
-      return this.sdkBackend.executeSend(input);
-    }
-
-    if (input.config.subagentBackend === "none") {
-      return this.scaffoldBackend.executeSend(input);
-    }
-
-    if (input.config.subagentBackend === "custom-plugin") {
-      return Result.err(toUnsupportedBackendError(input.taskId, "execute_send"));
-    }
-
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildSendPrompt(input),
@@ -883,6 +865,56 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       runtime: normalized.runtime,
       route: this.id,
     });
+  }
+
+  async executeStart(
+    input: TaskBackendStartInput,
+  ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>> {
+    if (input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_start"));
+    }
+
+    if (input.config.subagentBackend === "none") {
+      return this.scaffoldBackend.executeStart(input);
+    }
+
+    if (input.config.subagentBackend === "custom-plugin") {
+      return Result.err(toUnsupportedBackendError(input.taskId, "execute_start"));
+    }
+
+    if (input.config.subagentBackend === "interactive-sdk") {
+      const sdkResult = await this.sdkBackend.executeStart(input);
+      if (Result.isOk(sdkResult)) return sdkResult;
+      if (!this.shouldFallbackToCli(sdkResult.error)) return sdkResult;
+      return this.executeCliStart(input);
+    }
+
+    return this.executeCliStart(input);
+  }
+
+  async executeSend(
+    input: TaskBackendSendInput,
+  ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>> {
+    if (input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_send"));
+    }
+
+    if (input.config.subagentBackend === "none") {
+      return this.scaffoldBackend.executeSend(input);
+    }
+
+    if (input.config.subagentBackend === "custom-plugin") {
+      return Result.err(toUnsupportedBackendError(input.taskId, "execute_send"));
+    }
+
+    if (input.config.subagentBackend === "interactive-sdk") {
+      const sdkResult = await this.sdkBackend.executeSend(input);
+      if (Result.isOk(sdkResult)) return sdkResult;
+      if (!this.shouldFallbackToCli(sdkResult.error)) return sdkResult;
+      return this.executeCliSend(input);
+    }
+
+    return this.executeCliSend(input);
   }
 }
 

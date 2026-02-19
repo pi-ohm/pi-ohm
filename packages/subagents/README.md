@@ -84,6 +84,11 @@ Runtime backend is selected from `subagentBackend` config:
 - `none`: uses deterministic scaffold backend (echo-style debug output)
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
+Optional safety fallback:
+
+- set `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI=true` to fallback from `interactive-sdk` to
+  `interactive-shell` when SDK bootstrap/execution fails (`task_backend_execution_failed`)
+
 If output appears like prompt regurgitation, verify `subagentBackend` is not set to `none`.
 
 Nested interactive-shell outputs are sanitized to strip runtime metadata lines (`backend:`,
