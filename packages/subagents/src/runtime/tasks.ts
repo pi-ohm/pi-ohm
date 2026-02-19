@@ -257,6 +257,23 @@ function toTaskRuntimeSnapshot(entry: TaskRuntimeEntry): TaskRuntimeSnapshot {
   };
 }
 
+function recoverHydratedActiveRecord(input: {
+  readonly record: TaskRecord;
+  readonly nowEpochMs: number;
+}): TaskRecord {
+  const endedAtEpochMs = Math.max(input.record.startedAtEpochMs, input.nowEpochMs);
+
+  return {
+    ...input.record,
+    state: "failed",
+    activeToolCalls: 0,
+    updatedAtEpochMs: endedAtEpochMs,
+    endedAtEpochMs,
+    lastErrorCode: "task_rehydrated_incomplete",
+    lastErrorMessage: `Task '${input.record.id}' restored from persistence in non-terminal state '${input.record.state}' and was marked failed`,
+  };
+}
+
 function validateTaskRecord(record: TaskRecord): SubagentResult<TaskRecord, SubagentRuntimeError> {
   const parsed = parseTaskRecord(record);
   if (Result.isError(parsed)) {
@@ -945,10 +962,36 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       );
     }
 
+    let changed = false;
+
     for (const entry of loaded.value.entries) {
+      const normalizedRecord =
+        entry.record.state === "queued" || entry.record.state === "running"
+          ? recoverHydratedActiveRecord({
+              record: entry.record,
+              nowEpochMs: this.now(),
+            })
+          : entry.record;
+
+      const validatedRecord = validateTaskRecord(normalizedRecord);
+      if (Result.isError(validatedRecord)) {
+        this.persistenceDiagnostics.push(validatedRecord.error.message);
+        continue;
+      }
+
+      const rehydratedFromActive = entry.record.state !== validatedRecord.value.state;
+      if (rehydratedFromActive) {
+        changed = true;
+        this.persistenceDiagnostics.push(
+          `Task '${entry.record.id}' restored from non-terminal '${entry.record.state}' state and marked failed`,
+        );
+      }
+
       const hydrated: TaskRuntimeEntry = {
-        record: entry.record,
-        summary: entry.summary,
+        record: validatedRecord.value,
+        summary: rehydratedFromActive
+          ? `Task '${entry.record.id}' recovered from non-terminal state and marked failed`
+          : entry.summary,
         output: entry.output,
         backend: entry.backend,
         provider: entry.provider,
@@ -957,10 +1000,16 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         route: entry.route,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
-        errorCode: entry.errorCode,
-        errorMessage: entry.errorMessage,
+        errorCode: rehydratedFromActive ? "task_rehydrated_incomplete" : entry.errorCode,
+        errorMessage: rehydratedFromActive
+          ? `Task '${entry.record.id}' restored from persistence in non-terminal state '${entry.record.state}' and was marked failed`
+          : entry.errorMessage,
       };
-      this.tasks.set(entry.record.id, hydrated);
+      this.tasks.set(validatedRecord.value.id, hydrated);
+    }
+
+    if (changed) {
+      this.persistCurrentState();
     }
   }
 

@@ -399,6 +399,47 @@ defineTest("persistence restores snapshots across store instances", () => {
   });
 });
 
+defineTest("persistence marks non-terminal restored tasks as failed", () => {
+  withTempDir((dir) => {
+    const filePath = join(dir, "tasks.json");
+    let now = 1000;
+
+    const persistence = createJsonTaskRuntimePersistence(filePath);
+
+    const storeOne = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+    });
+
+    const created = storeOne.createTask({
+      taskId: "task_running_1",
+      subagent: finderSubagent,
+      description: "Long running task",
+      prompt: "stay running",
+      backend: "scaffold",
+      invocation: "task-routed",
+    });
+    assert.equal(Result.isOk(created), true);
+
+    now += 10;
+    const running = storeOne.markRunning("task_running_1", "Starting Finder");
+    assert.equal(Result.isOk(running), true);
+
+    now += 20;
+    const storeTwo = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+    });
+
+    const restored = storeTwo.getTask("task_running_1");
+    assert.notEqual(restored, undefined);
+    assert.equal(restored?.state, "failed");
+    assert.equal(restored?.activeToolCalls, 0);
+    assert.equal(restored?.errorCode, "task_rehydrated_incomplete");
+    assert.match(String(restored?.errorMessage), /non-terminal state/);
+  });
+});
+
 defineTest("retention policy expires terminal tasks with explicit error reason", () => {
   let now = 1000;
   const store = createInMemoryTaskRuntimeStore({
