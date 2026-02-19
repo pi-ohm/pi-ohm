@@ -84,6 +84,22 @@ Runtime backend is selected from `subagentBackend` config:
 - `none`: uses deterministic scaffold backend (echo-style debug output)
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
+Per-subagent model override is supported via `ohm.json`:
+
+```jsonc
+{
+  "subagents": {
+    "finder": { "model": "openai/gpt-4o" },
+    "oracle": { "model": "anthropic/claude-sonnet-4-5" },
+  },
+}
+```
+
+- format is required: `<provider>/<model>`
+- provider is normalized to lowercase
+- SDK backend validates against Pi model registry (built-ins + custom `models.json`)
+- interactive-shell backend forwards the same `--model` pattern to nested `pi`
+
 Optional safety fallback:
 
 - set `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI=true` to fallback from `interactive-sdk` to

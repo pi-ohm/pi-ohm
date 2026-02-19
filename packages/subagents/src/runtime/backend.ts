@@ -11,7 +11,7 @@ import {
   type ResourceLoader,
 } from "@mariozechner/pi-coding-agent";
 import { Result } from "better-result";
-import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import { getSubagentConfiguredModel, type OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../catalog";
 import { SubagentRuntimeError, type SubagentResult } from "../errors";
 import { parseTaskExecutionEventFromSdk, type TaskExecutionEvent } from "./events";
@@ -155,6 +155,7 @@ function isSdkFallbackToCliEnabled(): boolean {
 export interface PiCliRunnerInput {
   readonly cwd: string;
   readonly prompt: string;
+  readonly modelPattern?: string;
   readonly signal: AbortSignal | undefined;
   readonly timeoutMs: number;
 }
@@ -172,6 +173,7 @@ export type PiCliRunner = (input: PiCliRunnerInput) => Promise<PiCliRunnerResult
 export interface PiSdkRunnerInput {
   readonly cwd: string;
   readonly prompt: string;
+  readonly modelPattern?: string;
   readonly signal: AbortSignal | undefined;
   readonly timeoutMs: number;
 }
@@ -338,6 +340,22 @@ function normalizeRunnerOutput(output: string): string {
   return trimmed.length > 0 ? trimmed : "(no output)";
 }
 
+function parseProviderModelPattern(
+  modelPattern: string,
+): { readonly provider: string; readonly modelId: string } | undefined {
+  const trimmed = modelPattern.trim();
+  if (trimmed.length === 0) return undefined;
+
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex >= trimmed.length - 1) return undefined;
+
+  const provider = trimmed.slice(0, slashIndex).trim().toLowerCase();
+  const modelId = trimmed.slice(slashIndex + 1).trim();
+  if (provider.length === 0 || modelId.length === 0) return undefined;
+
+  return { provider, modelId };
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     const trimmed = error.message.trim();
@@ -376,22 +394,9 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   let timedOut = false;
   let aborted = false;
   let errorText: string | undefined;
-  let session:
-    | {
-        readonly prompt: (prompt: string) => Promise<void>;
-        readonly subscribe: (
-          listener: (event: {
-            readonly type: string;
-            readonly assistantMessageEvent?: {
-              readonly type: string;
-              readonly delta?: string;
-            };
-          }) => void,
-        ) => () => void;
-        readonly abort: () => Promise<void>;
-        readonly dispose: () => void;
-      }
-    | undefined;
+  let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
+  let resolvedModelProvider = "unavailable";
+  let resolvedModelId = "unavailable";
 
   try {
     const created = await createAgentSession({
@@ -411,6 +416,46 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     });
 
     session = created.session;
+
+    if (input.modelPattern) {
+      const parsed = parseProviderModelPattern(input.modelPattern);
+      if (!parsed) {
+        session.dispose();
+        return {
+          output: "",
+          events: [],
+          timedOut: false,
+          aborted: false,
+          error: `Invalid subagent model '${input.modelPattern}'. Expected '<provider>/<model>'.`,
+        };
+      }
+
+      const model = session.modelRegistry.find(parsed.provider, parsed.modelId);
+      if (!model) {
+        const providerCandidates = session.modelRegistry
+          .getAll()
+          .filter((candidate) => candidate.provider === parsed.provider)
+          .map((candidate) => candidate.id)
+          .slice(0, 8);
+        const providerHint =
+          providerCandidates.length > 0
+            ? ` Available for '${parsed.provider}': ${providerCandidates.join(", ")}.`
+            : "";
+
+        session.dispose();
+        return {
+          output: "",
+          events: [],
+          timedOut: false,
+          aborted: false,
+          error: `Configured subagent model '${input.modelPattern}' was not found.${providerHint}`,
+        };
+      }
+
+      await session.setModel(model);
+      resolvedModelProvider = model.provider;
+      resolvedModelId = model.id;
+    }
   } catch (error) {
     return {
       output: "",
@@ -486,8 +531,8 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   return {
     output: finalized.output,
     events: finalized.events,
-    provider: "unavailable",
-    model: "unavailable",
+    provider: resolvedModelProvider,
+    model: resolvedModelId,
     runtime: SDK_BACKEND_RUNTIME,
     timedOut: false,
     aborted: false,
@@ -508,14 +553,11 @@ export const runPiCliPrompt: PiCliRunner = async (
   }
 
   return new Promise<PiCliRunnerResult>((resolve) => {
-    const args = [
-      "--print",
-      "--no-session",
-      "--no-extensions",
-      "--tools",
-      PI_CLI_TOOLS,
-      input.prompt,
-    ];
+    const args = ["--print", "--no-session", "--no-extensions", "--tools", PI_CLI_TOOLS];
+    if (input.modelPattern) {
+      args.push("--model", input.modelPattern);
+    }
+    args.push(input.prompt);
 
     const proc = spawn("pi", args, {
       cwd: input.cwd,
@@ -688,6 +730,13 @@ function buildSendPrompt(input: TaskBackendSendInput): string {
   ].join("\n");
 }
 
+function resolveSubagentModelPattern(input: {
+  readonly config: OhmRuntimeConfig;
+  readonly subagent: OhmSubagentDefinition;
+}): string | undefined {
+  return getSubagentConfiguredModel(input.config, input.subagent.id);
+}
+
 export class ScaffoldTaskExecutionBackend implements TaskExecutionBackend {
   readonly id = "scaffold";
 
@@ -788,9 +837,14 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
   private async executeCliStart(
     input: TaskBackendStartInput,
   ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>> {
+    const modelPattern = resolveSubagentModelPattern({
+      config: input.config,
+      subagent: input.subagent,
+    });
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildStartPrompt(input),
+      modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
     });
@@ -829,9 +883,14 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
   private async executeCliSend(
     input: TaskBackendSendInput,
   ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>> {
+    const modelPattern = resolveSubagentModelPattern({
+      config: input.config,
+      subagent: input.subagent,
+    });
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildSendPrompt(input),
+      modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
     });
@@ -939,9 +998,15 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       return Result.err(toAbortedError(input.taskId, "execute_start"));
     }
 
+    const modelPattern = resolveSubagentModelPattern({
+      config: input.config,
+      subagent: input.subagent,
+    });
+
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildStartPrompt(input),
+      modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
     });
@@ -984,9 +1049,15 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       return Result.err(toAbortedError(input.taskId, "execute_send"));
     }
 
+    const modelPattern = resolveSubagentModelPattern({
+      config: input.config,
+      subagent: input.subagent,
+    });
+
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildSendPrompt(input),
+      modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
     });

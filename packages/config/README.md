@@ -19,3 +19,13 @@ Subagents runtime config highlights:
 - `subagents.permissions.default` (`allow|deny`)
 - `subagents.permissions.subagents` (per-subagent overrides)
 - `subagents.permissions.allowInternalRouting`
+- `subagents.<id>.model` (`<provider>/<model>`), e.g.:
+
+```jsonc
+{
+  "subagents": {
+    "finder": { "model": "openai/gpt-4o" },
+    "oracle": { "model": "anthropic/claude-sonnet-4-5" },
+  },
+}
+```

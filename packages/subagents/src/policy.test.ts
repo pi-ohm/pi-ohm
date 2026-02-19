@@ -22,6 +22,7 @@ const baseSubagentRuntimeConfig = {
     subagents: {},
     allowInternalRouting: false,
   },
+  profiles: {},
 } as const;
 
 const baseConfig: OhmRuntimeConfig = {

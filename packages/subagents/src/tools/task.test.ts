@@ -55,6 +55,7 @@ const runtimeSubagentsFixture = {
     subagents: {},
     allowInternalRouting: false,
   },
+  profiles: {},
 } as const;
 
 const runtimeConfigFixture: OhmRuntimeConfig = {

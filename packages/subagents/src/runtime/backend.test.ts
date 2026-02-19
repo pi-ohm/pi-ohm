@@ -21,7 +21,10 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
-function makeConfig(subagentBackend: OhmSubagentBackend): OhmRuntimeConfig {
+function makeConfig(
+  subagentBackend: OhmSubagentBackend,
+  profiles: Record<string, { model: string }> = {},
+): OhmRuntimeConfig {
   return {
     defaultMode: "smart",
     subagentBackend,
@@ -56,6 +59,7 @@ function makeConfig(subagentBackend: OhmSubagentBackend): OhmRuntimeConfig {
         subagents: {},
         allowInternalRouting: false,
       },
+      profiles,
     },
   };
 }
@@ -212,6 +216,40 @@ defineTest(
   },
 );
 
+defineTest("PiCliTaskExecutionBackend forwards configured subagent model pattern", async () => {
+  const requestedModels: string[] = [];
+
+  const runner: PiCliRunner = async (input) => {
+    if (input.modelPattern) {
+      requestedModels.push(input.modelPattern);
+    }
+
+    return {
+      exitCode: 0,
+      stdout: "finder online",
+      stderr: "",
+      timedOut: false,
+      aborted: false,
+    };
+  };
+
+  const backend = new PiCliTaskExecutionBackend(runner, 1_000);
+  const result = await backend.executeStart({
+    taskId: "task_4_model",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    prompt: "Find auth validation path and refresh flow",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-shell", {
+      finder: { model: "openai/gpt-4o" },
+    }),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  assert.deepEqual(requestedModels, ["openai/gpt-4o"]);
+});
+
 defineTest(
   "PiCliTaskExecutionBackend falls back to scaffold mode when backend is none",
   async () => {
@@ -334,6 +372,42 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
   assert.equal(result.value.model, "sdk-model");
   assert.equal(result.value.runtime, "pi-sdk");
   assert.equal(result.value.route, "interactive-sdk");
+});
+
+defineTest("PiSdkTaskExecutionBackend forwards configured subagent model pattern", async () => {
+  const requestedModels: string[] = [];
+
+  const runner: PiSdkRunner = async (input) => {
+    if (input.modelPattern) {
+      requestedModels.push(input.modelPattern);
+    }
+
+    return {
+      output: "sdk online",
+      events: [],
+      provider: "sdk-provider",
+      model: "sdk-model",
+      runtime: "pi-sdk",
+      timedOut: false,
+      aborted: false,
+    };
+  };
+
+  const backend = new PiSdkTaskExecutionBackend(runner, 1_000);
+  const result = await backend.executeStart({
+    taskId: "task_sdk_model",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation path",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk", {
+      finder: { model: "anthropic/claude-sonnet-4-5" },
+    }),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  assert.deepEqual(requestedModels, ["anthropic/claude-sonnet-4-5"]);
 });
 
 defineTest("Pi SDK stream capture records tool lifecycle and assistant deltas", () => {
