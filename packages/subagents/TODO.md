@@ -206,7 +206,7 @@ Ship SDK path safely with explicit migration and fallback controls.
   - Add optional fallback policy (`sdk->cli`) for recoverable bootstrap failures.
 - [x] **S14-T2: Error taxonomy mapping matrix**
   - Ensure SDK path maps to existing stable error codes/categories.
-- [ ] **S14-T3: Throughput + memory guardrails**
+- [x] **S14-T3: Throughput + memory guardrails**
   - Enforce timeline caps, update throttles, and runtime cleanup for async-heavy runs.
 - [ ] **S14-T4: Docs + operator cookbook**
   - Sync-vs-async recommendation matrix, backend tradeoffs, troubleshooting.

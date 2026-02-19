@@ -615,6 +615,46 @@ defineTest("retention policy expires terminal tasks with explicit error reason",
   assert.match(String(lookup?.errorMessage), /retention policy/);
 });
 
+defineTest("capacity policy evicts oldest terminal tasks when maxTasks is exceeded", () => {
+  let now = 1000;
+  const store = createInMemoryTaskRuntimeStore({
+    now: () => now,
+    retentionMs: 60_000,
+    maxTasks: 2,
+  });
+
+  for (const taskId of ["task_1", "task_2", "task_3"]) {
+    const created = store.createTask({
+      taskId,
+      subagent: finderSubagent,
+      description: `Task ${taskId}`,
+      prompt: `Prompt ${taskId}`,
+      backend: "scaffold",
+      invocation: "task-routed",
+    });
+    assert.equal(Result.isOk(created), true);
+
+    now += 5;
+    const running = store.markRunning(taskId, `Running ${taskId}`);
+    assert.equal(Result.isOk(running), true);
+
+    now += 5;
+    const succeeded = store.markSucceeded(taskId, `Done ${taskId}`, `Output ${taskId}`);
+    assert.equal(Result.isOk(succeeded), true);
+  }
+
+  const remainingIds = store
+    .listTasks()
+    .map((snapshot) => snapshot.id)
+    .sort();
+  assert.deepEqual(remainingIds, ["task_2", "task_3"]);
+
+  const evicted = store.getTasks(["task_1"])[0];
+  assert.equal(evicted?.found, false);
+  assert.equal(evicted?.errorCode, "task_expired");
+  assert.match(String(evicted?.errorMessage), /capacity policy/);
+});
+
 defineTest("corrupt persistence snapshot falls back to empty store and records diagnostics", () => {
   withTempDir((dir) => {
     const filePath = join(dir, "tasks.json");

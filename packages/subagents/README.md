@@ -160,7 +160,15 @@ Persistence details:
 
 - default snapshot path: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.subagents.tasks.json`
 - retention window is configurable via `OHM_SUBAGENTS_TASK_RETENTION_MS` (positive integer ms)
+- per-task structured event timeline cap is configurable via `OHM_SUBAGENTS_TASK_MAX_EVENTS`
+  (default `120`)
+- in-memory task registry capacity is configurable via `OHM_SUBAGENTS_TASK_MAX_ENTRIES`
+  (default `200`); oldest terminal tasks are evicted first once cap is exceeded
+- expired-task reason cache is configurable via `OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES`
+  (default `500`)
 - corrupt snapshot files are auto-recovered to `*.corrupt-<epoch>` and runtime falls back to empty state
+- inline `onUpdate` emission is throttled via `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS`
+  (default `120ms`) with duplicate-frame suppression to avoid async wait/update spam
 
 ## Migration notes
 

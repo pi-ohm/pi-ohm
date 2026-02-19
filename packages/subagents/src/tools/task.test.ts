@@ -1083,6 +1083,61 @@ defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {
   await Promise.resolve();
 });
 
+defineTest("runTaskToolMvp throttles duplicate wait progress updates", async () => {
+  const previousThrottle = process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+  process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "1000";
+
+  try {
+    const backend = new DeferredBackend();
+    const deps = makeDeps({ backend });
+
+    const started = await runTask({
+      params: {
+        op: "start",
+        async: true,
+        subagent_type: "finder",
+        description: "Throttle wait progress",
+        prompt: "keep running",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    assert.equal(started.details.status, "running");
+
+    const updates: string[] = [];
+    const waited = await runTask({
+      params: {
+        op: "wait",
+        ids: ["task_test_0001"],
+        timeout_ms: 260,
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: (partial) => {
+        updates.push(JSON.stringify(partial.details));
+      },
+      deps,
+    });
+
+    assert.equal(waited.details.error_code, "task_wait_timeout");
+    assert.equal(updates.length, 2);
+    assert.notEqual(updates[0], updates[1]);
+
+    backend.resolveSuccess(0, "Finder: Throttle wait progress", "done output");
+    await Promise.resolve();
+    await Promise.resolve();
+  } finally {
+    if (previousThrottle === undefined) {
+      delete process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+    } else {
+      process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = previousThrottle;
+    }
+  }
+});
+
 defineTest("runTaskToolMvp status/wait include terminal outputs for async tasks", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });

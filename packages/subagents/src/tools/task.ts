@@ -175,6 +175,28 @@ function resolveCollapsedResultPreviewVisualLines(): number {
   return 12;
 }
 
+function resolveTaskRetentionMs(): number | undefined {
+  return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_RETENTION_MS");
+}
+
+function resolveTaskMaxEventsPerTask(): number | undefined {
+  return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_MAX_EVENTS");
+}
+
+function resolveTaskMaxEntries(): number | undefined {
+  return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_MAX_ENTRIES");
+}
+
+function resolveTaskMaxExpiredEntries(): number | undefined {
+  return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES");
+}
+
+function resolveOnUpdateThrottleMs(): number {
+  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS");
+  if (fromEnv !== undefined) return fromEnv;
+  return 120;
+}
+
 function resolveDefaultTaskPersistencePath(): string {
   const baseDir =
     process.env.PI_CONFIG_DIR ??
@@ -187,7 +209,10 @@ function resolveDefaultTaskPersistencePath(): string {
 
 const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore({
   persistence: createJsonTaskRuntimePersistence(resolveDefaultTaskPersistencePath()),
-  retentionMs: parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_RETENTION_MS"),
+  retentionMs: resolveTaskRetentionMs(),
+  maxEventsPerTask: resolveTaskMaxEventsPerTask(),
+  maxTasks: resolveTaskMaxEntries(),
+  maxExpiredTasks: resolveTaskMaxExpiredEntries(),
 });
 
 let taskSequence = 0;
@@ -1541,7 +1566,57 @@ interface RunTaskToolInput {
 type TaskToolUiHandle = NonNullable<RunTaskToolInput["ui"]>;
 const liveUiBySurface = new WeakMap<TaskToolUiHandle, TaskLiveUiCoordinator>();
 const liveUiHeartbeatBySurface = new WeakMap<TaskToolUiHandle, ReturnType<typeof setInterval>>();
+const onUpdateLastEmissionByCallback = new WeakMap<
+  AgentToolUpdateCallback<TaskToolResultDetails>,
+  {
+    readonly atEpochMs: number;
+    readonly signature: string;
+  }
+>();
 const LIVE_UI_HEARTBEAT_MS = 120;
+
+function isThrottleBypassUpdate(details: TaskToolResultDetails): boolean {
+  if (
+    details.status === "succeeded" ||
+    details.status === "failed" ||
+    details.status === "cancelled"
+  ) {
+    return true;
+  }
+
+  if (details.op === "wait") {
+    if (details.done === true) return true;
+    if (details.wait_status === "timeout" || details.wait_status === "aborted") return true;
+  }
+
+  return false;
+}
+
+function shouldEmitOnUpdate(
+  callback: AgentToolUpdateCallback<TaskToolResultDetails>,
+  details: TaskToolResultDetails,
+): boolean {
+  const nextSignature = JSON.stringify(details);
+  const nowEpochMs = Date.now();
+  const previous = onUpdateLastEmissionByCallback.get(callback);
+
+  if (previous && previous.signature === nextSignature) {
+    return false;
+  }
+
+  const bypassThrottle = isThrottleBypassUpdate(details);
+  const throttleMs = resolveOnUpdateThrottleMs();
+
+  if (!bypassThrottle && previous && nowEpochMs - previous.atEpochMs < throttleMs) {
+    return false;
+  }
+
+  onUpdateLastEmissionByCallback.set(callback, {
+    atEpochMs: nowEpochMs,
+    signature: nextSignature,
+  });
+  return true;
+}
 
 function getTaskLiveUiCoordinator(ui: TaskToolUiHandle): TaskLiveUiCoordinator {
   const existing = liveUiBySurface.get(ui);
@@ -1611,6 +1686,10 @@ function emitTaskRuntimeUpdate(input: {
   }
 
   if (!input.onUpdate) {
+    return;
+  }
+
+  if (!shouldEmitOnUpdate(input.onUpdate, input.details)) {
     return;
   }
 

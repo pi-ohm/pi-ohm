@@ -19,6 +19,8 @@ export interface TaskRuntimeObservability {
 const TASK_PERSISTENCE_SCHEMA_VERSION = 1;
 const DEFAULT_RETENTION_MS = 1000 * 60 * 60 * 24;
 const DEFAULT_MAX_EVENTS_PER_TASK = 120;
+const DEFAULT_MAX_TASKS = 200;
+const DEFAULT_MAX_EXPIRED_TASKS = 500;
 
 export interface TaskRuntimeSnapshot {
   readonly id: string;
@@ -748,6 +750,8 @@ export interface InMemoryTaskRuntimeStoreOptions {
   readonly retentionMs?: number;
   readonly persistence?: TaskRuntimePersistence;
   readonly maxEventsPerTask?: number;
+  readonly maxTasks?: number;
+  readonly maxExpiredTasks?: number;
 }
 
 class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
@@ -758,6 +762,8 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
   private readonly retentionMs: number;
   private readonly persistence: TaskRuntimePersistence | undefined;
   private readonly maxEventsPerTask: number;
+  private readonly maxTasks: number;
+  private readonly maxExpiredTasks: number;
 
   constructor(options: InMemoryTaskRuntimeStoreOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -770,6 +776,12 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       options.maxEventsPerTask !== undefined && options.maxEventsPerTask > 0
         ? options.maxEventsPerTask
         : DEFAULT_MAX_EVENTS_PER_TASK;
+    this.maxTasks =
+      options.maxTasks !== undefined && options.maxTasks > 0 ? options.maxTasks : DEFAULT_MAX_TASKS;
+    this.maxExpiredTasks =
+      options.maxExpiredTasks !== undefined && options.maxExpiredTasks > 0
+        ? options.maxExpiredTasks
+        : DEFAULT_MAX_EXPIRED_TASKS;
 
     this.hydrateFromPersistence();
     this.pruneExpiredTerminalTasks();
@@ -788,6 +800,8 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         }),
       );
     }
+
+    this.expiredTasks.delete(input.taskId);
 
     const now = this.now();
     const initialRecord: TaskRecord = {
@@ -816,6 +830,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     };
 
     this.tasks.set(input.taskId, entry);
+    this.pruneTaskCapacity();
     this.persistCurrentState();
     return Result.ok(toTaskRuntimeSnapshot(entry));
   }
@@ -1259,6 +1274,12 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       this.tasks.set(validatedRecord.value.id, hydrated);
     }
 
+    const sizeBeforeCapacityPrune = this.tasks.size;
+    this.pruneTaskCapacity();
+    if (this.tasks.size !== sizeBeforeCapacityPrune) {
+      changed = true;
+    }
+
     if (changed) {
       this.persistCurrentState();
     }
@@ -1276,7 +1297,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       if (ageMs < this.retentionMs) continue;
 
       this.tasks.delete(taskId);
-      this.expiredTasks.set(
+      this.rememberExpiredTask(
         taskId,
         `Task id '${taskId}' expired by retention policy after ${this.retentionMs}ms`,
       );
@@ -1285,6 +1306,39 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
 
     if (changed) {
       this.persistCurrentState();
+    }
+  }
+
+  private rememberExpiredTask(taskId: string, reason: string): void {
+    this.expiredTasks.delete(taskId);
+    this.expiredTasks.set(taskId, reason);
+
+    while (this.expiredTasks.size > this.maxExpiredTasks) {
+      const oldest = this.expiredTasks.keys().next();
+      if (oldest.done) return;
+      this.expiredTasks.delete(oldest.value);
+    }
+  }
+
+  private pruneTaskCapacity(): void {
+    if (this.tasks.size <= this.maxTasks) return;
+
+    const evictable = [...this.tasks.entries()]
+      .filter(([, entry]) => isTerminalState(entry.record.state))
+      .sort((left, right) => {
+        const leftEnded = left[1].record.endedAtEpochMs ?? left[1].record.updatedAtEpochMs;
+        const rightEnded = right[1].record.endedAtEpochMs ?? right[1].record.updatedAtEpochMs;
+        return leftEnded - rightEnded;
+      });
+
+    for (const [taskId] of evictable) {
+      if (this.tasks.size <= this.maxTasks) return;
+
+      this.tasks.delete(taskId);
+      this.rememberExpiredTask(
+        taskId,
+        `Task id '${taskId}' evicted by capacity policy after reaching max ${this.maxTasks} tasks`,
+      );
     }
   }
 
