@@ -7,7 +7,7 @@
       "model": "openai-codex/gpt-5.2:xhigh"
     },
     "finder": {
-      "model": "openai-codex/gpt-5.3-codex-spark:high"
+      "model": "github-copilot/gemini-3-flash-preview"
     }
   }
 }

@@ -178,38 +178,47 @@ function parseOutputSections(output: string): {
   };
 }
 
-function summarizeToolPayload(payload: string | undefined): string | undefined {
-  if (!payload) return undefined;
-  const trimmed = payload.trim();
-  if (trimmed.length === 0) return undefined;
-  if (trimmed.length <= 90) return trimmed;
-  return `${trimmed.slice(0, 89)}…`;
+type ToolCallOutcome = "running" | "success" | "error";
+
+function formatToolName(toolName: string): string {
+  if (toolName.length === 0) return "tool";
+  return `${toolName[0]?.toUpperCase() ?? ""}${toolName.slice(1)}`;
 }
 
 function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly string[] {
-  const rows: string[] = [];
+  const order: string[] = [];
+  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome }>();
 
   for (const event of events) {
-    if (event.type === "tool_start") {
-      const payload = summarizeToolPayload(event.argsText);
-      rows.push(payload ? `○ ${event.toolName} ${payload}` : `○ ${event.toolName}`);
+    if (event.type !== "tool_start" && event.type !== "tool_update" && event.type !== "tool_end") {
       continue;
     }
 
-    if (event.type === "tool_update") {
-      const payload = summarizeToolPayload(event.partialText);
-      rows.push(payload ? `… ${event.toolName} ${payload}` : `… ${event.toolName}`);
+    const existing = calls.get(event.toolCallId);
+    if (!existing) {
+      order.push(event.toolCallId);
+      calls.set(event.toolCallId, {
+        toolName: event.toolName,
+        outcome:
+          event.type === "tool_end" ? (event.status === "error" ? "error" : "success") : "running",
+      });
       continue;
     }
 
     if (event.type === "tool_end") {
-      const payload = summarizeToolPayload(event.resultText);
-      const marker = event.status === "error" ? "✕" : "✓";
-      rows.push(payload ? `${marker} ${event.toolName} ${payload}` : `${marker} ${event.toolName}`);
+      calls.set(event.toolCallId, {
+        toolName: existing.toolName,
+        outcome: event.status === "error" ? "error" : "success",
+      });
     }
   }
 
-  return rows;
+  return order.map((toolCallId) => {
+    const call = calls.get(toolCallId);
+    if (!call) return "○ Tool";
+    const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
+    return `${marker} ${formatToolName(call.toolName)}`;
+  });
 }
 
 function assistantTextFromEvents(events: readonly TaskExecutionEvent[]): string | undefined {

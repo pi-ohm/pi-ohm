@@ -31,7 +31,7 @@ function markerForStatus(entry: SubagentTaskTreeEntry): string {
   if (entry.status === "succeeded") return "✓";
   if (entry.status === "failed") return "✕";
   if (entry.status === "cancelled") return "○";
-  const frameIndex = entry.spinnerFrame ?? 0;
+  const frameIndex = entry.spinnerFrame ?? Math.floor(Date.now() / 80);
   return SPINNER_FRAMES[Math.abs(frameIndex) % SPINNER_FRAMES.length] ?? "⠋";
 }
 
@@ -122,11 +122,6 @@ function resolvePromptLineLimit(options: SubagentTaskTreeRenderOptions): number 
   return clampPositive(options.maxPromptLines, fallback);
 }
 
-function resolveToolCallLimit(options: SubagentTaskTreeRenderOptions): number {
-  const fallback = options.compact ? 2 : 8;
-  return clampPositive(options.maxToolCalls, fallback);
-}
-
 function resolveResultLineLimit(options: SubagentTaskTreeRenderOptions): number {
   const fallback = options.compact ? 1 : 4;
   return clampPositive(options.maxResultLines, fallback);
@@ -140,19 +135,9 @@ function formatEntryChildren(
 
   children.push({ text: entry.prompt.trim(), maxLines: resolvePromptLineLimit(options) });
 
-  const toolCallLimit = resolveToolCallLimit(options);
-  const normalizedToolCalls = entry.toolCalls
-    .map((line) => normalizeToolCall(line))
-    .slice(0, toolCallLimit);
+  const normalizedToolCalls = entry.toolCalls.map((line) => normalizeToolCall(line));
   for (const toolCall of normalizedToolCalls) {
     children.push({ text: toolCall, maxLines: 1 });
-  }
-
-  if (entry.toolCalls.length > normalizedToolCalls.length) {
-    children.push({
-      text: `… ${entry.toolCalls.length - normalizedToolCalls.length} more tool call(s)`,
-      maxLines: 1,
-    });
   }
 
   children.push({ text: entry.result.trim(), maxLines: resolveResultLineLimit(options) });
@@ -222,7 +207,11 @@ export class SubagentTaskTreeComponent implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedLines && this.cachedWidth === width) {
+    const hasAnimatedEntries = this.entries.some(
+      (entry) => entry.status === "running" || entry.status === "queued",
+    );
+
+    if (!hasAnimatedEntries && this.cachedLines && this.cachedWidth === width) {
       return [...this.cachedLines];
     }
 
@@ -232,8 +221,13 @@ export class SubagentTaskTreeComponent implements Component {
       options: this.options,
     });
 
-    this.cachedWidth = width;
-    this.cachedLines = rendered;
+    if (!hasAnimatedEntries) {
+      this.cachedWidth = width;
+      this.cachedLines = rendered;
+    } else {
+      this.cachedWidth = undefined;
+      this.cachedLines = undefined;
+    }
     return [...rendered];
   }
 

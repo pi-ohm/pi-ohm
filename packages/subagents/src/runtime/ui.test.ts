@@ -291,12 +291,12 @@ defineTest("createTaskRuntimePresentation prefers structured event tool rows", (
   }
 
   assert.equal(
-    entry.toolCalls.some((line) => line.includes("○ read")),
+    entry.toolCalls.some((line) => line.includes("○ Read")),
     true,
   );
   assert.equal(
-    entry.toolCalls.some((line) => line.includes("… read")),
-    true,
+    entry.toolCalls.some((line) => line.includes("… Read")),
+    false,
   );
   assert.match(entry.result, /Scanning file/);
 });

@@ -31,6 +31,7 @@ import {
 import { createTaskRuntimePresentation } from "../runtime/ui";
 import type { TaskExecutionEvent } from "../runtime/events";
 import {
+  createSubagentTaskTreeComponent,
   renderSubagentTaskTreeLines,
   type SubagentTaskTreeEntry,
   type SubagentTaskTreeStatus,
@@ -502,38 +503,47 @@ function transcriptLines(output: string): readonly string[] {
     .filter((line) => line.length > 0);
 }
 
-function summarizeToolPayload(payload: string | undefined): string | undefined {
-  if (!payload) return undefined;
-  const trimmed = payload.trim();
-  if (trimmed.length === 0) return undefined;
-  if (trimmed.length <= 90) return trimmed;
-  return `${trimmed.slice(0, 89)}…`;
+type ToolCallOutcome = "running" | "success" | "error";
+
+function formatToolName(toolName: string): string {
+  if (toolName.length === 0) return "tool";
+  return `${toolName[0]?.toUpperCase() ?? ""}${toolName.slice(1)}`;
 }
 
 function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
-  const rows: string[] = [];
+  const order: string[] = [];
+  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome }>();
 
   for (const event of events) {
-    if (event.type === "tool_start") {
-      const payload = summarizeToolPayload(event.argsText);
-      rows.push(payload ? `○ ${event.toolName} ${payload}` : `○ ${event.toolName}`);
+    if (event.type !== "tool_start" && event.type !== "tool_update" && event.type !== "tool_end") {
       continue;
     }
 
-    if (event.type === "tool_update") {
-      const payload = summarizeToolPayload(event.partialText);
-      rows.push(payload ? `… ${event.toolName} ${payload}` : `… ${event.toolName}`);
+    const existing = calls.get(event.toolCallId);
+    if (!existing) {
+      order.push(event.toolCallId);
+      calls.set(event.toolCallId, {
+        toolName: event.toolName,
+        outcome:
+          event.type === "tool_end" ? (event.status === "error" ? "error" : "success") : "running",
+      });
       continue;
     }
 
     if (event.type === "tool_end") {
-      const payload = summarizeToolPayload(event.resultText);
-      const marker = event.status === "error" ? "✕" : "✓";
-      rows.push(payload ? `${marker} ${event.toolName} ${payload}` : `${marker} ${event.toolName}`);
+      calls.set(event.toolCallId, {
+        toolName: existing.toolName,
+        outcome: event.status === "error" ? "error" : "success",
+      });
     }
   }
 
-  return rows;
+  return order.map((toolCallId) => {
+    const call = calls.get(toolCallId);
+    if (!call) return "○ Tool";
+    const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
+    return `${marker} ${formatToolName(call.toolName)}`;
+  });
 }
 
 function assistantTextFromEvents(events: readonly TaskExecutionEvent[]): string | undefined {
@@ -832,10 +842,7 @@ function renderBackgroundLine(entry: SubagentTaskTreeEntry): string {
 }
 
 function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
-  const entries =
-    details.items && details.items.length > 0
-      ? details.items.map((item) => buildTreeEntryFromItem(item, expanded))
-      : [buildTreeEntryFromDetails(details, expanded)];
+  const entries = toTaskTreeEntries(details, expanded);
 
   if (!expanded && entries.every((entry) => isBackgroundStatus(entry.status))) {
     const lines = entries.map((entry) => renderBackgroundLine(entry));
@@ -865,6 +872,25 @@ function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean)
   }
 
   return lines.join("\n");
+}
+
+function toTaskTreeEntries(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+): readonly SubagentTaskTreeEntry[] {
+  return details.items && details.items.length > 0
+    ? details.items.map((item) => buildTreeEntryFromItem(item, expanded))
+    : [buildTreeEntryFromDetails(details, expanded)];
+}
+
+function createTaskToolResultTreeComponent(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+): { render(width: number): string[]; invalidate(): void } {
+  return createSubagentTaskTreeComponent({
+    entries: toTaskTreeEntries(details, expanded),
+    options: treeRenderOptions(expanded),
+  });
 }
 
 function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): string {
@@ -2906,6 +2932,10 @@ export function registerTaskTool(
     },
     renderCall: (args, _theme) => new Text(formatTaskToolCallFromRegistrationArgs(args), 0, 0),
     renderResult: (result, _options, _theme) => {
+      if (isTaskToolResultDetails(result.details) && !isOhmDebugEnabled()) {
+        return createTaskToolResultTreeComponent(result.details, _options.expanded);
+      }
+
       const text = isTaskToolResultDetails(result.details)
         ? detailsToText(result.details, _options.expanded)
         : result.content

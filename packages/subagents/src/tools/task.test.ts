@@ -371,7 +371,7 @@ defineTest("formatTaskToolResult renders collection items", () => {
   );
 
   assert.doesNotMatch(compact, /items:/);
-  assert.match(compact, /⠋ Finder · Auth flow scan/);
+  assert.match(compact, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Auth flow scan/);
   assert.match(compact, /✕ Task task_missing/);
   assert.match(compact, /Unknown task id/);
 });
@@ -459,13 +459,13 @@ defineTest("formatTaskToolResult prefers structured tool_rows over output scrapi
       output: "final summary only",
       output_available: true,
       backend: "test-backend",
-      tool_rows: ['○ read {"path":"src/index.ts"}', '✓ read {"ok":true}'],
+      tool_rows: ["○ Read", "✓ Read"],
     },
     false,
   );
 
-  assert.match(compact, /○ read/);
-  assert.match(compact, /✓ read/);
+  assert.match(compact, /○ Read/);
+  assert.match(compact, /✓ Read/);
 });
 
 defineTest("formatTaskToolResult uses minimal inline style for running background tasks", () => {
@@ -777,7 +777,7 @@ defineTest("runTaskToolMvp streams sdk tool rows into onUpdate while running", a
     assert.equal(runningToolRows.length > 0, true);
     const flattened = runningToolRows.flat();
     assert.equal(
-      flattened.some((row) => row.includes("○ read")),
+      flattened.some((row) => row.includes("Read")),
       true,
     );
   } finally {
@@ -1864,10 +1864,7 @@ defineTest("runTaskToolMvp exposes tool_rows from structured backend events", as
   });
 
   assert.equal(started.details.status, "succeeded");
-  assert.deepEqual(Reflect.get(started.details, "tool_rows"), [
-    '○ read {"path":"src/index.ts"}',
-    '✓ read {"ok":true}',
-  ]);
+  assert.deepEqual(Reflect.get(started.details, "tool_rows"), ["✓ Read"]);
   assert.equal(Reflect.get(started.details, "event_count"), 2);
 });
 
