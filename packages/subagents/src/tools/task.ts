@@ -29,6 +29,7 @@ import {
   type TaskLiveUiCoordinator,
 } from "../runtime/live-ui";
 import { createTaskRuntimePresentation } from "../runtime/ui";
+import type { TaskExecutionEvent } from "../runtime/events";
 import {
   renderSubagentTaskTreeLines,
   type SubagentTaskTreeEntry,
@@ -70,6 +71,8 @@ export interface TaskToolItemDetails {
   readonly error_code?: string;
   readonly error_category?: TaskErrorCategory;
   readonly error_message?: string;
+  readonly tool_rows?: readonly string[];
+  readonly event_count?: number;
 }
 
 export interface TaskToolResultDetails {
@@ -95,6 +98,8 @@ export interface TaskToolResultDetails {
   readonly error_code?: string;
   readonly error_category?: TaskErrorCategory;
   readonly error_message?: string;
+  readonly tool_rows?: readonly string[];
+  readonly event_count?: number;
   readonly items?: readonly TaskToolItemDetails[];
   readonly timed_out?: boolean;
   readonly done?: boolean;
@@ -470,6 +475,40 @@ function transcriptLines(output: string): readonly string[] {
     .filter((line) => line.length > 0);
 }
 
+function summarizeToolPayload(payload: string | undefined): string | undefined {
+  if (!payload) return undefined;
+  const trimmed = payload.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length <= 90) return trimmed;
+  return `${trimmed.slice(0, 89)}…`;
+}
+
+function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
+  const rows: string[] = [];
+
+  for (const event of events) {
+    if (event.type === "tool_start") {
+      const payload = summarizeToolPayload(event.argsText);
+      rows.push(payload ? `○ ${event.toolName} ${payload}` : `○ ${event.toolName}`);
+      continue;
+    }
+
+    if (event.type === "tool_update") {
+      const payload = summarizeToolPayload(event.partialText);
+      rows.push(payload ? `… ${event.toolName} ${payload}` : `… ${event.toolName}`);
+      continue;
+    }
+
+    if (event.type === "tool_end") {
+      const payload = summarizeToolPayload(event.resultText);
+      const marker = event.status === "error" ? "✕" : "✓";
+      rows.push(payload ? `${marker} ${event.toolName} ${payload}` : `${marker} ${event.toolName}`);
+    }
+  }
+
+  return rows;
+}
+
 function toTreeStatus(status: TaskToolStatus): SubagentTaskTreeStatus {
   if (status === "queued") return "queued";
   if (status === "running") return "running";
@@ -658,7 +697,7 @@ function buildTreeEntryFromDetails(
       summary: details.summary,
     }),
     prompt: details.prompt ?? details.description ?? details.summary,
-    toolCalls: sections?.toolCalls ?? [],
+    toolCalls: details.tool_rows ?? sections?.toolCalls ?? [],
     result,
   };
 }
@@ -708,7 +747,7 @@ function buildTreeEntryFromItem(
       summary: item.summary,
     }),
     prompt: item.prompt ?? item.description ?? item.summary,
-    toolCalls: sections?.toolCalls ?? [],
+    toolCalls: item.tool_rows ?? sections?.toolCalls ?? [],
     result,
   };
 }
@@ -814,7 +853,14 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (details.error_code) lines.push(`error_code: ${details.error_code}`);
   if (details.error_category) lines.push(`error_category: ${details.error_category}`);
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
+  if (typeof details.event_count === "number") lines.push(`event_count: ${details.event_count}`);
   if (details.timed_out) lines.push("timed_out: true");
+  if (details.tool_rows && details.tool_rows.length > 0) {
+    lines.push("", "tool_rows:");
+    for (const toolRow of details.tool_rows) {
+      lines.push(`- ${toolRow}`);
+    }
+  }
 
   if (details.output_available && details.output) {
     lines.push("", "output:");
@@ -877,6 +923,13 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
         if (item.error_code) lines.push(`  error_code: ${item.error_code}`);
         if (item.error_category) lines.push(`  error_category: ${item.error_category}`);
         if (item.error_message) lines.push(`  error_message: ${item.error_message}`);
+        if (typeof item.event_count === "number") lines.push(`  event_count: ${item.event_count}`);
+        if (item.tool_rows && item.tool_rows.length > 0) {
+          lines.push("  tool_rows:");
+          for (const toolRow of item.tool_rows) {
+            lines.push(`  - ${toolRow}`);
+          }
+        }
       } else if (item.output_available && item.output) {
         lines.push("  output:");
         for (const outputLine of item.output.split("\n")) {
@@ -1112,6 +1165,7 @@ function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
 
 function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
   const output = resolveSnapshotOutput(snapshot);
+  const toolRows = toToolRows(snapshot.events);
 
   return {
     id: snapshot.id,
@@ -1136,6 +1190,8 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     ended_at_epoch_ms: snapshot.endedAtEpochMs,
     error_code: snapshot.errorCode,
     error_message: snapshot.errorMessage,
+    tool_rows: toolRows,
+    event_count: snapshot.events.length,
   };
 }
 
@@ -1148,6 +1204,7 @@ function snapshotToTaskResultDetails(
     typeof output === "string" && output.length > 0
       ? toTaskOutputPayload(output)
       : resolveSnapshotOutput(snapshot);
+  const toolRows = toToolRows(snapshot.events);
 
   return {
     op,
@@ -1170,6 +1227,8 @@ function snapshotToTaskResultDetails(
     invocation: snapshot.invocation,
     error_code: snapshot.errorCode,
     error_message: snapshot.errorMessage,
+    tool_rows: toolRows,
+    event_count: snapshot.events.length,
   };
 }
 
@@ -1242,6 +1301,7 @@ async function runTaskExecutionLifecycle(input: {
       endedAtEpochMs: Date.now(),
       errorCode: running.error.code,
       errorMessage: running.error.message,
+      events: [],
     };
 
     emitTaskRuntimeUpdate({
@@ -1345,6 +1405,30 @@ async function runTaskExecutionLifecycle(input: {
     });
 
     return fallback;
+  }
+
+  if (execution.value.events && execution.value.events.length > 0) {
+    const appended = input.deps.taskStore.appendEvents(input.taskId, execution.value.events);
+    if (Result.isError(appended)) {
+      const failed = input.deps.taskStore.markFailed(
+        input.taskId,
+        appended.error.message,
+        appended.error.code,
+        appended.error.message,
+      );
+
+      if (Result.isOk(failed)) {
+        emitTaskRuntimeUpdate({
+          details: snapshotToTaskResultDetails("start", failed.value, failed.value.output),
+          deps: input.deps,
+          hasUI: input.hasUI,
+          ui: input.ui,
+          onUpdate: input.onUpdate,
+        });
+
+        return failed.value;
+      }
+    }
   }
 
   const succeeded = input.deps.taskStore.markSucceeded(
@@ -2437,6 +2521,55 @@ async function runTaskSend(
     });
 
     return result;
+  }
+
+  if (sendResult.value.events && sendResult.value.events.length > 0) {
+    const appended = input.deps.taskStore.appendEvents(
+      interaction.value.id,
+      sendResult.value.events,
+    );
+    if (Result.isError(appended)) {
+      const failed = input.deps.taskStore.markFailed(
+        interaction.value.id,
+        appended.error.message,
+        appended.error.code,
+        appended.error.message,
+      );
+
+      if (Result.isError(failed)) {
+        const result = toAgentToolResult({
+          op: "send",
+          status: "failed",
+          task_id: interaction.value.id,
+          summary: failed.error.message,
+          backend: backendId,
+          error_code: failed.error.code,
+          error_message: failed.error.message,
+        });
+
+        emitTaskRuntimeUpdate({
+          details: result.details,
+          deps: input.deps,
+          hasUI: input.hasUI,
+          ui: input.ui,
+          onUpdate: input.onUpdate,
+        });
+
+        return result;
+      }
+
+      const result = toAgentToolResult(
+        snapshotToTaskResultDetails("send", failed.value, failed.value.output),
+      );
+      emitTaskRuntimeUpdate({
+        details: result.details,
+        deps: input.deps,
+        hasUI: input.hasUI,
+        ui: input.ui,
+        onUpdate: input.onUpdate,
+      });
+      return result;
+    }
   }
 
   const completed = input.deps.taskStore.markInteractionComplete(

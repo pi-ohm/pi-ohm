@@ -356,6 +356,54 @@ defineTest("setExecutionPromise and getExecutionPromise round-trip", async () =>
   assert.equal(resolved, true);
 });
 
+defineTest("appendEvents keeps event ordering with bounded retention", () => {
+  const { store } = makeStoreWithClock();
+
+  const created = store.createTask({
+    taskId: "task_1",
+    subagent: finderSubagent,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+  assert.equal(Result.isOk(created), true);
+
+  const appended = store.appendEvents("task_1", [
+    {
+      type: "tool_start",
+      toolCallId: "tool_1",
+      toolName: "read",
+      argsText: '{"path":"src/index.ts"}',
+      atEpochMs: 1010,
+    },
+    {
+      type: "assistant_text_delta",
+      delta: "working...",
+      atEpochMs: 1011,
+    },
+    {
+      type: "tool_end",
+      toolCallId: "tool_1",
+      toolName: "read",
+      resultText: '{"ok":true}',
+      status: "success",
+      atEpochMs: 1012,
+    },
+  ]);
+
+  assert.equal(Result.isOk(appended), true);
+  if (Result.isError(appended)) {
+    assert.fail("Expected appendEvents to succeed");
+  }
+
+  const snapshot = store.getTask("task_1");
+  assert.notEqual(snapshot, undefined);
+  assert.equal(snapshot?.events.length, 3);
+  assert.equal(snapshot?.events[0]?.type, "tool_start");
+  assert.equal(snapshot?.events[2]?.type, "tool_end");
+});
+
 defineTest("persistence restores snapshots across store instances", () => {
   withTempDir((dir) => {
     const filePath = join(dir, "tasks.json");
@@ -437,6 +485,68 @@ defineTest("persistence marks non-terminal restored tasks as failed", () => {
     assert.equal(restored?.activeToolCalls, 0);
     assert.equal(restored?.errorCode, "task_rehydrated_incomplete");
     assert.match(String(restored?.errorMessage), /non-terminal state/);
+  });
+});
+
+defineTest("persistence restores bounded task events", () => {
+  withTempDir((dir) => {
+    const filePath = join(dir, "tasks.json");
+    let now = 1000;
+
+    const persistence = createJsonTaskRuntimePersistence(filePath);
+
+    const storeOne = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+      maxEventsPerTask: 2,
+    });
+
+    const created = storeOne.createTask({
+      taskId: "task_events_1",
+      subagent: finderSubagent,
+      description: "Event persistence",
+      prompt: "keep events",
+      backend: "scaffold",
+      invocation: "task-routed",
+    });
+    assert.equal(Result.isOk(created), true);
+
+    const append = storeOne.appendEvents("task_events_1", [
+      {
+        type: "assistant_text_delta",
+        delta: "a",
+        atEpochMs: 1001,
+      },
+      {
+        type: "assistant_text_delta",
+        delta: "b",
+        atEpochMs: 1002,
+      },
+      {
+        type: "assistant_text_delta",
+        delta: "c",
+        atEpochMs: 1003,
+      },
+    ]);
+    assert.equal(Result.isOk(append), true);
+
+    now += 10;
+    const restoredStore = createInMemoryTaskRuntimeStore({
+      now: () => now,
+      persistence,
+      maxEventsPerTask: 2,
+    });
+
+    const restored = restoredStore.getTask("task_events_1");
+    assert.notEqual(restored, undefined);
+    assert.equal(restored?.events.length, 2);
+    assert.equal(restored?.events[0]?.type, "assistant_text_delta");
+    if (restored?.events[0]?.type === "assistant_text_delta") {
+      assert.equal(restored.events[0].delta, "b");
+    }
+    if (restored?.events[1]?.type === "assistant_text_delta") {
+      assert.equal(restored.events[1].delta, "c");
+    }
   });
 });
 

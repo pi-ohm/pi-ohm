@@ -134,9 +134,9 @@ Replace heuristic output parsing with structured runtime events captured from SD
     - `task_terminal`
 - [x] **S12-T2: Event sink wiring in SDK backend**
   - Convert session events to domain events at boundary.
-- [ ] **S12-T3: Task store event timeline support**
+- [x] **S12-T3: Task store event timeline support**
   - Add bounded `events[]` per task; enforce retention/size caps.
-- [ ] **S12-T4: Status/wait payload extension for event-derived rows**
+- [x] **S12-T4: Status/wait payload extension for event-derived rows**
   - Expose deterministic tool row data without scraping `output` text.
 
 ### Acceptance

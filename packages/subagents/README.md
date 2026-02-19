@@ -56,6 +56,9 @@ Current behavior:
   - `output_truncated`
   - `output_total_chars`
   - `output_returned_chars`
+- includes structured SDK-derived tool transcript rows in details/items when available:
+  - `tool_rows` (deterministic per-tool lifecycle rows)
+  - `event_count` (captured structured event count)
 - includes machine marker on every tool details payload:
   - `contract_version: "task.v1"`
 - includes observability fields on details/items:

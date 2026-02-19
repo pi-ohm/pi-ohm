@@ -446,6 +446,27 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
   assert.match(compact, /╰── done/);
 });
 
+defineTest("formatTaskToolResult prefers structured tool_rows over output scraping", () => {
+  const compact = formatTaskToolResult(
+    {
+      op: "start",
+      status: "succeeded",
+      task_id: "task_1",
+      subagent_type: "finder",
+      description: "Structured rows",
+      summary: "Finder: Structured rows",
+      output: "final summary only",
+      output_available: true,
+      backend: "test-backend",
+      tool_rows: ['○ read {"path":"src/index.ts"}', '✓ read {"ok":true}'],
+    },
+    false,
+  );
+
+  assert.match(compact, /○ read/);
+  assert.match(compact, /✓ read/);
+});
+
 defineTest("formatTaskToolResult uses minimal inline style for running background tasks", () => {
   const compact = formatTaskToolResult(
     {
@@ -1678,6 +1699,67 @@ defineTest("runTaskToolMvp exposes observability fields in lifecycle payload", a
   assert.equal(Reflect.get(started.details, "route"), "test-backend");
   assert.equal(Reflect.get(started.details, "provider"), "unavailable");
   assert.equal(Reflect.get(started.details, "model"), "unavailable");
+});
+
+defineTest("runTaskToolMvp exposes tool_rows from structured backend events", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "interactive-sdk",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: eventful",
+          output: "eventful output",
+          provider: "unavailable",
+          model: "unavailable",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+          events: [
+            {
+              type: "tool_start",
+              toolCallId: "tool_1",
+              toolName: "read",
+              argsText: '{"path":"src/index.ts"}',
+              atEpochMs: 1001,
+            },
+            {
+              type: "tool_end",
+              toolCallId: "tool_1",
+              toolName: "read",
+              resultText: '{"ok":true}',
+              status: "success",
+              atEpochMs: 1002,
+            },
+          ],
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+        });
+      },
+    },
+  });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Structured rows",
+      prompt: "Return structured rows",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "succeeded");
+  assert.deepEqual(Reflect.get(started.details, "tool_rows"), [
+    '○ read {"path":"src/index.ts"}',
+    '✓ read {"ok":true}',
+  ]);
+  assert.equal(Reflect.get(started.details, "event_count"), 2);
 });
 
 defineTest("runTaskToolMvp status aggregates runtime observability from task items", async () => {

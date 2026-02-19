@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
 import { SubagentPersistenceError, SubagentRuntimeError, type SubagentResult } from "../errors";
+import type { TaskExecutionEvent } from "./events";
 import { parseTaskRecord, type TaskRecord } from "../schema";
 
 export type TaskLifecycleState = TaskRecord["state"];
@@ -17,6 +18,7 @@ export interface TaskRuntimeObservability {
 
 const TASK_PERSISTENCE_SCHEMA_VERSION = 1;
 const DEFAULT_RETENTION_MS = 1000 * 60 * 60 * 24;
+const DEFAULT_MAX_EVENTS_PER_TASK = 120;
 
 export interface TaskRuntimeSnapshot {
   readonly id: string;
@@ -40,6 +42,7 @@ export interface TaskRuntimeSnapshot {
   readonly endedAtEpochMs?: number;
   readonly errorCode?: string;
   readonly errorMessage?: string;
+  readonly events: readonly TaskExecutionEvent[];
 }
 
 export interface TaskRuntimeLookup {
@@ -73,6 +76,7 @@ export interface PersistedTaskRuntimeEntry {
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;
   readonly errorMessage?: string;
+  readonly events: readonly TaskExecutionEvent[];
 }
 
 export interface TaskRuntimePersistenceSnapshot {
@@ -138,6 +142,10 @@ export interface TaskRuntimeStore {
     execution: Promise<void>,
   ): SubagentResult<true, SubagentRuntimeError>;
   getExecutionPromise(taskId: string): Promise<void> | undefined;
+  appendEvents(
+    taskId: string,
+    events: readonly TaskExecutionEvent[],
+  ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError>;
   getPersistenceDiagnostics(): readonly string[];
 }
 
@@ -154,6 +162,7 @@ interface TaskRuntimeEntry {
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;
   readonly errorMessage?: string;
+  readonly events: readonly TaskExecutionEvent[];
   readonly abortController?: AbortController;
   readonly executionPromise?: Promise<void>;
 }
@@ -254,6 +263,7 @@ function toTaskRuntimeSnapshot(entry: TaskRuntimeEntry): TaskRuntimeSnapshot {
     endedAtEpochMs: entry.record.endedAtEpochMs,
     errorCode: entry.errorCode,
     errorMessage: entry.errorMessage,
+    events: entry.events,
   };
 }
 
@@ -294,6 +304,203 @@ function parseOptionalString(value: unknown): string | undefined {
   return value;
 }
 
+function parseRequiredString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function parseRequiredEpochMs(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (value < 0) return undefined;
+  return value;
+}
+
+function parsePersistedTaskExecutionEvent(
+  value: unknown,
+): SubagentResult<TaskExecutionEvent, SubagentRuntimeError> {
+  if (!isObjectRecord(value)) {
+    return Result.err(
+      new SubagentRuntimeError({
+        code: "task_persistence_entry_invalid",
+        stage: "task_persistence",
+        message: "Persisted task event must be an object",
+      }),
+    );
+  }
+
+  const type = parseRequiredString(value.type);
+  if (!type) {
+    return Result.err(
+      new SubagentRuntimeError({
+        code: "task_persistence_entry_invalid",
+        stage: "task_persistence",
+        message: "Persisted task event missing type",
+      }),
+    );
+  }
+
+  const atEpochMs = parseRequiredEpochMs(value.atEpochMs);
+  if (atEpochMs === undefined) {
+    return Result.err(
+      new SubagentRuntimeError({
+        code: "task_persistence_entry_invalid",
+        stage: "task_persistence",
+        message: "Persisted task event missing valid atEpochMs",
+      }),
+    );
+  }
+
+  if (type === "assistant_text_delta") {
+    const delta = parseRequiredString(value.delta);
+    if (!delta) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_persistence_entry_invalid",
+          stage: "task_persistence",
+          message: "assistant_text_delta event missing delta",
+        }),
+      );
+    }
+
+    return Result.ok({
+      type,
+      delta,
+      atEpochMs,
+    });
+  }
+
+  if (type === "tool_start") {
+    const toolCallId = parseRequiredString(value.toolCallId);
+    const toolName = parseRequiredString(value.toolName);
+    if (!toolCallId || !toolName) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_persistence_entry_invalid",
+          stage: "task_persistence",
+          message: "tool_start event missing toolCallId/toolName",
+        }),
+      );
+    }
+
+    return Result.ok({
+      type,
+      toolCallId,
+      toolName,
+      argsText: parseOptionalString(value.argsText),
+      atEpochMs,
+    });
+  }
+
+  if (type === "tool_update") {
+    const toolCallId = parseRequiredString(value.toolCallId);
+    const toolName = parseRequiredString(value.toolName);
+    if (!toolCallId || !toolName) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_persistence_entry_invalid",
+          stage: "task_persistence",
+          message: "tool_update event missing toolCallId/toolName",
+        }),
+      );
+    }
+
+    return Result.ok({
+      type,
+      toolCallId,
+      toolName,
+      partialText: parseOptionalString(value.partialText),
+      atEpochMs,
+    });
+  }
+
+  if (type === "tool_end") {
+    const toolCallId = parseRequiredString(value.toolCallId);
+    const toolName = parseRequiredString(value.toolName);
+    const status = value.status;
+
+    if (!toolCallId || !toolName || (status !== "success" && status !== "error")) {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_persistence_entry_invalid",
+          stage: "task_persistence",
+          message: "tool_end event missing fields or invalid status",
+        }),
+      );
+    }
+
+    return Result.ok({
+      type,
+      toolCallId,
+      toolName,
+      resultText: parseOptionalString(value.resultText),
+      status,
+      atEpochMs,
+    });
+  }
+
+  if (type === "task_terminal") {
+    if (value.terminal !== "agent_end") {
+      return Result.err(
+        new SubagentRuntimeError({
+          code: "task_persistence_entry_invalid",
+          stage: "task_persistence",
+          message: "task_terminal event has invalid terminal marker",
+        }),
+      );
+    }
+
+    return Result.ok({
+      type,
+      terminal: "agent_end",
+      atEpochMs,
+    });
+  }
+
+  return Result.err(
+    new SubagentRuntimeError({
+      code: "task_persistence_entry_invalid",
+      stage: "task_persistence",
+      message: `Unsupported persisted task event type '${type}'`,
+    }),
+  );
+}
+
+function trimEvents(
+  events: readonly TaskExecutionEvent[],
+  maxEventsPerTask: number,
+): readonly TaskExecutionEvent[] {
+  if (events.length <= maxEventsPerTask) return [...events];
+  return events.slice(events.length - maxEventsPerTask);
+}
+
+function parsePersistedEvents(
+  value: unknown,
+  maxEventsPerTask: number,
+): SubagentResult<readonly TaskExecutionEvent[], SubagentRuntimeError> {
+  if (value === undefined) return Result.ok([]);
+  if (!Array.isArray(value)) {
+    return Result.err(
+      new SubagentRuntimeError({
+        code: "task_persistence_entry_invalid",
+        stage: "task_persistence",
+        message: "Persisted task events must be an array",
+      }),
+    );
+  }
+
+  const parsed: TaskExecutionEvent[] = [];
+  for (const event of value) {
+    const parsedEvent = parsePersistedTaskExecutionEvent(event);
+    if (Result.isError(parsedEvent)) return parsedEvent;
+    parsed.push(parsedEvent.value);
+  }
+
+  return Result.ok(trimEvents(parsed, maxEventsPerTask));
+}
+
 function parseFollowUpPrompts(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
 
@@ -322,6 +529,7 @@ function normalizeObservability(
 
 function parsePersistedEntry(
   input: unknown,
+  maxEventsPerTask: number,
 ): SubagentResult<PersistedTaskRuntimeEntry, SubagentRuntimeError> {
   if (!isObjectRecord(input)) {
     return Result.err(
@@ -378,6 +586,11 @@ function parsePersistedEntry(
     );
   }
 
+  const parsedEvents = parsePersistedEvents(input.events, maxEventsPerTask);
+  if (Result.isError(parsedEvents)) {
+    return Result.err(parsedEvents.error);
+  }
+
   return Result.ok({
     record: parsedRecord.value,
     summary,
@@ -393,11 +606,13 @@ function parsePersistedEntry(
     errorCode: parseOptionalString(input.errorCode),
     errorMessage: parseOptionalString(input.errorMessage),
     followUpPrompts: parseFollowUpPrompts(input.followUpPrompts),
+    events: parsedEvents.value,
   });
 }
 
 function parsePersistenceSnapshot(
   input: unknown,
+  maxEventsPerTask: number,
 ): SubagentResult<readonly PersistedTaskRuntimeEntry[], SubagentPersistenceError> {
   if (!isObjectRecord(input)) {
     return Result.err(
@@ -431,7 +646,7 @@ function parsePersistenceSnapshot(
 
   const entries: PersistedTaskRuntimeEntry[] = [];
   for (const entry of input.entries) {
-    const parsed = parsePersistedEntry(entry);
+    const parsed = parsePersistedEntry(entry, maxEventsPerTask);
     if (Result.isError(parsed)) {
       return Result.err(
         new SubagentPersistenceError({
@@ -493,7 +708,7 @@ export function createJsonTaskRuntimePersistence(filePath: string): TaskRuntimeP
         });
       }
 
-      const snapshot = parsePersistenceSnapshot(parsed.value);
+      const snapshot = parsePersistenceSnapshot(parsed.value, Number.MAX_SAFE_INTEGER);
       if (Result.isError(snapshot)) {
         return Result.ok({
           entries: [],
@@ -532,6 +747,7 @@ export interface InMemoryTaskRuntimeStoreOptions {
   readonly now?: () => number;
   readonly retentionMs?: number;
   readonly persistence?: TaskRuntimePersistence;
+  readonly maxEventsPerTask?: number;
 }
 
 class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
@@ -541,6 +757,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
   private readonly now: () => number;
   private readonly retentionMs: number;
   private readonly persistence: TaskRuntimePersistence | undefined;
+  private readonly maxEventsPerTask: number;
 
   constructor(options: InMemoryTaskRuntimeStoreOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -549,6 +766,10 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         ? options.retentionMs
         : DEFAULT_RETENTION_MS;
     this.persistence = options.persistence;
+    this.maxEventsPerTask =
+      options.maxEventsPerTask !== undefined && options.maxEventsPerTask > 0
+        ? options.maxEventsPerTask
+        : DEFAULT_MAX_EVENTS_PER_TASK;
 
     this.hydrateFromPersistence();
     this.pruneExpiredTerminalTasks();
@@ -591,6 +812,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       ...normalizeObservability(input.backend, input.observability),
       invocation: input.invocation,
       followUpPrompts: [],
+      events: [],
     };
 
     this.tasks.set(input.taskId, entry);
@@ -857,6 +1079,31 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     return this.tasks.get(taskId)?.executionPromise;
   }
 
+  appendEvents(
+    taskId: string,
+    events: readonly TaskExecutionEvent[],
+  ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError> {
+    this.pruneExpiredTerminalTasks();
+
+    const currentResult = this.getMutableEntry(taskId);
+    if (Result.isError(currentResult)) return currentResult;
+
+    const current = currentResult.value;
+    if (events.length === 0) {
+      return Result.ok(toTaskRuntimeSnapshot(current));
+    }
+
+    const nextEvents = trimEvents([...current.events, ...events], this.maxEventsPerTask);
+    const nextEntry: TaskRuntimeEntry = {
+      ...current,
+      events: nextEvents,
+    };
+
+    this.tasks.set(taskId, nextEntry);
+    this.persistCurrentState();
+    return Result.ok(toTaskRuntimeSnapshot(nextEntry));
+  }
+
   getPersistenceDiagnostics(): readonly string[] {
     return this.persistenceDiagnostics;
   }
@@ -1000,6 +1247,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         route: entry.route,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
+        events: trimEvents(entry.events, this.maxEventsPerTask),
         errorCode: rehydratedFromActive ? "task_rehydrated_incomplete" : entry.errorCode,
         errorMessage: rehydratedFromActive
           ? `Task '${entry.record.id}' restored from persistence in non-terminal state '${entry.record.state}' and was marked failed`
@@ -1056,6 +1304,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         followUpPrompts: entry.followUpPrompts,
         errorCode: entry.errorCode,
         errorMessage: entry.errorMessage,
+        events: entry.events,
       })),
     };
 

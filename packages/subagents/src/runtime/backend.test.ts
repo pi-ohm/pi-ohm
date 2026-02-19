@@ -301,6 +301,7 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
     prompts.push(input.prompt);
     return {
       output: "sdk online",
+      events: [],
       provider: "sdk-provider",
       model: "sdk-model",
       runtime: "pi-sdk",
@@ -397,6 +398,7 @@ defineTest("Pi SDK stream capture ignores unsupported events", () => {
 defineTest("PiSdkTaskExecutionBackend maps timeout/abort/execution failures", async () => {
   const timeoutBackend = new PiSdkTaskExecutionBackend(async () => ({
     output: "",
+    events: [],
     timedOut: true,
     aborted: false,
   }));
@@ -419,6 +421,7 @@ defineTest("PiSdkTaskExecutionBackend maps timeout/abort/execution failures", as
 
   const abortedBackend = new PiSdkTaskExecutionBackend(async () => ({
     output: "",
+    events: [],
     timedOut: false,
     aborted: true,
   }));
@@ -441,6 +444,7 @@ defineTest("PiSdkTaskExecutionBackend maps timeout/abort/execution failures", as
 
   const failedBackend = new PiSdkTaskExecutionBackend(async () => ({
     output: "",
+    events: [],
     timedOut: false,
     aborted: false,
     error: "sdk failed",

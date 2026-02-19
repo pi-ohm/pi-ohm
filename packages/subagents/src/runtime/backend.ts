@@ -14,7 +14,7 @@ import { Result } from "better-result";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../catalog";
 import { SubagentRuntimeError, type SubagentResult } from "../errors";
-import { parseTaskExecutionEventFromSdk } from "./events";
+import { parseTaskExecutionEventFromSdk, type TaskExecutionEvent } from "./events";
 
 export interface TaskBackendStartInput {
   readonly taskId: string;
@@ -33,6 +33,7 @@ export interface TaskBackendStartOutput {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly events?: readonly TaskExecutionEvent[];
 }
 
 export interface TaskBackendSendInput {
@@ -54,6 +55,7 @@ export interface TaskBackendSendOutput {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly events?: readonly TaskExecutionEvent[];
 }
 
 export interface TaskExecutionBackend {
@@ -171,6 +173,7 @@ export interface PiSdkRunnerResult {
   readonly provider?: string;
   readonly model?: string;
   readonly runtime?: string;
+  readonly events: readonly TaskExecutionEvent[];
   readonly timedOut: boolean;
   readonly aborted: boolean;
   readonly error?: string;
@@ -184,12 +187,14 @@ const SDK_BACKEND_RUNTIME = "pi-sdk";
 export interface PiSdkStreamCaptureState {
   assistantChunks: string[];
   toolLines: string[];
+  events: TaskExecutionEvent[];
   sawAgentEnd: boolean;
   capturedEventCount: number;
 }
 
 export interface PiSdkStreamCaptureResult {
   readonly output: string;
+  readonly events: readonly TaskExecutionEvent[];
   readonly sawAgentEnd: boolean;
   readonly capturedEventCount: number;
 }
@@ -208,6 +213,7 @@ export function createPiSdkStreamCaptureState(): PiSdkStreamCaptureState {
   return {
     assistantChunks: [],
     toolLines: [],
+    events: [],
     sawAgentEnd: false,
     capturedEventCount: 0,
   };
@@ -219,6 +225,7 @@ export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: un
   if (!parsed.value) return;
 
   state.capturedEventCount += 1;
+  state.events.push(parsed.value);
 
   if (parsed.value.type === "assistant_text_delta") {
     state.assistantChunks.push(parsed.value.delta);
@@ -275,6 +282,7 @@ export function finalizePiSdkStreamCapture(
 
   return {
     output: parts.length > 0 ? parts.join("\n").trim() : "(no output)",
+    events: [...state.events],
     sawAgentEnd: state.sawAgentEnd,
     capturedEventCount: state.capturedEventCount,
   };
@@ -350,6 +358,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   if (input.signal?.aborted) {
     return {
       output: "",
+      events: [],
       timedOut: false,
       aborted: true,
     };
@@ -397,6 +406,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   } catch (error) {
     return {
       output: "",
+      events: [],
       timedOut: false,
       aborted: false,
       error: toErrorMessage(error),
@@ -438,6 +448,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   if (aborted || input.signal?.aborted) {
     return {
       output: "",
+      events: [...captureState.events],
       timedOut: false,
       aborted: true,
     };
@@ -446,6 +457,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   if (timedOut) {
     return {
       output: "",
+      events: [...captureState.events],
       timedOut: true,
       aborted: false,
     };
@@ -454,6 +466,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   if (errorText) {
     return {
       output: "",
+      events: [...captureState.events],
       timedOut: false,
       aborted: false,
       error: errorText,
@@ -464,6 +477,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
 
   return {
     output: finalized.output,
+    events: finalized.events,
     provider: "unavailable",
     model: "unavailable",
     runtime: SDK_BACKEND_RUNTIME,
@@ -927,6 +941,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
       route: this.id,
+      events: run.events,
     });
   }
 
@@ -971,6 +986,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
       route: this.id,
+      events: run.events,
     });
   }
 }

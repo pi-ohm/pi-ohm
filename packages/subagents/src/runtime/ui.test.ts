@@ -26,6 +26,7 @@ function makeSnapshot(overrides: Partial<TaskRuntimeSnapshot> = {}): TaskRuntime
     activeToolCalls: 1,
     startedAtEpochMs: 1000,
     updatedAtEpochMs: 1200,
+    events: [],
     ...overrides,
   };
 }
