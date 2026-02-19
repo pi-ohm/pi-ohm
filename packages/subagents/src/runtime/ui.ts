@@ -104,11 +104,12 @@ export function createTaskRuntimePresentation(input: {
 }): TaskRuntimePresentation {
   const maxItems = input.maxItems ?? 5;
   const sorted = sortSnapshots(input.snapshots);
-  const visible = sorted.slice(0, Math.max(maxItems, 0));
-
-  const running = sorted.filter(
+  const active = sorted.filter(
     (snapshot) => snapshot.state === "running" || snapshot.state === "queued",
-  ).length;
+  );
+  const visible = active.slice(0, Math.max(maxItems, 0));
+
+  const running = active.length;
   const failed = sorted.filter((snapshot) => snapshot.state === "failed").length;
   const completed = sorted.filter((snapshot) => snapshot.state === "succeeded").length;
   const cancelled = sorted.filter((snapshot) => snapshot.state === "cancelled").length;

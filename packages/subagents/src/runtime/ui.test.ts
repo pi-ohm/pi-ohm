@@ -113,9 +113,39 @@ defineTest("createTaskRuntimePresentation synchronizes status + widget summaries
 
   assert.match(presentation.statusLine, /subagents 1 running/);
   assert.match(presentation.statusLine, /tools 2 active/);
-  assert.equal(presentation.widgetLines.length, 4);
+  assert.equal(presentation.widgetLines.length, 2);
   assert.equal(presentation.widgetLines[0]?.includes("task_failed"), false);
   assert.match(presentation.plainText, /Tools/);
+});
+
+defineTest("createTaskRuntimePresentation omits idle terminal-only widget rows", () => {
+  const succeeded = makeSnapshot({
+    id: "task_succeeded",
+    state: "succeeded",
+    activeToolCalls: 0,
+    totalToolCalls: 2,
+    endedAtEpochMs: 2600,
+    updatedAtEpochMs: 2600,
+  });
+
+  const failed = makeSnapshot({
+    id: "task_failed",
+    state: "failed",
+    activeToolCalls: 0,
+    totalToolCalls: 1,
+    endedAtEpochMs: 2500,
+    updatedAtEpochMs: 2500,
+  });
+
+  const presentation = createTaskRuntimePresentation({
+    snapshots: [succeeded, failed],
+    nowEpochMs: 3500,
+  });
+
+  assert.match(presentation.statusLine, /subagents idle/);
+  assert.equal(presentation.hasActiveTasks, false);
+  assert.equal(presentation.widgetLines.length, 0);
+  assert.equal(presentation.compactWidgetLines.length, 0);
 });
 
 defineTest("createTaskRuntimePresentation running status includes aggregate counters", () => {
