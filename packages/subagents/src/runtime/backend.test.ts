@@ -6,8 +6,11 @@ import type { OhmSubagentDefinition } from "../catalog";
 import {
   createDefaultTaskExecutionBackend,
   PiCliTaskExecutionBackend,
+  PiSdkTaskExecutionBackend,
   ScaffoldTaskExecutionBackend,
   type PiCliRunner,
+  type PiSdkRunner,
+  type TaskExecutionBackend,
 } from "./backend";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
@@ -288,6 +291,105 @@ defineTest(
   },
 );
 
+defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", async () => {
+  const prompts: string[] = [];
+
+  const runner: PiSdkRunner = async (input) => {
+    prompts.push(input.prompt);
+    return {
+      output: "sdk online",
+      provider: "sdk-provider",
+      model: "sdk-model",
+      runtime: "pi-sdk",
+      timedOut: false,
+      aborted: false,
+    };
+  };
+
+  const backend = new PiSdkTaskExecutionBackend(runner, 1_000);
+  const result = await backend.executeStart({
+    taskId: "task_sdk_1",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation path",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  if (Result.isError(result)) {
+    assert.fail("Expected interactive-sdk backend execution to succeed");
+  }
+
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0] ?? "", /You are the Finder subagent in Pi OHM/);
+  assert.equal(result.value.output, "sdk online");
+  assert.equal(result.value.provider, "sdk-provider");
+  assert.equal(result.value.model, "sdk-model");
+  assert.equal(result.value.runtime, "pi-sdk");
+  assert.equal(result.value.route, "interactive-sdk");
+});
+
+defineTest("PiCliTaskExecutionBackend delegates to sdk backend when configured", async () => {
+  let cliCalled = false;
+
+  const cliRunner: PiCliRunner = async () => {
+    cliCalled = true;
+    return {
+      exitCode: 0,
+      stdout: "cli output",
+      stderr: "",
+      timedOut: false,
+      aborted: false,
+    };
+  };
+
+  const sdkBackend: TaskExecutionBackend = {
+    id: "interactive-sdk",
+    async executeStart() {
+      return Result.ok({
+        summary: "Finder: via sdk",
+        output: "sdk output",
+        provider: "sdk-provider",
+        model: "sdk-model",
+        runtime: "pi-sdk",
+        route: "interactive-sdk",
+      });
+    },
+    async executeSend() {
+      return Result.ok({
+        summary: "Finder follow-up: via sdk",
+        output: "sdk follow-up output",
+        provider: "sdk-provider",
+        model: "sdk-model",
+        runtime: "pi-sdk",
+        route: "interactive-sdk",
+      });
+    },
+  };
+
+  const backend = new PiCliTaskExecutionBackend(cliRunner, 1_000, sdkBackend);
+  const result = await backend.executeStart({
+    taskId: "task_sdk_2",
+    subagent: subagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation path",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(cliCalled, false);
+  assert.equal(Result.isOk(result), true);
+  if (Result.isError(result)) {
+    assert.fail("Expected sdk delegation to succeed");
+  }
+
+  assert.equal(result.value.output, "sdk output");
+  assert.equal(result.value.route, "interactive-sdk");
+});
+
 defineTest("PiCliTaskExecutionBackend reports timeout and backend execution failures", async () => {
   const timeoutRunner: PiCliRunner = async () => ({
     exitCode: 124,
@@ -350,6 +452,7 @@ defineTest("PiCliTaskExecutionBackend resolves backend IDs from runtime config",
   }));
 
   assert.equal(backend.resolveBackendId(makeConfig("interactive-shell")), "interactive-shell");
+  assert.equal(backend.resolveBackendId(makeConfig("interactive-sdk")), "interactive-sdk");
   assert.equal(backend.resolveBackendId(makeConfig("none")), "scaffold");
   assert.equal(backend.resolveBackendId(makeConfig("custom-plugin")), "custom-plugin");
 });

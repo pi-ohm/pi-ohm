@@ -11,7 +11,7 @@ import {
 export const OHM_EXTENSION_NAME = "pi-ohm";
 
 export type OhmMode = "rush" | "smart" | "deep";
-export type OhmSubagentBackend = "none" | "interactive-shell" | "custom-plugin";
+export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
 
 export interface OhmFeatureFlags {
   handoff: boolean;
@@ -167,7 +167,14 @@ function normalizeSubagentBackend(
   value: unknown,
   fallback: OhmSubagentBackend,
 ): OhmSubagentBackend {
-  if (value === "none" || value === "interactive-shell" || value === "custom-plugin") return value;
+  if (
+    value === "none" ||
+    value === "interactive-shell" ||
+    value === "interactive-sdk" ||
+    value === "custom-plugin"
+  ) {
+    return value;
+  }
   return fallback;
 }
 
@@ -508,7 +515,7 @@ export function registerOhmSettings(pi: ExtensionAPI): void {
       label: "Subagent Backend",
       description: "How Pi Ohm should delegate subagents",
       defaultValue: DEFAULT_OHM_CONFIG.subagentBackend,
-      values: ["interactive-shell", "custom-plugin", "none"],
+      values: ["interactive-shell", "interactive-sdk", "custom-plugin", "none"],
     },
     {
       id: "feature-handoff",

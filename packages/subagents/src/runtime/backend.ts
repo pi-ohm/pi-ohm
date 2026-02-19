@@ -1,4 +1,15 @@
 import { spawn } from "node:child_process";
+import {
+  createAgentSession,
+  createBashTool,
+  createEditTool,
+  createExtensionRuntime,
+  createReadTool,
+  createWriteTool,
+  SessionManager,
+  SettingsManager,
+  type ResourceLoader,
+} from "@mariozechner/pi-coding-agent";
 import { Result } from "better-result";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../catalog";
@@ -147,7 +158,223 @@ export interface PiCliRunnerResult {
 
 export type PiCliRunner = (input: PiCliRunnerInput) => Promise<PiCliRunnerResult>;
 
+export interface PiSdkRunnerInput {
+  readonly cwd: string;
+  readonly prompt: string;
+  readonly signal: AbortSignal | undefined;
+  readonly timeoutMs: number;
+}
+
+export interface PiSdkRunnerResult {
+  readonly output: string;
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly timedOut: boolean;
+  readonly aborted: boolean;
+  readonly error?: string;
+}
+
+export type PiSdkRunner = (input: PiSdkRunnerInput) => Promise<PiSdkRunnerResult>;
+
 const PI_CLI_TOOLS = "read,bash,edit,write,grep,find,ls";
+const SDK_BACKEND_RUNTIME = "pi-sdk";
+
+function createSdkResourceLoader(): ResourceLoader {
+  const runtime = createExtensionRuntime();
+
+  return {
+    getExtensions: () => ({
+      extensions: [],
+      errors: [],
+      runtime,
+    }),
+    getSkills: () => ({
+      skills: [],
+      diagnostics: [],
+    }),
+    getPrompts: () => ({
+      prompts: [],
+      diagnostics: [],
+    }),
+    getThemes: () => ({
+      themes: [],
+      diagnostics: [],
+    }),
+    getAgentsFiles: () => ({
+      agentsFiles: [],
+    }),
+    getSystemPrompt: () =>
+      [
+        "You are the Pi OHM subagent runtime.",
+        "Use available tools only when required.",
+        "Return concise concrete findings.",
+      ].join(" "),
+    getAppendSystemPrompt: () => [],
+    getPathMetadata: () => new Map(),
+    extendResources: () => {},
+    reload: async () => {},
+  };
+}
+
+function normalizeRunnerOutput(output: string): string {
+  const trimmed = output.trim();
+  return trimmed.length > 0 ? trimmed : "(no output)";
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const trimmed = error.message.trim();
+    return trimmed.length > 0 ? trimmed : "unknown backend error";
+  }
+
+  if (typeof error === "string") {
+    const trimmed = error.trim();
+    return trimmed.length > 0 ? trimmed : "unknown backend error";
+  }
+
+  return "unknown backend error";
+}
+
+async function abortSdkSession(session: { readonly abort: () => Promise<void> }): Promise<void> {
+  try {
+    await session.abort();
+  } catch {
+    // noop: abort used as best-effort cancellation signal.
+  }
+}
+
+export const runPiSdkPrompt: PiSdkRunner = async (
+  input: PiSdkRunnerInput,
+): Promise<PiSdkRunnerResult> => {
+  if (input.signal?.aborted) {
+    return {
+      output: "",
+      timedOut: false,
+      aborted: true,
+    };
+  }
+
+  const outputChunks: string[] = [];
+  let timedOut = false;
+  let aborted = false;
+  let errorText: string | undefined;
+  let session:
+    | {
+        readonly prompt: (prompt: string) => Promise<void>;
+        readonly subscribe: (
+          listener: (event: {
+            readonly type: string;
+            readonly assistantMessageEvent?: {
+              readonly type: string;
+              readonly delta?: string;
+            };
+          }) => void,
+        ) => () => void;
+        readonly abort: () => Promise<void>;
+        readonly dispose: () => void;
+      }
+    | undefined;
+
+  try {
+    const created = await createAgentSession({
+      cwd: input.cwd,
+      resourceLoader: createSdkResourceLoader(),
+      tools: [
+        createReadTool(input.cwd),
+        createBashTool(input.cwd),
+        createEditTool(input.cwd),
+        createWriteTool(input.cwd),
+      ],
+      sessionManager: SessionManager.inMemory(),
+      settingsManager: SettingsManager.inMemory({
+        compaction: { enabled: false },
+        retry: { enabled: false },
+      }),
+    });
+
+    session = created.session;
+  } catch (error) {
+    return {
+      output: "",
+      timedOut: false,
+      aborted: false,
+      error: toErrorMessage(error),
+    };
+  }
+
+  const unsubscribe = session.subscribe((event) => {
+    if (event.type !== "message_update") return;
+    const assistantMessageEvent = event.assistantMessageEvent;
+    if (!assistantMessageEvent) return;
+    if (assistantMessageEvent.type !== "text_delta") return;
+    if (typeof assistantMessageEvent.delta !== "string") return;
+
+    outputChunks.push(assistantMessageEvent.delta);
+  });
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const onAbort = () => {
+    aborted = true;
+    void abortSdkSession(session);
+  };
+
+  if (input.signal) {
+    input.signal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    void abortSdkSession(session);
+  }, input.timeoutMs);
+
+  try {
+    await session.prompt(input.prompt);
+  } catch (error) {
+    errorText = toErrorMessage(error);
+  } finally {
+    clearTimeout(timeoutHandle);
+    if (input.signal) {
+      input.signal.removeEventListener("abort", onAbort);
+    }
+    unsubscribe();
+    session.dispose();
+  }
+
+  if (aborted || input.signal?.aborted) {
+    return {
+      output: "",
+      timedOut: false,
+      aborted: true,
+    };
+  }
+
+  if (timedOut) {
+    return {
+      output: "",
+      timedOut: true,
+      aborted: false,
+    };
+  }
+
+  if (errorText) {
+    return {
+      output: "",
+      timedOut: false,
+      aborted: false,
+      error: errorText,
+    };
+  }
+
+  return {
+    output: normalizeRunnerOutput(outputChunks.join("")),
+    provider: "unavailable",
+    model: "unavailable",
+    runtime: SDK_BACKEND_RUNTIME,
+    timedOut: false,
+    aborted: false,
+  };
+};
 
 export const runPiCliPrompt: PiCliRunner = async (
   input: PiCliRunnerInput,
@@ -424,10 +651,12 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
   constructor(
     private readonly runner: PiCliRunner = runPiCliPrompt,
     private readonly timeoutMs: number = getTimeoutMsFromEnv(),
+    private readonly sdkBackend: TaskExecutionBackend = new PiSdkTaskExecutionBackend(),
   ) {}
 
   resolveBackendId(config: OhmRuntimeConfig): string {
     if (config.subagentBackend === "none") return this.scaffoldBackend.id;
+    if (config.subagentBackend === "interactive-sdk") return "interactive-sdk";
     if (config.subagentBackend === "custom-plugin") return "custom-plugin";
     return this.id;
   }
@@ -437,6 +666,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
   ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>> {
     if (input.signal?.aborted) {
       return Result.err(toAbortedError(input.taskId, "execute_start"));
+    }
+
+    if (input.config.subagentBackend === "interactive-sdk") {
+      return this.sdkBackend.executeStart(input);
     }
 
     if (input.config.subagentBackend === "none") {
@@ -492,6 +725,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       return Result.err(toAbortedError(input.taskId, "execute_send"));
     }
 
+    if (input.config.subagentBackend === "interactive-sdk") {
+      return this.sdkBackend.executeSend(input);
+    }
+
     if (input.config.subagentBackend === "none") {
       return this.scaffoldBackend.executeSend(input);
     }
@@ -534,6 +771,109 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       provider: normalized.provider,
       model: normalized.model,
       runtime: normalized.runtime,
+      route: this.id,
+    });
+  }
+}
+
+export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
+  readonly id = "interactive-sdk";
+
+  constructor(
+    private readonly runner: PiSdkRunner = runPiSdkPrompt,
+    private readonly timeoutMs: number = getTimeoutMsFromEnv(),
+  ) {}
+
+  resolveBackendId(config: OhmRuntimeConfig): string {
+    if (config.subagentBackend === "none") return "scaffold";
+    if (config.subagentBackend === "custom-plugin") return "custom-plugin";
+    return this.id;
+  }
+
+  async executeStart(
+    input: TaskBackendStartInput,
+  ): Promise<SubagentResult<TaskBackendStartOutput, SubagentRuntimeError>> {
+    if (input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_start"));
+    }
+
+    const run = await this.runner({
+      cwd: input.cwd,
+      prompt: buildStartPrompt(input),
+      signal: input.signal,
+      timeoutMs: this.timeoutMs,
+    });
+
+    if (run.aborted || input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_start"));
+    }
+
+    if (run.timedOut) {
+      return Result.err(toBackendTimeoutError(input.taskId, "execute_start"));
+    }
+
+    if (run.error) {
+      return Result.err(
+        toBackendExecutionError({
+          taskId: input.taskId,
+          stage: "execute_start",
+          exitCode: 1,
+          stderr: run.error,
+        }),
+      );
+    }
+
+    const summary = `${input.subagent.name}: ${truncate(input.description, 72)}`;
+    return Result.ok({
+      summary,
+      output: normalizeRunnerOutput(run.output),
+      provider: run.provider ?? "unavailable",
+      model: run.model ?? "unavailable",
+      runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
+      route: this.id,
+    });
+  }
+
+  async executeSend(
+    input: TaskBackendSendInput,
+  ): Promise<SubagentResult<TaskBackendSendOutput, SubagentRuntimeError>> {
+    if (input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_send"));
+    }
+
+    const run = await this.runner({
+      cwd: input.cwd,
+      prompt: buildSendPrompt(input),
+      signal: input.signal,
+      timeoutMs: this.timeoutMs,
+    });
+
+    if (run.aborted || input.signal?.aborted) {
+      return Result.err(toAbortedError(input.taskId, "execute_send"));
+    }
+
+    if (run.timedOut) {
+      return Result.err(toBackendTimeoutError(input.taskId, "execute_send"));
+    }
+
+    if (run.error) {
+      return Result.err(
+        toBackendExecutionError({
+          taskId: input.taskId,
+          stage: "execute_send",
+          exitCode: 1,
+          stderr: run.error,
+        }),
+      );
+    }
+
+    const summary = `${input.subagent.name} follow-up: ${truncate(input.prompt, 72)}`;
+    return Result.ok({
+      summary,
+      output: normalizeRunnerOutput(run.output),
+      provider: run.provider ?? "unavailable",
+      model: run.model ?? "unavailable",
+      runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
       route: this.id,
     });
   }

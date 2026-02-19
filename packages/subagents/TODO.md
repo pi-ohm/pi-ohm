@@ -86,7 +86,7 @@ Prove we can execute subagent tasks via `createAgentSession()` safely in-process
 
 ### Tickets
 
-- [ ] **S11-T1: Implement `PiSdkTaskExecutionBackend` spike class (opt-in only)**
+- [x] **S11-T1: Implement `PiSdkTaskExecutionBackend` spike class (opt-in only)**
   - Add backend alongside existing CLI backend; no default switch yet.
 - [ ] **S11-T2: SDK session boot profile for subagents**
   - In-memory session/settings, isolated loader, deterministic model selection policy.

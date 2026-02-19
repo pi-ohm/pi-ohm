@@ -75,6 +75,8 @@ Runtime backend is selected from `subagentBackend` config:
 
 - `interactive-shell` (default): executes a real nested `pi` run for subagent prompts
   using built-in tools (`read,bash,edit,write,grep,find,ls`)
+- `interactive-sdk` (opt-in): executes subagent prompts through in-process Pi SDK
+  sessions with in-memory session/settings managers
 - `none`: uses deterministic scaffold backend (echo-style debug output)
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
