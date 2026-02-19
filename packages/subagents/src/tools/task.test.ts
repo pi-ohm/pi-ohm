@@ -304,7 +304,7 @@ defineTest("formatTaskToolCall supports start/status/wait/send/cancel", () => {
       prompt: "Trace auth",
       async: true,
     }),
-    "task start finder · Auth flow scan async",
+    "task start finder · Auth flow scan",
   );
 
   assert.equal(
@@ -691,6 +691,104 @@ defineTest(
   },
 );
 
+defineTest("runTaskToolMvp streams sdk tool rows into onUpdate while running", async () => {
+  const previousThrottle = process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+  process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "1";
+
+  try {
+    const deps = makeDeps({
+      backend: {
+        id: "interactive-sdk",
+        async executeStart(input: TaskBackendStartInput) {
+          input.onEvent?.({
+            type: "tool_start",
+            toolCallId: "tool_1",
+            toolName: "read",
+            argsText: '{"path":"src/index.ts"}',
+            atEpochMs: 1001,
+          });
+
+          await sleep(20);
+
+          input.onEvent?.({
+            type: "tool_end",
+            toolCallId: "tool_1",
+            toolName: "read",
+            resultText: '{"ok":true}',
+            status: "success",
+            atEpochMs: 1002,
+          });
+
+          return Result.ok({
+            summary: "Finder: streamed",
+            output: "done",
+            provider: "unavailable",
+            model: "unavailable",
+            runtime: "pi-sdk",
+            route: "interactive-sdk",
+            events: [
+              {
+                type: "tool_start",
+                toolCallId: "tool_1",
+                toolName: "read",
+                argsText: '{"path":"src/index.ts"}',
+                atEpochMs: 1001,
+              },
+              {
+                type: "tool_end",
+                toolCallId: "tool_1",
+                toolName: "read",
+                resultText: '{"ok":true}',
+                status: "success",
+                atEpochMs: 1002,
+              },
+            ],
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const runningToolRows: string[][] = [];
+    const result = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Streamed tool rows",
+        prompt: "Show streaming rows",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: (partial) => {
+        if (partial.details.status !== "running") return;
+        const rows = partial.details.tool_rows;
+        if (!rows) return;
+        runningToolRows.push([...rows]);
+      },
+      deps,
+    });
+
+    assert.equal(result.details.status, "succeeded");
+    assert.equal(runningToolRows.length > 0, true);
+    const flattened = runningToolRows.flat();
+    assert.equal(
+      flattened.some((row) => row.includes("○ read")),
+      true,
+    );
+  } finally {
+    if (previousThrottle === undefined) {
+      delete process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+    } else {
+      process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = previousThrottle;
+    }
+  }
+});
+
 defineTest("runTaskToolMvp keeps widget surface empty by default", async () => {
   const widgetFrames: (readonly string[] | undefined)[] = [];
 
@@ -724,8 +822,7 @@ defineTest("runTaskToolMvp keeps widget surface empty by default", async () => {
 });
 
 defineTest("runTaskToolMvp does not animate live widget frames when mode is off", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
+  const deps = makeDeps();
   const widgetFrames: string[] = [];
 
   const started = await runTaskToolMvp({
@@ -752,14 +849,12 @@ defineTest("runTaskToolMvp does not animate live widget frames when mode is off"
     deps,
   });
 
-  assert.equal(started.details.status, "running");
+  assert.equal(started.details.status, "failed");
+  assert.equal(started.details.error_code, "task_async_disabled");
 
-  await sleep(360);
+  await sleep(120);
 
   assert.equal(widgetFrames.length, 0);
-
-  backend.resolveSuccess(0, "Finder: Animated frame check", "done");
-  await sleep(80);
 });
 
 defineTest("runTaskToolMvp surfaces multiline output text in tool content", async () => {
@@ -862,9 +957,8 @@ defineTest("runTaskToolMvp exposes truncation metadata for long output", async (
   }
 });
 
-defineTest("runTaskToolMvp handles async start and status lifecycle", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
+defineTest("runTaskToolMvp rejects async start lifecycle requests", async () => {
+  const deps = makeDeps();
 
   const started = await runTask({
     params: {
@@ -880,64 +974,31 @@ defineTest("runTaskToolMvp handles async start and status lifecycle", async () =
     deps,
   });
 
-  assert.equal(started.details.status, "running");
-  assert.equal(started.details.task_id, "task_test_0001");
-  assert.equal(backend.calls.length, 1);
-
-  const statusBefore = await runTask({
-    params: {
-      op: "status",
-      ids: ["task_test_0001"],
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
-  });
-
-  assert.equal(statusBefore.details.op, "status");
-  assert.equal(Reflect.get(statusBefore.details, "contract_version"), "task.v1");
-  assert.equal(statusBefore.details.status, "running");
-  assert.equal(statusBefore.details.items?.[0]?.status, "running");
-
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
-  await Promise.resolve();
-  await Promise.resolve();
-
-  const statusAfter = await runTask({
-    params: {
-      op: "status",
-      ids: ["task_test_0001"],
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
-  });
-
-  assert.equal(statusAfter.details.status, "succeeded");
-  assert.equal(statusAfter.details.items?.[0]?.status, "succeeded");
+  assert.equal(started.details.status, "failed");
+  assert.equal(started.details.error_code, "task_async_disabled");
+  assert.equal(started.details.error_category, "runtime");
 });
 
 defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
 
-  assert.equal(started.details.status, "running");
+  const running = deps.taskStore.markRunning("task_test_0001", "Running finder");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seeded task running state");
+  }
 
   const waited = await runTask({
     params: {
@@ -959,9 +1020,15 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waited.details.error_code, "task_wait_timeout");
   assert.equal(waited.details.error_category, "runtime");
 
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
-  await Promise.resolve();
-  await Promise.resolve();
+  const completed = deps.taskStore.markSucceeded(
+    "task_test_0001",
+    "Finder: Auth flow scan",
+    "done output",
+  );
+  assert.equal(Result.isOk(completed), true);
+  if (Result.isError(completed)) {
+    assert.fail("Expected seeded task completion");
+  }
 
   const waitedAfter = await runTask({
     params: {
@@ -982,27 +1049,27 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
 });
 
 defineTest("runTaskToolMvp wait streams live inline updates in UI mode", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Wait stream",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Wait stream",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running wait stream");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   setTimeout(() => {
-    backend.resolveSuccess(0, "Finder: Wait stream", "done output");
+    void deps.taskStore.markSucceeded("task_test_0001", "Finder: Wait stream", "done output");
   }, 220);
 
   const updateStatuses: string[] = [];
@@ -1039,24 +1106,24 @@ defineTest("runTaskToolMvp wait streams live inline updates in UI mode", async (
 });
 
 defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running abort wait");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   const controller = new AbortController();
   controller.abort();
@@ -1078,10 +1145,6 @@ defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {
   assert.equal(waited.details.timed_out, true);
   assert.equal(Reflect.get(waited.details, "done"), false);
   assert.equal(Reflect.get(waited.details, "wait_status"), "aborted");
-
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
-  await Promise.resolve();
-  await Promise.resolve();
 });
 
 defineTest("runTaskToolMvp throttles duplicate wait progress updates", async () => {
@@ -1089,24 +1152,24 @@ defineTest("runTaskToolMvp throttles duplicate wait progress updates", async () 
   process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "1000";
 
   try {
-    const backend = new DeferredBackend();
-    const deps = makeDeps({ backend });
-
-    const started = await runTask({
-      params: {
-        op: "start",
-        async: true,
-        subagent_type: "finder",
-        description: "Throttle wait progress",
-        prompt: "keep running",
-      },
-      cwd: "/tmp/project",
-      signal: undefined,
-      onUpdate: undefined,
-      deps,
+    const deps = makeDeps();
+    const created = deps.taskStore.createTask({
+      taskId: "task_test_0001",
+      subagent: finderSubagentFixture,
+      description: "Throttle wait progress",
+      prompt: "keep running",
+      backend: deps.backend.id,
+      invocation: "task-routed",
     });
-
-    assert.equal(started.details.status, "running");
+    assert.equal(Result.isOk(created), true);
+    if (Result.isError(created)) {
+      assert.fail("Expected seed task creation");
+    }
+    const running = deps.taskStore.markRunning("task_test_0001", "Running throttle wait");
+    assert.equal(Result.isOk(running), true);
+    if (Result.isError(running)) {
+      assert.fail("Expected seed running state");
+    }
 
     const updates: string[] = [];
     const waited = await runTask({
@@ -1126,10 +1189,6 @@ defineTest("runTaskToolMvp throttles duplicate wait progress updates", async () 
     assert.equal(waited.details.error_code, "task_wait_timeout");
     assert.equal(updates.length, 2);
     assert.notEqual(updates[0], updates[1]);
-
-    backend.resolveSuccess(0, "Finder: Throttle wait progress", "done output");
-    await Promise.resolve();
-    await Promise.resolve();
   } finally {
     if (previousThrottle === undefined) {
       delete process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
@@ -1140,28 +1199,33 @@ defineTest("runTaskToolMvp throttles duplicate wait progress updates", async () 
 });
 
 defineTest("runTaskToolMvp status/wait include terminal outputs for async tasks", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
-
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "line1\nline2\nline3");
-  await Promise.resolve();
-  await Promise.resolve();
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running auth flow scan");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
+  const completed = deps.taskStore.markSucceeded(
+    "task_test_0001",
+    "Finder: Auth flow scan",
+    "line1\nline2\nline3",
+  );
+  assert.equal(Result.isOk(completed), true);
+  if (Result.isError(completed)) {
+    assert.fail("Expected seed task completion");
+  }
 
   const waited = await runTask({
     params: {
@@ -1208,22 +1272,23 @@ defineTest("runTaskToolMvp status/wait include terminal outputs for async tasks"
 defineTest("runTaskToolMvp send resumes running task", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running auth flow scan");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   const send = await runTask({
     params: {
@@ -1242,10 +1307,6 @@ defineTest("runTaskToolMvp send resumes running task", async () => {
   assert.match(send.details.summary, /follow-up/i);
   assert.equal(backend.sendCalls.length, 1);
   assert.equal(backend.sendCalls[0]?.followUpPrompts.length, 1);
-
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
-  await Promise.resolve();
-  await Promise.resolve();
 });
 
 defineTest("runTaskToolMvp send rejects terminal task", async () => {
@@ -1283,24 +1344,24 @@ defineTest("runTaskToolMvp send rejects terminal task", async () => {
 });
 
 defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running auth flow scan");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   const cancelled = await runTask({
     params: {
@@ -1317,10 +1378,6 @@ defineTest("runTaskToolMvp cancel marks running task as cancelled", async () => 
   assert.equal(cancelled.details.status, "cancelled");
   assert.equal(Reflect.get(cancelled.details, "cancel_applied"), true);
   assert.equal(Reflect.get(cancelled.details, "prior_status"), "running");
-
-  const signal = backend.calls[0]?.input.signal;
-  assert.notEqual(signal, undefined);
-  assert.equal(signal?.aborted, true);
 
   const cancelledAgain = await runTask({
     params: {
@@ -1425,11 +1482,9 @@ defineTest("runTaskToolMvp enforces deny policy decisions", async () => {
 });
 
 defineTest("runTaskToolMvp enforces deny policy on send", async () => {
-  const backend = new DeferredBackend();
   let decision: "allow" | "deny" = "allow";
 
   const deps = makeDeps({
-    backend,
     loadConfig: async () => ({
       ...loadedConfigFixture,
       config: {
@@ -1446,21 +1501,23 @@ defineTest("runTaskToolMvp enforces deny policy on send", async () => {
     }),
   });
 
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running auth flow scan");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   decision = "deny";
   const send = await runTask({
@@ -1478,31 +1535,27 @@ defineTest("runTaskToolMvp enforces deny policy on send", async () => {
   assert.equal(send.details.status, "failed");
   assert.equal(send.details.error_code, "task_permission_denied");
   assert.equal(send.details.error_category, "policy");
-
-  backend.resolveSuccess(0, "Finder: Auth flow scan", "done output");
-  await Promise.resolve();
-  await Promise.resolve();
 });
 
 defineTest("runTaskToolMvp wait reports cancelled terminal state after cancel", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
-
-  const started = await runTask({
-    params: {
-      op: "start",
-      async: true,
-      subagent_type: "finder",
-      description: "Auth flow scan",
-      prompt: "Trace auth validation",
-    },
-    cwd: "/tmp/project",
-    signal: undefined,
-    onUpdate: undefined,
-    deps,
+  const deps = makeDeps();
+  const created = deps.taskStore.createTask({
+    taskId: "task_test_0001",
+    subagent: finderSubagentFixture,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: deps.backend.id,
+    invocation: "task-routed",
   });
-
-  assert.equal(started.details.status, "running");
+  assert.equal(Result.isOk(created), true);
+  if (Result.isError(created)) {
+    assert.fail("Expected seed task creation");
+  }
+  const running = deps.taskStore.markRunning("task_test_0001", "Running auth flow scan");
+  assert.equal(Result.isOk(running), true);
+  if (Result.isError(running)) {
+    assert.fail("Expected seed running state");
+  }
 
   const cancelled = await runTask({
     params: {
@@ -1669,9 +1722,8 @@ defineTest("runTaskToolMvp batch start isolates failures", async () => {
   assert.equal(items[2]?.status, "succeeded");
 });
 
-defineTest("runTaskToolMvp batch async mixed validity reports partial acceptance", async () => {
-  const backend = new DeferredBackend();
-  const deps = makeDeps({ backend });
+defineTest("runTaskToolMvp batch async requests are rejected", async () => {
+  const deps = makeDeps();
 
   const started = await runTask({
     params: {
@@ -1702,27 +1754,29 @@ defineTest("runTaskToolMvp batch async mixed validity reports partial acceptance
     deps,
   });
 
-  assert.equal(started.details.status, "running");
-  assert.equal(Reflect.get(started.details, "accepted_count"), 2);
-  assert.equal(Reflect.get(started.details, "rejected_count"), 1);
-  assert.equal(Reflect.get(started.details, "batch_status"), "partial");
+  assert.equal(started.details.status, "failed");
+  assert.equal(started.details.error_code, "task_async_disabled");
+});
 
-  const acceptedIds = (started.details.items ?? [])
-    .filter((item) => item.found)
-    .map((item) => item.id);
+defineTest("runTaskToolMvp batch item async requests are rejected", async () => {
+  const deps = makeDeps();
 
-  assert.equal(acceptedIds.length, 2);
-
-  backend.resolveSuccess(0, "Finder: valid-1", "output valid-1");
-  backend.resolveSuccess(1, "Finder: valid-3", "output valid-3");
-  await Promise.resolve();
-  await Promise.resolve();
-
-  const waited = await runTask({
+  const started = await runTask({
     params: {
-      op: "wait",
-      ids: acceptedIds,
-      timeout_ms: 200,
+      op: "start",
+      tasks: [
+        {
+          subagent_type: "finder",
+          description: "valid-1",
+          prompt: "trace valid-1",
+        },
+        {
+          subagent_type: "finder",
+          description: "invalid-2",
+          prompt: "trace invalid-2",
+          async: true,
+        },
+      ],
     },
     cwd: "/tmp/project",
     signal: undefined,
@@ -1730,9 +1784,8 @@ defineTest("runTaskToolMvp batch async mixed validity reports partial acceptance
     deps,
   });
 
-  assert.equal(waited.details.status, "succeeded");
-  assert.equal(Reflect.get(waited.details, "done"), true);
-  assert.equal(Reflect.get(waited.details, "wait_status"), "completed");
+  assert.equal(started.details.status, "failed");
+  assert.equal(started.details.error_code, "task_async_disabled");
 });
 
 defineTest("runTaskToolMvp exposes observability fields in lifecycle payload", async () => {
@@ -1930,7 +1983,7 @@ defineTest("runTaskToolMvp status aggregates runtime observability from task ite
 });
 
 defineTest(
-  "runTaskToolMvp batch async honors configured concurrency and wait coverage",
+  "runTaskToolMvp batch sync honors configured concurrency and output coverage",
   async () => {
     const backend = new CountingBackend();
     const deps = makeDeps({ backend });
@@ -1938,7 +1991,6 @@ defineTest(
     const started = await runTask({
       params: {
         op: "start",
-        async: true,
         parallel: true,
         tasks: [
           {
@@ -1969,33 +2021,19 @@ defineTest(
       deps,
     });
 
-    const ids = (started.details.items ?? []).filter((item) => item.found).map((item) => item.id);
-
-    assert.equal(ids.length, 4);
-
-    const waited = await runTask({
-      params: {
-        op: "wait",
-        ids,
-        timeout_ms: 300,
-      },
-      cwd: "/tmp/project",
-      signal: undefined,
-      onUpdate: undefined,
-      deps,
-    });
-
-    assert.equal(waited.details.status, "succeeded");
+    assert.equal(started.details.status, "succeeded");
     assert.equal(
-      waited.details.items?.every((item) => item.status === "succeeded"),
+      started.details.items?.every((item) => item.status === "succeeded"),
       true,
     );
     assert.equal(
-      (waited.details.items ?? []).every((item) => Reflect.get(item, "output_available") === true),
+      (started.details.items ?? []).every((item) => Reflect.get(item, "output_available") === true),
       true,
     );
     assert.equal(
-      (waited.details.items ?? []).every((item) => typeof Reflect.get(item, "output") === "string"),
+      (started.details.items ?? []).every(
+        (item) => typeof Reflect.get(item, "output") === "string",
+      ),
       true,
     );
     assert.equal(backend.maxInFlight, 2);
@@ -2021,7 +2059,7 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.equal(registeredNames[0], "task");
   assert.equal(registeredLabels[0], "Task");
   assert.match(registeredDescriptions[0], /start\/status\/wait\/send\/cancel/);
-  assert.match(registeredDescriptions[0], /Default behavior is sync/);
+  assert.match(registeredDescriptions[0], /synchronous and blocking/);
   assert.match(registeredDescriptions[0], /Active subagent roster:/);
   assert.match(registeredDescriptions[0], /whenToUse:/);
   assert.match(registeredDescriptions[0], /search/);

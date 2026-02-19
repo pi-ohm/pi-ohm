@@ -4,6 +4,7 @@ import {
   type SubagentTaskTreeStatus,
 } from "@pi-ohm/tui";
 import type { TaskRuntimeSnapshot } from "./tasks";
+import type { TaskExecutionEvent } from "./events";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
@@ -177,6 +178,51 @@ function parseOutputSections(output: string): {
   };
 }
 
+function summarizeToolPayload(payload: string | undefined): string | undefined {
+  if (!payload) return undefined;
+  const trimmed = payload.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length <= 90) return trimmed;
+  return `${trimmed.slice(0, 89)}…`;
+}
+
+function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly string[] {
+  const rows: string[] = [];
+
+  for (const event of events) {
+    if (event.type === "tool_start") {
+      const payload = summarizeToolPayload(event.argsText);
+      rows.push(payload ? `○ ${event.toolName} ${payload}` : `○ ${event.toolName}`);
+      continue;
+    }
+
+    if (event.type === "tool_update") {
+      const payload = summarizeToolPayload(event.partialText);
+      rows.push(payload ? `… ${event.toolName} ${payload}` : `… ${event.toolName}`);
+      continue;
+    }
+
+    if (event.type === "tool_end") {
+      const payload = summarizeToolPayload(event.resultText);
+      const marker = event.status === "error" ? "✕" : "✓";
+      rows.push(payload ? `${marker} ${event.toolName} ${payload}` : `${marker} ${event.toolName}`);
+    }
+  }
+
+  return rows;
+}
+
+function assistantTextFromEvents(events: readonly TaskExecutionEvent[]): string | undefined {
+  const deltas = events
+    .filter((event) => event.type === "assistant_text_delta")
+    .map((event) => event.delta);
+
+  if (deltas.length === 0) return undefined;
+  const text = deltas.join("").trim();
+  if (text.length === 0) return undefined;
+  return text;
+}
+
 function capitalize(input: string): string {
   if (input.length === 0) return input;
   return input[0].toUpperCase() + input.slice(1);
@@ -184,11 +230,17 @@ function capitalize(input: string): string {
 
 function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): SubagentTaskTreeEntry {
   const parsed = snapshot.output ? parseOutputSections(snapshot.output) : undefined;
+  const eventToolCalls = toToolRowsFromEvents(snapshot.events);
+  const assistantText = assistantTextFromEvents(snapshot.events);
   const active = snapshot.state === "queued" || snapshot.state === "running";
 
   const result = active
-    ? "Working..."
-    : (parsed?.result ?? snapshot.errorMessage ?? snapshot.summary ?? "(no output)");
+    ? (assistantText ?? "Working...")
+    : (assistantText ??
+      parsed?.result ??
+      snapshot.errorMessage ??
+      snapshot.summary ??
+      "(no output)");
 
   const spinnerFrame = Math.floor(Math.max(0, nowEpochMs - snapshot.startedAtEpochMs) / 120);
 
@@ -197,7 +249,7 @@ function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): Subagen
     status: toTreeStatus(snapshot.state),
     title: `${capitalize(snapshot.subagentType)} · ${snapshot.description}`,
     prompt: snapshot.prompt,
-    toolCalls: parsed?.toolCalls ?? [],
+    toolCalls: eventToolCalls.length > 0 ? eventToolCalls : (parsed?.toolCalls ?? []),
     result,
     spinnerFrame,
   };

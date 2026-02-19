@@ -76,7 +76,7 @@ export interface LoadedOhmRuntimeConfig {
 
 const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
   defaultMode: "smart",
-  subagentBackend: "interactive-shell",
+  subagentBackend: "interactive-sdk",
   features: {
     handoff: true,
     subagents: true,

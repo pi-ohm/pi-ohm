@@ -248,3 +248,55 @@ defineTest("createTaskRuntimePresentation maps output into tool rows + result ro
   assert.match(entry.toolCalls[0] ?? "", /Read packages\/subagents/);
   assert.match(entry.result, /Working/);
 });
+
+defineTest("createTaskRuntimePresentation prefers structured event tool rows", () => {
+  const running = makeSnapshot({
+    id: "task_stream",
+    state: "running",
+    prompt: "Inspect src/index.ts",
+    events: [
+      {
+        type: "tool_start",
+        toolCallId: "tool_1",
+        toolName: "read",
+        argsText: '{"path":"src/index.ts"}',
+        atEpochMs: 1001,
+      },
+      {
+        type: "tool_update",
+        toolCallId: "tool_1",
+        toolName: "read",
+        partialText: '{"progress":"50%"}',
+        atEpochMs: 1002,
+      },
+      {
+        type: "assistant_text_delta",
+        delta: "Scanning file...",
+        atEpochMs: 1003,
+      },
+    ],
+    output: "assistant> fallback output",
+    updatedAtEpochMs: 2000,
+  });
+
+  const presentation = createTaskRuntimePresentation({
+    snapshots: [running],
+    nowEpochMs: 3000,
+  });
+
+  const entry = presentation.widgetEntries[0];
+  assert.notEqual(entry, undefined);
+  if (!entry) {
+    assert.fail("Expected one widget entry");
+  }
+
+  assert.equal(
+    entry.toolCalls.some((line) => line.includes("○ read")),
+    true,
+  );
+  assert.equal(
+    entry.toolCalls.some((line) => line.includes("… read")),
+    true,
+  );
+  assert.match(entry.result, /Scanning file/);
+});

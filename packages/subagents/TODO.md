@@ -7,6 +7,7 @@ This replaces prior ticket-by-ticket log with a technical summary of what is alr
 ### Runtime foundations
 
 - Task lifecycle implemented end-to-end: `start | status | wait | send | cancel`.
+- Async/background task starts are currently disabled by policy (`task_async_disabled`) until UX is rebuilt.
 - Strong payload boundary normalization exists (`id|ids`, `op:"result" -> status`, strict validation envelopes).
 - Current payload includes `contract_version: "task.v1"` plus explicit fields for wait/cancel/batch ergonomics.
 - Structured observability propagated (`backend/provider/model/runtime/route`) and aggregated across collections.
@@ -15,8 +16,8 @@ This replaces prior ticket-by-ticket log with a technical summary of what is alr
 
 ### Execution backends
 
-- Default execution no longer scaffold-only; nested pi execution backend exists.
-- Current default backend path uses CLI subprocess (`pi --print ...`), including timeout + abort handling.
+- Default execution backend is now SDK (`interactive-sdk`).
+- Explicit CLI fallback backend remains available (`interactive-shell`) and can be used as rollback/fallback.
 - Backend identity normalization + explicit backend failure taxonomy implemented.
 
 ### Invocation model + schema
@@ -30,27 +31,20 @@ This replaces prior ticket-by-ticket log with a technical summary of what is alr
 - Task history rendering supports collapsed default + `Ctrl+O` expand.
 - Non-debug rendering moved to inline Amp-style tree messaging.
 - Debug mode preserves verbose contract view (`OHM_DEBUG=1|true`).
-- Sync-first guidance added; async remains opt-in.
+- Sync blocking starts are enforced; async/background start mode disabled.
 - Live bottom widget default switched off; inline updates now primary UX path.
+- SDK event rows stream into inline/task tree surfaces while task is running.
 
 ---
 
 ## 1) Current technical gap (root cause)
 
-We still cannot guarantee full per-tool-call fidelity in inline messages.
+Residual gap is no longer event fidelity; remaining gap is UX polish for running/queued states.
 
 ### Why
 
-Current task backend is CLI-capture based (`packages/subagents/src/runtime/backend.ts`):
-
-- spawns nested `pi --print --no-session --no-extensions --tools ...`.
-- receives only final stdout/stderr text payload.
-- tool-call rows are inferred from freeform text heuristics.
-
-That means:
-
-- if nested output doesn’t explicitly print each tool call, we cannot display each call.
-- inline message stream is best-effort reconstruction, not event-accurate telemetry.
+SDK path now streams structured events and updates tool rows in-place.
+CLI backend remains text-capture fallback and has lower transcript fidelity.
 
 ---
 
@@ -60,7 +54,7 @@ Migrate subagent execution from nested CLI text capture to SDK session streaming
 
 ### Desired end-state
 
-- `task` stays sync-by-default; async opt-in.
+- `task` starts are synchronous/blocking (`async:true` rejected).
 - Inline task message is authoritative live surface.
 - Bottom sticky widget remains optional/off by default.
 - Tool-call rows come from real SDK tool events (`tool_execution_start/update/end`), not output parsing.
@@ -230,9 +224,9 @@ If S11-S14 metrics are good, make SDK backend default.
 
 ### Tickets
 
-- [ ] **S15-T1: Flip default backend to SDK**
-- [ ] **S15-T2: Keep CLI backend as explicit fallback mode**
-- [ ] **S15-T3: Release notes + migration callouts**
+- [x] **S15-T1: Flip default backend to SDK**
+- [x] **S15-T2: Keep CLI backend as explicit fallback mode**
+- [x] **S15-T3: Release notes + migration callouts**
 
 ### Gate criteria (must all pass)
 

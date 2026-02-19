@@ -27,19 +27,19 @@ from profile IDs with deterministic collision handling.
 - direct-tool execution and task-routed execution share the same runtime/result envelope
 
 The orchestration tool name is **`task`**. Async orchestration lifecycle
-operations (`start/status/wait/send/cancel`) are exposed through this tool, but
-default execution is sync (`async:false`). Use `async:true` only for background/long tasks.
+operations (`start/status/wait/send/cancel`) are exposed through this tool.
+Subagent starts are synchronous/blocking. `async:true` start requests are rejected.
 
 ## Task tool (current)
 
 Current behavior:
 
-- supports `op: "start"` for a single task payload (sync + `async:true`)
+- supports `op: "start"` for a single task payload (sync)
 - supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - input normalization: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
 - non-debug result text renders Amp-style inline message trees (prompt -> tool calls -> result)
-- running background updates use minimal inline progress lines
+- running updates stream inline tool rows in-place from SDK events
 - returns `task_id`, status, and deterministic task details
 - includes explicit wait/cancel ergonomics fields:
   - `wait_status` (`completed|timeout|aborted`)
@@ -77,10 +77,10 @@ Current behavior:
 
 Runtime backend is selected from `subagentBackend` config:
 
-- `interactive-shell` (default): executes a real nested `pi` run for subagent prompts
-  using built-in tools (`read,bash,edit,write,grep,find,ls`)
-- `interactive-sdk` (opt-in): executes subagent prompts through in-process Pi SDK
+- `interactive-sdk` (default): executes subagent prompts through in-process Pi SDK
   sessions with in-memory session/settings managers
+- `interactive-shell` (fallback): executes a real nested `pi` run for subagent prompts
+  using built-in tools (`read,bash,edit,write,grep,find,ls`)
 - `none`: uses deterministic scaffold backend (echo-style debug output)
 - `custom-plugin`: currently returns `unsupported_subagent_backend`
 
@@ -117,26 +117,24 @@ For unknown tasks/expired tasks, error categorization is explicit: `error_catego
 
 ## Operator cookbook
 
-### 1) Sync vs async recommendation matrix
+### 1) Execution mode policy
 
-| scenario                                        | recommended mode                         | why                                                     |
-| ----------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- |
-| quick lookup, single task, result needed now    | `start` (default sync)                   | simplest UX; one call, one terminal result              |
-| long-running analysis where caller can continue | `start async:true` + `wait/status` later | avoids blocking; keeps task lifecycle explicit          |
-| fan-out independent tasks                       | `start tasks[] parallel:true`            | deterministic ordered aggregation + bounded concurrency |
-| follow-up on active task                        | `send`                                   | preserves task history + follow-up prompts              |
-| stop background task                            | `cancel`                                 | explicit terminal transition + abort propagation        |
+| scenario                                     | recommended mode              | why                                                     |
+| -------------------------------------------- | ----------------------------- | ------------------------------------------------------- |
+| quick lookup, single task, result needed now | `start` (sync blocking)       | simplest UX; one call, one terminal result              |
+| fan-out independent tasks                    | `start tasks[] parallel:true` | deterministic ordered aggregation + bounded concurrency |
+| follow-up on an existing active task         | `send`                        | preserves task history + follow-up prompts              |
 
-Default policy: use sync first; opt into async only when needed.
+`async:true` start requests are rejected (`task_async_disabled`).
 
 ### 2) Backend tradeoff matrix
 
-| backend                       | strengths                                                                    | tradeoffs                                        | when to pick                               |
-| ----------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
-| `interactive-shell` (default) | mature nested CLI behavior; straightforward rollback                         | text-capture based transcript fidelity           | safe baseline/default                      |
-| `interactive-sdk` (opt-in)    | structured tool/assistant events, event-derived rows, better inline fidelity | newer path; needs smoke/ops confidence           | pre-prod validation + richer observability |
-| `none`                        | deterministic scaffold output                                                | no real execution                                | testing/demo/debug wiring only             |
-| `custom-plugin`               | reserved hook                                                                | not implemented (`unsupported_subagent_backend`) | none currently                             |
+| backend                        | strengths                                                                    | tradeoffs                                        | when to pick                   |
+| ------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------ |
+| `interactive-sdk` (default)    | structured tool/assistant events, event-derived rows, better inline fidelity | newer path                                       | default                        |
+| `interactive-shell` (fallback) | mature nested CLI behavior; straightforward rollback                         | text-capture based transcript fidelity           | explicit rollback / fallback   |
+| `none`                         | deterministic scaffold output                                                | no real execution                                | testing/demo/debug wiring only |
+| `custom-plugin`                | reserved hook                                                                | not implemented (`unsupported_subagent_backend`) | none currently                 |
 
 Fallback policy:
 
@@ -159,11 +157,10 @@ printf '/ohm-subagents\n' | PI_CONFIG_DIR=/tmp/pi-ohm-sdk-smoke pi -e ./packages
 Task lifecycle smoke checklist:
 
 1. sync single `start`
-2. async single `start async:true` + `status` + `wait`
-3. `cancel` running task
-4. batch partial acceptance (`tasks[]` mixed validity)
-5. timeout path (`wait timeout_ms`)
-6. follow-up `send` on running task
+2. async guard (`start async:true` returns `task_async_disabled`)
+3. batch partial acceptance (`tasks[]` mixed validity)
+4. timeout path (`wait timeout_ms`)
+5. follow-up `send` on running task
 
 ### 4) Troubleshooting quick map
 
@@ -212,8 +209,6 @@ Batch execution notes:
 - aggregate item order is deterministic (input order)
 - bounded parallelism is enforced by `subagents.taskMaxConcurrency` (default `3`)
 - task failures are isolated; one failed batch item does not abort siblings
-- async mixed-validity batch starts no longer collapse to top-level failure when tasks were accepted;
-  use acceptance counters + `batch_status` to decide polling behavior
 
 ## Task permission policy
 
@@ -357,16 +352,17 @@ For profiles marked `primary:true`, direct tool input schema is subagent-specifi
 
 - `librarian`
   - required: `query`
-  - optional: `context`, `async`, `description`
+  - optional: `context`, `description`
 - `oracle`
   - required: `task`
-  - optional: `context`, `files[]`, `async`, `description`
+  - optional: `context`, `files[]`, `description`
 - `finder`
   - required: `query`
-  - optional: `async`, `description`
+  - optional: `description`
 
 Normalization behavior:
 
 - `context` is forwarded in a dedicated prompt section (`Context:`)
 - oracle `files[]` is forwarded in a dedicated prompt block (`Files:` + bullet paths)
+- `async:true` inputs are rejected by task lifecycle policy (`task_async_disabled`)
 - task lifecycle/result payload remains the same shape after primary normalization

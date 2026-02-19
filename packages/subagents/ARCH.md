@@ -7,7 +7,7 @@
 - a lifecycle `task` tool (`start|status|wait|send|cancel`)
 - dual invocation model (`task-routed` + optional direct `primary-tool`)
 - typed recoverable failures (`better-result`)
-- inline-first UX (sync-first by default, async optional)
+- inline-first UX (sync blocking starts; async start disabled)
 
 ---
 
@@ -73,6 +73,7 @@ Input normalization:
 
 - `id` normalized to `ids` for `status`/`wait`
 - `op:"result"` normalized to `status`
+- `async:true` start requests rejected with `task_async_disabled`
 
 ## 5.2 Output invariants
 
@@ -124,7 +125,8 @@ Primary prompt normalization:
 
 ## 6.1 Implemented now
 
-- `interactive-shell` backend (default): nested Pi CLI execution
+- `interactive-sdk` backend (default): in-process SDK execution with structured events
+- `interactive-shell` backend: nested Pi CLI fallback path
 - `none`: deterministic scaffold backend
 - `custom-plugin`: explicit unsupported placeholder
 

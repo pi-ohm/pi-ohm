@@ -469,6 +469,68 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
   assert.equal(result.value.route, "interactive-sdk");
 });
 
+defineTest("PiSdkTaskExecutionBackend forwards streamed events to caller", async () => {
+  const backend = new PiSdkTaskExecutionBackend(async (input) => {
+    input.onEvent?.({
+      type: "tool_start",
+      toolCallId: "tool_1",
+      toolName: "read",
+      argsText: '{"path":"src/index.ts"}',
+      atEpochMs: 1001,
+    });
+    input.onEvent?.({
+      type: "tool_end",
+      toolCallId: "tool_1",
+      toolName: "read",
+      resultText: '{"ok":true}',
+      status: "success",
+      atEpochMs: 1002,
+    });
+
+    return {
+      output: "sdk output",
+      events: [
+        {
+          type: "tool_start",
+          toolCallId: "tool_1",
+          toolName: "read",
+          argsText: '{"path":"src/index.ts"}',
+          atEpochMs: 1001,
+        },
+        {
+          type: "tool_end",
+          toolCallId: "tool_1",
+          toolName: "read",
+          resultText: '{"ok":true}',
+          status: "success",
+          atEpochMs: 1002,
+        },
+      ],
+      timedOut: false,
+      aborted: false,
+    };
+  });
+
+  const streamed: string[] = [];
+  const result = await backend.executeStart({
+    taskId: "task_sdk_streamed_events",
+    subagent: subagentFixture,
+    description: "stream events",
+    prompt: "stream events",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+    onEvent: (event) => {
+      if (event.type === "tool_start" || event.type === "tool_end") {
+        streamed.push(`${event.type}:${event.toolName}`);
+      }
+    },
+  });
+
+  assert.equal(Result.isOk(result), true);
+  assert.deepEqual(streamed, ["tool_start:read", "tool_end:read"]);
+});
+
 defineTest("PiSdkTaskExecutionBackend forwards configured subagent model pattern", async () => {
   const requestedModels: string[] = [];
 
@@ -1012,7 +1074,7 @@ defineTest("PiCliTaskExecutionBackend resolves backend IDs from runtime config",
   assert.equal(backend.resolveBackendId(makeConfig("custom-plugin")), "custom-plugin");
 });
 
-defineTest("createDefaultTaskExecutionBackend defaults to interactive-shell backend", () => {
+defineTest("createDefaultTaskExecutionBackend defaults to interactive-sdk backend", () => {
   const backend = createDefaultTaskExecutionBackend();
-  assert.equal(backend.id, "interactive-shell");
+  assert.equal(backend.id, "interactive-sdk");
 });

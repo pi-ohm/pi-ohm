@@ -25,6 +25,7 @@ export interface TaskBackendStartInput {
   readonly config: OhmRuntimeConfig;
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
+  readonly onEvent?: (event: TaskExecutionEvent) => void;
 }
 
 export interface TaskBackendStartOutput {
@@ -47,6 +48,7 @@ export interface TaskBackendSendInput {
   readonly config: OhmRuntimeConfig;
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
+  readonly onEvent?: (event: TaskExecutionEvent) => void;
 }
 
 export interface TaskBackendSendOutput {
@@ -177,6 +179,7 @@ export interface PiSdkRunnerInput {
   readonly modelPattern?: string;
   readonly signal: AbortSignal | undefined;
   readonly timeoutMs: number;
+  readonly onEvent?: (event: TaskExecutionEvent) => void;
 }
 
 export interface PiSdkRunnerResult {
@@ -194,6 +197,8 @@ export type PiSdkRunner = (input: PiSdkRunnerInput) => Promise<PiSdkRunnerResult
 
 const PI_CLI_TOOLS = "read,bash,edit,write,grep,find,ls";
 const SDK_BACKEND_RUNTIME = "pi-sdk";
+const SDK_BACKEND_ROUTE = "interactive-sdk";
+const CLI_BACKEND_ROUTE = "interactive-shell";
 
 export interface PiSdkStreamCaptureState {
   assistantChunks: string[];
@@ -230,17 +235,20 @@ export function createPiSdkStreamCaptureState(): PiSdkStreamCaptureState {
   };
 }
 
-export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: unknown): void {
+export function applyPiSdkSessionEvent(
+  state: PiSdkStreamCaptureState,
+  event: unknown,
+): TaskExecutionEvent | undefined {
   const parsed = parseTaskExecutionEventFromSdk(event);
-  if (Result.isError(parsed)) return;
-  if (!parsed.value) return;
+  if (Result.isError(parsed)) return undefined;
+  if (!parsed.value) return undefined;
 
   state.capturedEventCount += 1;
   state.events.push(parsed.value);
 
   if (parsed.value.type === "assistant_text_delta") {
     state.assistantChunks.push(parsed.value.delta);
-    return;
+    return parsed.value;
   }
 
   if (parsed.value.type === "tool_start") {
@@ -251,7 +259,7 @@ export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: un
         payload: parsed.value.argsText,
       }),
     );
-    return;
+    return parsed.value;
   }
 
   if (parsed.value.type === "tool_update") {
@@ -262,7 +270,7 @@ export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: un
         payload: parsed.value.partialText,
       }),
     );
-    return;
+    return parsed.value;
   }
 
   if (parsed.value.type === "tool_end") {
@@ -273,12 +281,15 @@ export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: un
         payload: parsed.value.resultText,
       }),
     );
-    return;
+    return parsed.value;
   }
 
   if (parsed.value.type === "task_terminal") {
     state.sawAgentEnd = true;
+    return parsed.value;
   }
+
+  return parsed.value;
 }
 
 export function finalizePiSdkStreamCapture(
@@ -592,7 +603,9 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   }
 
   const unsubscribe = session.subscribe((event) => {
-    applyPiSdkSessionEvent(captureState, event);
+    const captured = applyPiSdkSessionEvent(captureState, event);
+    if (!captured) return;
+    input.onEvent?.(captured);
   });
 
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
@@ -937,7 +950,7 @@ export class ScaffoldTaskExecutionBackend implements TaskExecutionBackend {
 }
 
 export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
-  readonly id = "interactive-shell";
+  readonly id = SDK_BACKEND_ROUTE;
   private readonly scaffoldBackend = new ScaffoldTaskExecutionBackend();
 
   constructor(
@@ -948,7 +961,8 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
 
   resolveBackendId(config: OhmRuntimeConfig): string {
     if (config.subagentBackend === "none") return this.scaffoldBackend.id;
-    if (config.subagentBackend === "interactive-sdk") return "interactive-sdk";
+    if (config.subagentBackend === "interactive-shell") return CLI_BACKEND_ROUTE;
+    if (config.subagentBackend === "interactive-sdk") return SDK_BACKEND_ROUTE;
     if (config.subagentBackend === "custom-plugin") return "custom-plugin";
     return this.id;
   }
@@ -1001,7 +1015,7 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       provider: normalized.provider,
       model: normalized.model,
       runtime: normalized.runtime,
-      route: this.id,
+      route: CLI_BACKEND_ROUTE,
     });
   }
 
@@ -1047,7 +1061,7 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       provider: normalized.provider,
       model: normalized.model,
       runtime: normalized.runtime,
-      route: this.id,
+      route: CLI_BACKEND_ROUTE,
     });
   }
 
@@ -1066,6 +1080,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       return Result.err(toUnsupportedBackendError(input.taskId, "execute_start"));
     }
 
+    if (input.config.subagentBackend === "interactive-shell") {
+      return this.executeCliStart(input);
+    }
+
     if (input.config.subagentBackend === "interactive-sdk") {
       const sdkResult = await this.sdkBackend.executeStart(input);
       if (Result.isOk(sdkResult)) return sdkResult;
@@ -1073,6 +1091,9 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       return this.executeCliStart(input);
     }
 
+    const sdkResult = await this.sdkBackend.executeStart(input);
+    if (Result.isOk(sdkResult)) return sdkResult;
+    if (!this.shouldFallbackToCli(sdkResult.error)) return sdkResult;
     return this.executeCliStart(input);
   }
 
@@ -1091,6 +1112,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       return Result.err(toUnsupportedBackendError(input.taskId, "execute_send"));
     }
 
+    if (input.config.subagentBackend === "interactive-shell") {
+      return this.executeCliSend(input);
+    }
+
     if (input.config.subagentBackend === "interactive-sdk") {
       const sdkResult = await this.sdkBackend.executeSend(input);
       if (Result.isOk(sdkResult)) return sdkResult;
@@ -1098,6 +1123,9 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       return this.executeCliSend(input);
     }
 
+    const sdkResult = await this.sdkBackend.executeSend(input);
+    if (Result.isOk(sdkResult)) return sdkResult;
+    if (!this.shouldFallbackToCli(sdkResult.error)) return sdkResult;
     return this.executeCliSend(input);
   }
 }
@@ -1134,6 +1162,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
+      onEvent: input.onEvent,
     });
 
     if (run.aborted || input.signal?.aborted) {
@@ -1162,7 +1191,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       provider: run.provider ?? "unavailable",
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
-      route: this.id,
+      route: SDK_BACKEND_ROUTE,
       events: run.events,
     });
   }
@@ -1185,6 +1214,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       modelPattern,
       signal: input.signal,
       timeoutMs: this.timeoutMs,
+      onEvent: input.onEvent,
     });
 
     if (run.aborted || input.signal?.aborted) {
@@ -1213,7 +1243,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       provider: run.provider ?? "unavailable",
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
-      route: this.id,
+      route: SDK_BACKEND_ROUTE,
       events: run.events,
     });
   }

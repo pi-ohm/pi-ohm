@@ -439,8 +439,8 @@ function withItemObservabilityDefaults(item: TaskToolItemDetails): TaskToolItemD
 
 function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): string {
   const lines: string[] = [
-    "Orchestrate subagent execution. Supports start/status/wait/send/cancel with optional async lifecycle.",
-    "Default behavior is sync (async=false). Prefer sync unless background execution is required.",
+    "Orchestrate subagent execution. Supports start/status/wait/send/cancel.",
+    "Subagent starts are synchronous and blocking. Async/background start mode is disabled.",
     "Compatibility: status/wait accept either id or ids. op=result is treated as status.",
     "",
     "Active subagent roster:",
@@ -1035,8 +1035,7 @@ export function formatTaskToolCall(args: TaskToolParameters): string {
     return `task start batch (${args.tasks.length})`;
   }
 
-  const asyncSuffix = args.async ? " async" : "";
-  return `task start ${args.subagent_type} · ${args.description}${asyncSuffix}`;
+  return `task start ${args.subagent_type} · ${args.description}`;
 }
 
 export function formatTaskToolResult(details: TaskToolResultDetails, expanded: boolean): string {
@@ -1375,6 +1374,24 @@ async function runTaskExecutionLifecycle(input: {
     onUpdate: input.onUpdate,
   });
 
+  let streamedEventCount = 0;
+  const onBackendEvent = (event: TaskExecutionEvent): void => {
+    streamedEventCount += 1;
+
+    const appended = input.deps.taskStore.appendEvents(input.taskId, [event]);
+    if (Result.isError(appended)) {
+      return;
+    }
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("start", appended.value),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+  };
+
   const execution = await input.deps.backend.executeStart({
     taskId: input.taskId,
     subagent: input.subagent,
@@ -1383,6 +1400,7 @@ async function runTaskExecutionLifecycle(input: {
     cwd: input.cwd,
     config: input.config,
     signal: input.signal,
+    onEvent: onBackendEvent,
   });
 
   const latest = input.deps.taskStore.getTask(input.taskId);
@@ -1459,7 +1477,10 @@ async function runTaskExecutionLifecycle(input: {
   }
 
   if (execution.value.events && execution.value.events.length > 0) {
-    const appended = input.deps.taskStore.appendEvents(input.taskId, execution.value.events);
+    const remainingEvents = execution.value.events.slice(
+      Math.min(streamedEventCount, execution.value.events.length),
+    );
+    const appended = input.deps.taskStore.appendEvents(input.taskId, remainingEvents);
     if (Result.isError(appended)) {
       const failed = input.deps.taskStore.markFailed(
         input.taskId,
@@ -1816,6 +1837,15 @@ type TaskStartBatchParameters = {
   readonly async?: boolean;
 };
 
+function isAsyncRequestedForStart(params: Extract<TaskToolParameters, { op: "start" }>): boolean {
+  if ("tasks" in params) {
+    if (params.async === true) return true;
+    return params.tasks.some((task) => task.async === true);
+  }
+
+  return params.async === true;
+}
+
 interface PreparedTaskExecution {
   readonly index: number;
   readonly taskId: string;
@@ -1864,6 +1894,24 @@ function fallbackFailedSnapshot(input: {
     activeToolCalls: 0,
     endedAtEpochMs: Date.now(),
     updatedAtEpochMs: Date.now(),
+  };
+}
+
+function asyncStartDisabledDetails(input: {
+  readonly backendId: string;
+  readonly subagentType?: string;
+  readonly description?: string;
+}): TaskToolResultDetails {
+  return {
+    op: "start",
+    status: "failed",
+    summary: "Async/background subagent execution is disabled",
+    backend: input.backendId,
+    subagent_type: input.subagentType,
+    description: input.description,
+    error_code: "task_async_disabled",
+    error_message:
+      "Subagent starts must run synchronously. Remove async:true and run start directly.",
   };
 }
 
@@ -2018,18 +2066,10 @@ async function runPreparedTaskExecutions(
   });
 }
 
-function summarizeBatchStart(items: readonly TaskToolItemDetails[], asyncMode: boolean): string {
+function summarizeBatchStart(items: readonly TaskToolItemDetails[]): string {
   const total = items.length;
   const accepted = items.filter((item) => item.found).length;
   const rejected = total - accepted;
-
-  if (asyncMode) {
-    if (rejected > 0) {
-      return `Started batch tasks: ${accepted}/${total} accepted (${rejected} rejected)`;
-    }
-
-    return `Started batch tasks: ${accepted}/${total} accepted`;
-  }
 
   const succeeded = items.filter((item) => item.status === "succeeded").length;
   if (rejected > 0) {
@@ -2039,10 +2079,7 @@ function summarizeBatchStart(items: readonly TaskToolItemDetails[], asyncMode: b
   return `Completed batch tasks: ${succeeded}/${total} succeeded`;
 }
 
-function resolveBatchStatus(
-  items: readonly TaskToolItemDetails[],
-  asyncMode: boolean,
-): {
+function resolveBatchStatus(items: readonly TaskToolItemDetails[]): {
   readonly status: TaskToolStatus;
   readonly totalCount: number;
   readonly acceptedCount: number;
@@ -2055,20 +2092,6 @@ function resolveBatchStatus(
 
   const succeededCount = items.filter((item) => item.status === "succeeded").length;
   const failedCount = items.filter((item) => item.status === "failed" || !item.found).length;
-
-  if (asyncMode) {
-    const batchStatus: TaskBatchStatus =
-      acceptedCount === 0 ? "rejected" : rejectedCount > 0 ? "partial" : "accepted";
-
-    const status: TaskToolStatus = acceptedCount > 0 ? "running" : "failed";
-    return {
-      status,
-      totalCount,
-      acceptedCount,
-      rejectedCount,
-      batchStatus,
-    };
-  }
 
   const batchStatus: TaskBatchStatus =
     acceptedCount === 0
@@ -2179,43 +2202,6 @@ async function runTaskStartBatch(
 
   const concurrency = params.parallel ? resolveBatchMaxConcurrency(config.config) : 1;
 
-  if (params.async) {
-    void runPreparedTaskExecutions(prepared, concurrency).catch(() => undefined);
-
-    for (const execution of prepared) {
-      const current = input.deps.taskStore.getTask(execution.taskId) ?? execution.createdSnapshot;
-      items[execution.index] = snapshotToItem(current);
-    }
-
-    const normalizedItems = items.map((item, index) => {
-      if (item) return item;
-      return toTaskItemFailure({
-        id: `task_batch_${index + 1}`,
-        summary: "Batch task result unavailable",
-        errorCode: "task_batch_result_unavailable",
-        errorMessage: "Batch task result unavailable",
-      });
-    });
-
-    const batch = resolveBatchStatus(normalizedItems, true);
-    const observability = resolveCollectionObservability(normalizedItems, backendId);
-    return toAgentToolResult({
-      op: "start",
-      status: batch.status,
-      summary: summarizeBatchStart(normalizedItems, true),
-      backend: backendId,
-      provider: observability.provider,
-      model: observability.model,
-      runtime: observability.runtime,
-      route: observability.route,
-      items: normalizedItems,
-      total_count: batch.totalCount,
-      accepted_count: batch.acceptedCount,
-      rejected_count: batch.rejectedCount,
-      batch_status: batch.batchStatus,
-    });
-  }
-
   const completed = await runPreparedTaskExecutions(prepared, concurrency);
   for (let index = 0; index < prepared.length; index += 1) {
     const execution = prepared[index];
@@ -2234,12 +2220,12 @@ async function runTaskStartBatch(
     });
   });
 
-  const batch = resolveBatchStatus(normalizedItems, false);
+  const batch = resolveBatchStatus(normalizedItems);
   const observability = resolveCollectionObservability(normalizedItems, backendId);
   return toAgentToolResult({
     op: "start",
     status: batch.status,
-    summary: summarizeBatchStart(normalizedItems, false),
+    summary: summarizeBatchStart(normalizedItems),
     backend: backendId,
     provider: observability.provider,
     model: observability.model,
@@ -2331,27 +2317,6 @@ async function runTaskStartSingle(
     });
   }
 
-  if (params.async) {
-    void prepared.value.run().catch(() => undefined);
-    const current = input.deps.taskStore.getTask(taskId) ?? prepared.value.createdSnapshot;
-    return toAgentToolResult({
-      op: "start",
-      status: current.state,
-      task_id: current.id,
-      subagent_type: current.subagentType,
-      description: current.description,
-      summary: `Started async ${subagent.name}: ${params.description}`,
-      backend: current.backend,
-      provider: current.provider,
-      model: current.model,
-      runtime: current.runtime,
-      route: current.route,
-      invocation: current.invocation,
-      error_code: current.errorCode,
-      error_message: current.errorMessage,
-    });
-  }
-
   const completed = await prepared.value.run();
   return toAgentToolResult(snapshotToTaskResultDetails("start", completed, completed.output));
 }
@@ -2361,6 +2326,18 @@ async function runTaskStart(
   input: RunTaskToolInput,
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
+  if (isAsyncRequestedForStart(params)) {
+    const subagentType = "tasks" in params ? undefined : params.subagent_type;
+    const description = "tasks" in params ? undefined : params.description;
+    return toAgentToolResult(
+      asyncStartDisabledDetails({
+        backendId: resolveBackendId(input.deps.backend, config.config),
+        subagentType,
+        description,
+      }),
+    );
+  }
+
   if ("tasks" in params) {
     return runTaskStartBatch(params, input, config);
   }
@@ -2571,6 +2548,24 @@ async function runTaskSend(
     onUpdate: input.onUpdate,
   });
 
+  let streamedEventCount = 0;
+  const onBackendEvent = (event: TaskExecutionEvent): void => {
+    streamedEventCount += 1;
+
+    const appended = input.deps.taskStore.appendEvents(interaction.value.id, [event]);
+    if (Result.isError(appended)) {
+      return;
+    }
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails("send", appended.value),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+  };
+
   const sendResult = await input.deps.backend.executeSend({
     taskId: interaction.value.id,
     subagent,
@@ -2581,6 +2576,7 @@ async function runTaskSend(
     cwd: input.cwd,
     config: config.config,
     signal: input.signal,
+    onEvent: onBackendEvent,
   });
 
   if (Result.isError(sendResult)) {
@@ -2629,10 +2625,10 @@ async function runTaskSend(
   }
 
   if (sendResult.value.events && sendResult.value.events.length > 0) {
-    const appended = input.deps.taskStore.appendEvents(
-      interaction.value.id,
-      sendResult.value.events,
+    const remainingEvents = sendResult.value.events.slice(
+      Math.min(streamedEventCount, sendResult.value.events.length),
     );
+    const appended = input.deps.taskStore.appendEvents(interaction.value.id, remainingEvents);
     if (Result.isError(appended)) {
       const failed = input.deps.taskStore.markFailed(
         interaction.value.id,

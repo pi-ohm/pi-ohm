@@ -103,16 +103,13 @@ function buildPrimaryToolDescription(subagent: OhmSubagentDefinition): string {
   );
 
   if (subagent.id === "librarian") {
-    lines.push("", "Input: query (required), context (optional), async (optional)");
+    lines.push("", "Input: query (required), context (optional)");
   } else if (subagent.id === "oracle") {
-    lines.push(
-      "",
-      "Input: task (required), context (optional), files[] (optional), async (optional)",
-    );
+    lines.push("", "Input: task (required), context (optional), files[] (optional)");
   } else if (subagent.id === "finder") {
-    lines.push("", "Input: query (required), async (optional)");
+    lines.push("", "Input: query (required)");
   } else {
-    lines.push("", "Input: prompt (required), async (optional)");
+    lines.push("", "Input: prompt (required)");
   }
 
   return lines.join("\n");
@@ -298,8 +295,7 @@ function toPrimaryToolCallText(subagent: OhmSubagentDefinition, params: unknown)
   const normalized = normalizePrimaryPrompt(params, subagent);
   if (!normalized.ok) return subagent.id;
 
-  const suffix = normalized.async ? " async" : "";
-  return `${subagent.id} · ${normalized.description}${suffix}`;
+  return `${subagent.id} · ${normalized.description}`;
 }
 
 function toResultText(result: AgentToolResult<unknown>): string {
