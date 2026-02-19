@@ -1,49 +1,47 @@
-## `@pi-ohm/subagents` Architecture
+# `@pi-ohm/subagents` — Architecture
 
-## Objectives
+## 1) Purpose
 
-- Mirror OpenCode-style subagents with a **Task tool** async lifecycle.
-- Support a `primary: true` option so selected agents are exposed as direct top-level tools.
-- Provide strong live UX feedback while tasks are running.
-- Use `@mariozechner/pi-tui` as the standard UI layer for subagent task visuals.
-- Keep default runtime self-contained (no third-party extension dependency).
+`@pi-ohm/subagents` provides OpenCode-style subagent orchestration in Pi with:
 
-## Constraints
-
-- **No `interactive_shell` dependency** for core behavior.
-  - It is third-party and should not be required for default package functionality.
-- Runtime must work in plain Pi extension environments with only core extension APIs.
-- Recoverable errors must use **`better-result`** typed Result flows (no ad-hoc try/catch propagation).
+- a lifecycle `task` tool (`start|status|wait|send|cancel`)
+- dual invocation model (`task-routed` + optional direct `primary-tool`)
+- stable machine contract (`task.v1`)
+- typed recoverable failures (`better-result`)
+- inline-first UX (sync-first by default, async optional)
 
 ---
 
-## Invocation Model
+## 2) Hard constraints
 
-1. **Task-routed path** (`primary: false`, default)
-   - Invoked through the `task` orchestration tool.
-   - Runs in isolated task context with resumable task IDs.
-
-2. **Primary-tool path** (`primary: true`)
-   - Agent is also exposed as direct top-level tool entrypoint.
-   - No delegation handoff required for invocation.
-   - Tool registration must be generated from active profile definitions.
-   - Tool description/help text must be derived from profile metadata (`summary`, `whenToUse`, `prompt` summary).
-   - `primary: true` does **not** remove task-tool routing; profile remains callable via `task` (`subagent_type`).
-
-Default profile intent:
-
-- `librarian`: `primary: true`
-- `finder`: task-routed
-- `oracle`: task-routed
-
-Primary profiles are dual-path by design:
-
-- direct tool invocation
-- task-tool invocation via `subagent_type`
+- No required third-party extension dependency for core runtime.
+- Must run in plain Pi extension environments.
+- Recoverable failures use typed `Result<T,E>` flows (no broad throw/catch propagation).
+- Tool boundary schemas stay TypeBox-compatible with Pi tool registration.
+- Internal domain validation/parsing stays Zod v4.
 
 ---
 
-## Config Resolution
+## 3) Invocation model
+
+## 3.1 Task-routed (default)
+
+- Agent selected by `subagent_type` via `task` tool.
+- Runs in task registry with resumable IDs and lifecycle ops.
+
+## 3.2 Primary-tool (`primary: true`)
+
+- Profile also exposed as direct top-level tool.
+- **Additive**: still routable through `task`.
+
+Default intent:
+
+- `librarian`: primary by default
+- `finder`, `oracle`: task-routed by default
+
+---
+
+## 4) Config resolution
 
 Resolution order:
 
@@ -51,332 +49,285 @@ Resolution order:
 2. global `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
 3. project `.pi/ohm.json`
 
-Merge policy:
+Merge semantics:
 
-- scalar fields: last writer wins (`model`, `primary`, `reasoningEffort`, etc.)
-- list metadata fields: additive merge where explicitly intended
+- scalar: last-writer-wins
+- additive merge only where explicitly defined
 
 ---
 
-## Task Tool Contract
+## 5) Task tool contract (`task.v1`)
 
-OpenCode-style payload + Codex-style async lifecycle.
+## 5.1 Input operations
 
-```jsonc
-// start one
-{
-  "op": "start",
-  "subagent_type": "finder",
-  "description": "auth flow scan",
-  "prompt": "Find token validation + refresh call paths",
-  "async": true
-}
+- `start` single:
+  - `{ op:"start", subagent_type, description, prompt, async? }`
+- `start` batch:
+  - `{ op:"start", tasks:[...], parallel?, async? }`
+- lifecycle:
+  - `status` `{ op:"status", ids|id }`
+  - `wait` `{ op:"wait", ids|id, timeout_ms? }`
+  - `send` `{ op:"send", id, prompt }`
+  - `cancel` `{ op:"cancel", id }`
 
-// start many in one call
-{
-  "op": "start",
-  "tasks": [
-    { "subagent_type": "finder", "description": "scan", "prompt": "Locate auth endpoints" },
-    { "subagent_type": "oracle", "description": "review", "prompt": "Review auth risk areas" }
-  ],
-  "parallel": true
-}
+Compatibility:
 
-// lifecycle
-{ "op": "status", "ids": ["task_1", "task_2"] }
-{ "op": "wait", "ids": ["task_1", "task_2"], "timeout_ms": 120000 }
-{ "op": "send", "id": "task_1", "prompt": "Now check tests" }
-{ "op": "cancel", "id": "task_1" }
-```
+- `id` normalized to `ids` for `status`/`wait`
+- `op:"result"` normalized to `status`
 
-Compatibility behavior:
+## 5.2 Output invariants
 
-- `status`/`wait` normalize either `id` or `ids`
-- `op:"result"` normalizes to `status`
+Every details payload includes:
 
-Output payload behavior:
+- `contract_version: "task.v1"`
+- `status`, `summary`, `backend`
+- observability fields:
+  - `provider`, `model`, `runtime`, `route`
 
-- lifecycle responses include `output_available` for top-level/task-item entries
-- lifecycle responses include explicit wait ergonomics fields:
-  - `wait_status` (`completed|timeout|aborted`)
-  - `done` (boolean terminality signal for wait)
-- cancel responses include explicit effect metadata:
-  - `cancel_applied`
+Lifecycle ergonomics:
+
+- wait:
+  - `wait_status: completed|timeout|aborted`
+  - `done: boolean`
+- cancel:
+  - `cancel_applied: boolean`
   - `prior_status`
-- batch start responses include acceptance accounting:
-  - `total_count`
-  - `accepted_count`
-  - `rejected_count`
-  - `batch_status` (`accepted|partial|completed|rejected`)
-- large output is capped by `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
-- truncation is machine-signaled via:
-  - `output_truncated`
-  - `output_total_chars`
-  - `output_returned_chars`
-- every task tool details payload includes stable contract marker:
-  - `contract_version: "task.v1"`
-- observability fields are explicit on details/items:
-  - `provider`
-  - `model`
-  - `runtime`
-  - `route`
-- collection ops (`status`/`wait`) aggregate observability from items:
-  - prevents top-level runtime drift when item metadata is richer than backend fallback
+- batch:
+  - `total_count`, `accepted_count`, `rejected_count`
+  - `batch_status: accepted|partial|completed|rejected`
 
-Backend selection behavior:
+Output/truncation contract:
 
-- `subagentBackend:"interactive-shell"` runs nested `pi` execution
-- `subagentBackend:"none"` uses deterministic scaffold backend
-- `subagentBackend:"custom-plugin"` is currently surfaced as unsupported
+- `output_available`
+- `output_truncated`
+- `output_total_chars`
+- `output_returned_chars`
+- cap env: `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
 
-Interactive-shell output normalization:
+Error category semantics:
 
-- strip nested runtime metadata prefixes from surfaced subagent text:
-  - `backend:`
-  - `provider:`
-  - `model:`
-
-This keeps backend identity deterministic at task payload level (`details.backend`).
-
-Summary/output ergonomics:
-
-- human text rendering labels concise summary as `summary:`
-- canonical full result remains `output` (never inferred from summary)
-
-Error category refinement:
-
-- unknown/expired task ids are categorized as `not_found` (not generic runtime)
+- unknown/expired IDs classified as `not_found`
 
 Primary tool schema specialization:
 
-- `librarian` primary schema: `query` + optional `context`
-- `oracle` primary schema: `task` + optional `context` + optional `files[]`
-- `finder` primary schema: `query`
+- librarian: `query` (+ optional `context`, controls)
+- oracle: `task` (+ optional `context`, `files[]`, controls)
+- finder: `query` (+ controls)
 
-Primary normalization contract:
+Primary prompt normalization:
 
-- map specialized primary payloads into task-start prompt blocks before routing
-- context forwarded under `Context:` block
-- oracle file paths forwarded under deterministic `Files:` block
-- post-routing lifecycle contract remains task-identical (`contract_version: task.v1`)
-
-### Task tool discovery payload requirements
-
-The `task` tool description/instructions presented to the model should include an
-active subagent roster derived from merged definitions.
-
-Roster must include **all active subagents**, including profiles with `primary: true`.
-
-Required roster fields per subagent:
-
-- `id`
-- invocation mode (`task-routed` | `primary-tool`)
-- short summary/description
-- full `whenToUse` guidance (no condensation)
-
-Goal: model can pick the right subagent without guessing hidden catalog state.
+- `Context:` block for context
+- `Files:` block (oracle) for deterministic file forwarding
 
 ---
 
-## Pi-mono Findings to Reuse
+## 6) Runtime backends (current)
 
-Inspected references:
+## 6.1 Implemented now
 
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/subagent/index.ts`
-- `node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
-- `node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/status-line.ts`
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/plan-mode/index.ts`
+- `interactive-shell` backend (default): nested Pi CLI execution
+- `none`: deterministic scaffold backend
+- `custom-plugin`: explicit unsupported placeholder
 
-Useful patterns:
+## 6.2 Current default backend mechanics
 
-1. **Streaming progress from tools**
-   - Use `execute(..., onUpdate, ctx)` and emit partial states frequently.
-   - Include running/done counters in `onUpdate` content.
+In `src/runtime/backend.ts`, nested run uses subprocess CLI (`pi --print ...`) and returns final stdout/stderr snapshot.
 
-2. **Rich tool visualization**
-   - Implement `renderCall` + `renderResult` for compact vs expanded views.
-   - Display per-task summaries and tool-call snippets.
+Pros:
 
-3. **Live status/footer feedback**
-   - Use `ctx.ui.setStatus("ohm-subagents", text)` for persistent counters.
+- simple bootstrap
+- deterministic timeout/abort handling
 
-4. **Widget-based task panel**
-   - Use `ctx.ui.setWidget("ohm-subagents", lines, { placement: "belowEditor" })`
-   - Show running tasks + descriptions + quick status icons.
+Gap:
 
-5. **Tool lifecycle events**
-   - Use `tool_execution_start/update/end` where available to track in-flight tool calls.
-
-6. **`@mariozechner/pi-tui` components for consistent rendering**
-   - Use pi-tui primitives/components for spinner-like activity indicators and stable text layout.
-   - Keep status output simple and deterministic so model/user can read progress at a glance.
+- not event-native; per-tool-call fidelity depends on emitted text
+- inline tool rows are best-effort parsing, not guaranteed complete telemetry
 
 ---
 
-## Visual Feedback Requirements (must-have)
+## 7) UI architecture (current)
 
-While task orchestration is running, show:
+Primary user surface is inline tool-result messaging.
 
-- number of task-tool jobs running/completed/failed
-- **live number of tool calls currently in-flight**
-- short task descriptors (`description`, `subagent_type`, status icon)
-- elapsed time for each running task (or orchestration group)
+- Non-debug default (`OHM_DEBUG` off):
+  - Amp-style tree inline rendering in task history.
+  - Running/queued background updates are minimal inline lines.
+  - Terminal states render richer tree output.
 
-Planned surfaces:
+- Debug mode (`OHM_DEBUG=1|true`):
+  - verbose contract metadata view.
 
-1. **Footer status (`setStatus`)**
-   - Example: `subagents 1 running · tools 3 active · elapsed 00:18`
-
-2. **Widget (`setWidget`)**
-   - Top N running tasks rendered as Amp-style tree blocks via `@pi-ohm/tui`.
-   - Each task entry renders: header (`✓/⠋ title`), prompt row, parsed tool-call rows, terminal/result row.
-
-3. **Tool renderer (`renderCall` / `renderResult`)**
-   - Collapsed summary by default, expanded drilldown for details.
-
-4. **Streaming text updates (`onUpdate`)**
-   - Emit deterministic periodic snapshots during execution.
+- Bottom live widget:
+  - optional only
+  - default mode is off (`OHM_SUBAGENTS_UI_MODE` fallback)
+  - can still be enabled with `/ohm-subagents-live off|compact|verbose`
 
 ---
 
-## TUI Runtime Requirements (`@mariozechner/pi-tui`)
+## 8) Schema + error strategy
 
-Required baseline for every running task surfaced in UI:
+Boundary schemas:
 
-- spinner indicator
-- source `prompt` from task `start` payload
-- parsed tool-call rows when available (best effort)
-- terminal/result row with deterministic fallback when tool rows are unavailable
+- TypeBox for tool registration payload compatibility.
 
-Minimal target line format:
+Internal schemas/state:
 
-```bash
-  ⠋ Finder · Auth flow scan
-    ├── Trace auth validation
-    ├── ✓ Read packages/subagents/src
-    ╰── Working...
-```
+- Zod v4 for records, normalization, domain parsing.
 
-Terminal state line format examples:
+Recoverable error handling:
 
-```bash
-  ✓ Finder · Auth flow scan
-    ├── Trace auth validation
-    ├── ✓ Read packages/subagents/src
-    ╰── Auth validation path uses task permission policy + runtime store transitions.
-
-  ✕ Finder · Auth flow scan
-    ├── Trace auth validation
-    ╰── Task failed: backend timeout while reading repository files.
-```
-
-Behavior requirements:
-
-- Spinner animates only for non-terminal task states.
-- Elapsed time starts at task `start` acceptance and stops at terminal state.
-- Tool-call count reflects in-flight calls for that task scope.
-- If TUI is unavailable, provide equivalent plain-text progress in `onUpdate`.
+- `better-result` typed Result returns
+- stable code/category mapping at tool boundary
+- no silent fallback swallowing
 
 ---
 
-## Schema Strategy (Zod + Pi tool API)
+## 9) Module map (as-built)
 
-Pi extension tool registration currently expects **TypeBox** for `parameters`.
-
-Therefore:
-
-1. **External tool input schema**
-   - Use TypeBox for `pi.registerTool({ parameters })` compatibility.
-
-2. **Internal runtime/domain schemas**
-   - Use **Zod v4** (`zod@^4`) for:
-     - config normalization
-     - persisted task records
-     - internal message/result validation
-
-Version baseline:
-
-- pi-ohm root already pins `zod: ^4`
-- inspected pi-mono environment has `zod` **4.1.13** installed
-
-Rule: standardize internal schemas on Zod v4 APIs only.
+- `src/schema.ts` — TypeBox tool params + Zod runtime parsing
+- `src/runtime/tasks.ts` — task registry, lifecycle state machine, persistence
+- `src/runtime/backend.ts` — backend implementations + timeout/abort mapping
+- `src/runtime/ui.ts` — snapshot-to-tree entry mapping
+- `src/runtime/live-ui.ts` — optional widget coordinator/modes
+- `src/tools/task.ts` — lifecycle routing, rendering, update emission
+- `src/tools/primary.ts` — primary-tool schema and forwarding
+- `src/extension.ts` — commands and registration wiring
+- `@pi-ohm/tui` — shared tree component for task visualization
 
 ---
 
-## Error Handling Strategy (`better-result`)
+## 10) SDK migration (detailed)
 
-Core requirement: use `better-result` for recoverable errors across task runtime and tool routing.
+## 10.1 Why migrate from CLI backend
 
-Rules:
+Current CLI capture cannot guarantee full live tool-call fidelity. SDK gives structured event stream by design.
 
-1. **No thrown recoverable errors across module boundaries**
-   - Runtime modules return `Result<T, E>`.
-   - Recoverable failures are represented as typed errors, not exceptions.
+## 10.2 SDK references (authoritative)
 
-2. **Typed error taxonomy via `TaggedError`**
-   - Define explicit error categories for at least:
-     - validation/config
-     - policy/permissions
-     - runtime/execution
-     - persistence/state
+Primary docs/examples:
 
-3. **Use boundary wrappers for throw-prone operations**
-   - `Result.try` / `Result.tryPromise` at I/O boundaries (filesystem, provider calls, parsing).
+- `node_modules/@mariozechner/pi-coding-agent/docs/sdk.md`
+- `node_modules/@mariozechner/pi-coding-agent/examples/sdk/12-full-control.ts`
+- `node_modules/@mariozechner/pi-coding-agent/examples/sdk/05-tools.ts`
 
-4. **Tool boundary maps Result to stable tool output**
-   - `task` tool responses expose deterministic machine-parseable error codes/details.
-   - Do not hide failures with broad catches or silent fallbacks.
+Typed event/API references:
 
-5. **Bug-class failures**
-   - Defects should fail loudly for diagnosis; do not reclassify programming bugs as domain success.
+- `node_modules/@mariozechner/pi-coding-agent/dist/core/sdk.d.ts`
+  - `createAgentSession(options)`
+- `node_modules/@mariozechner/pi-coding-agent/dist/core/agent-session.d.ts`
+  - `AgentSession`, `session.subscribe(...)`, `session.prompt(...)`
+- `node_modules/@mariozechner/pi-coding-agent/dist/core/extensions/types.d.ts`
+  - `tool_execution_start`
+  - `tool_execution_update`
+  - `tool_execution_end`
+  - `message_update`, `agent_end`, etc.
+
+## 10.3 Target backend design (`interactive-sdk`)
+
+Add new backend implementation (alongside existing CLI backend):
+
+- `PiSdkTaskExecutionBackend` in `src/runtime/backend.ts`
+
+Session bootstrap profile:
+
+- `createAgentSession({ ... })` with:
+  - `SessionManager.inMemory()`
+  - `SettingsManager.inMemory(...)` (deterministic behavior)
+  - explicit tool factories per cwd:
+    - `createReadTool(cwd)`, `createBashTool(cwd)`, `createEditTool(cwd)`, `createWriteTool(cwd)`, etc.
+  - constrained `resourceLoader` (no recursive extension side-effects)
+
+Execution model:
+
+- call `session.prompt(prompt)` for start/send flows
+- subscribe to structured events while running
+- convert events to typed task timeline entries
+- resolve terminal output on `agent_end` / terminal conditions
+
+Abort/timeout mapping:
+
+- timeout -> `task_backend_timeout`
+- abort signal -> `task_aborted`
+- execution failure -> `task_backend_execution_failed`
+
+## 10.4 Event model (required)
+
+Introduce boundary-parsed ADT (no impossible states), e.g.:
+
+- `assistant_text_delta`
+- `tool_start`
+- `tool_update`
+- `tool_end`
+- `task_terminal`
+
+All SDK events parsed at boundary into this ADT before runtime store mutation.
+
+## 10.5 Runtime store extension
+
+Per-task bounded event timeline:
+
+- append-only ordered stream while active
+- deterministic cap + eviction strategy
+- persisted snapshot support (bounded footprint)
+
+This replaces regex-only reconstruction for tool rows.
+
+## 10.6 Rendering behavior after migration
+
+Inline live message (primary surface):
+
+- running: concise line(s)
+- tool events append structured rows in-order
+- terminal: expanded tree snapshot
+
+Bottom widget remains optional and off by default.
+
+## 10.7 Rollout strategy
+
+1. Add `interactive-sdk` backend behind config gate.
+2. Keep CLI backend intact as fallback.
+3. Validate parity:
+   - task.v1 fields
+   - error code/category mapping
+   - wait/cancel/batch semantics
+4. If stable, optionally flip default backend.
+
+## 10.8 Risks + mitigations
+
+- **Risk:** extension recursion / nested side effects
+  - **Mitigation:** in-memory session + constrained loader + explicit tools.
+
+- **Risk:** event flood memory growth
+  - **Mitigation:** bounded timeline + throttled updates + retention policy.
+
+- **Risk:** contract drift across backends
+  - **Mitigation:** shared normalization layer + parity tests per op.
 
 ---
 
-## Parallelization Approach
+## 11) Testing expectations
 
-Core package behavior (required):
+Required coverage:
 
-- single task-tool execution
-- batched parallel task-tool execution in one tool call
-- async lifecycle (`start/status/wait/send/cancel`)
+- parser/config merge
+- lifecycle (`start/status/wait/send/cancel`)
+- batch determinism + bounded concurrency
+- rendering (inline running vs terminal; collapsed/expanded)
+- primary-tool parity vs task-routed
+- better-result error-path mapping
+- backend parity matrix (CLI vs SDK once added)
 
-Implementation approach:
+Verification gate:
 
-- in-process task runtime with bounded concurrency pool
-- deterministic result ordering in aggregate responses
-- persistent task registry for resumability across turns
-
-Harness-level multi-tool parallel wrappers are optional accelerators, not correctness dependencies.
-
----
-
-## Suggested Module Layout
-
-- `src/schema.ts` — Zod internal schemas + TypeBox parameter schemas
-- `@pi-ohm/core/errors` — shared `better-result` TaggedError definitions + error unions
-- `src/runtime/tasks.ts` — task registry + lifecycle state machine
-- `src/runtime/executor.ts` — task execution engine + concurrency control
-- `src/runtime/ui.ts` — status snapshot + tree-entry mapping
-- `@pi-ohm/tui` — reusable Amp-style tree component (`SubagentTaskTreeComponent`)
-- `src/tools/task.ts` — task tool registration + op routing
-- `src/tools/primary/*.ts` — direct tools generated for `primary: true` agents
-- `src/extension.ts` — wiring + events + status synchronization
-
-Primary-tool generator requirements:
-
-- register/unregister on config/catalog changes
-- generate tool name from profile id
-- generate tool description/help text from profile definition
-- include full `whenToUse` guidance so tools are self-selecting to the model
+- `yarn test:subagents`
+- `yarn typecheck`
+- `yarn lint`
+- interactive smoke via `pi -e ./packages/subagents/src/extension.ts`
 
 ---
 
-## Testing Expectations
+## 12) Non-goals (for now)
 
-- parser/config merge tests
-- lifecycle tests (`start/status/wait/send/cancel`)
-- parallel determinism + bounded concurrency tests
-- renderer/status snapshot tests (for visual feedback correctness)
-- regression tests for `primary: true` routing vs task-routed execution
-- `better-result` error-path tests (typed errors + Result mapping at tool boundary)
+- Removing CLI backend immediately.
+- Auto-enabling bottom widget by default.
+- Breaking `task.v1` contract for existing consumers.
