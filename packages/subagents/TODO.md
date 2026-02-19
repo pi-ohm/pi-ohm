@@ -208,7 +208,7 @@ Ship SDK path safely with explicit migration and fallback controls.
   - Ensure SDK path maps to existing stable error codes/categories.
 - [x] **S14-T3: Throughput + memory guardrails**
   - Enforce timeline caps, update throttles, and runtime cleanup for async-heavy runs.
-- [ ] **S14-T4: Docs + operator cookbook**
+- [x] **S14-T4: Docs + operator cookbook**
   - Sync-vs-async recommendation matrix, backend tradeoffs, troubleshooting.
 
 ### Acceptance

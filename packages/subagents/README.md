@@ -96,6 +96,76 @@ Nested interactive-shell outputs are sanitized to strip runtime metadata lines (
 
 For unknown tasks/expired tasks, error categorization is explicit: `error_category: "not_found"`.
 
+## Operator cookbook
+
+### 1) Sync vs async recommendation matrix
+
+| scenario                                        | recommended mode                         | why                                                     |
+| ----------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- |
+| quick lookup, single task, result needed now    | `start` (default sync)                   | simplest UX; one call, one terminal result              |
+| long-running analysis where caller can continue | `start async:true` + `wait/status` later | avoids blocking; keeps task lifecycle explicit          |
+| fan-out independent tasks                       | `start tasks[] parallel:true`            | deterministic ordered aggregation + bounded concurrency |
+| follow-up on active task                        | `send`                                   | preserves task history + follow-up prompts              |
+| stop background task                            | `cancel`                                 | explicit terminal transition + abort propagation        |
+
+Default policy: use sync first; opt into async only when needed.
+
+### 2) Backend tradeoff matrix
+
+| backend                       | strengths                                                                    | tradeoffs                                        | when to pick                               |
+| ----------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------ | ------------------------------------------ |
+| `interactive-shell` (default) | mature nested CLI behavior; straightforward rollback                         | text-capture based transcript fidelity           | safe baseline/default                      |
+| `interactive-sdk` (opt-in)    | structured tool/assistant events, event-derived rows, better inline fidelity | newer path; needs smoke/ops confidence           | pre-prod validation + richer observability |
+| `none`                        | deterministic scaffold output                                                | no real execution                                | testing/demo/debug wiring only             |
+| `custom-plugin`               | reserved hook                                                                | not implemented (`unsupported_subagent_backend`) | none currently                             |
+
+Fallback policy:
+
+- enable `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI=true` to downgrade only recoverable SDK bootstrap failures (`task_backend_execution_failed`) from SDK -> CLI path.
+
+### 3) Recommended smoke matrix
+
+```bash
+# default backend visibility
+printf '/ohm-subagents\n' | pi -e ./packages/subagents/extension.ts
+
+# explicit sdk backend visibility
+mkdir -p /tmp/pi-ohm-sdk-smoke
+cat >/tmp/pi-ohm-sdk-smoke/ohm.json <<'EOF'
+{ "subagentBackend": "interactive-sdk" }
+EOF
+printf '/ohm-subagents\n' | PI_CONFIG_DIR=/tmp/pi-ohm-sdk-smoke pi -e ./packages/subagents/extension.ts
+```
+
+Task lifecycle smoke checklist:
+
+1. sync single `start`
+2. async single `start async:true` + `status` + `wait`
+3. `cancel` running task
+4. batch partial acceptance (`tasks[]` mixed validity)
+5. timeout path (`wait timeout_ms`)
+6. follow-up `send` on running task
+
+### 4) Troubleshooting quick map
+
+| symptom                                 | likely cause                                                   | check/fix                                                                      |
+| --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| output looks scaffolded/echoed          | backend is `none`                                              | set `subagentBackend` to `interactive-shell` or `interactive-sdk`              |
+| sdk selected but execution drops to cli | fallback env enabled and sdk hit recoverable bootstrap failure | inspect `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI`; disable to keep hard sdk failures |
+| `task_wait_timeout`                     | task still non-terminal at timeout                             | increase `timeout_ms`, poll with `status`, or reduce batch size                |
+| `task_wait_aborted`                     | caller signal cancelled wait                                   | retry wait with active signal                                                  |
+| `task_expired` on old IDs               | retention/capacity eviction                                    | increase retention/cap env knobs; treat task IDs as ephemeral                  |
+| too many inline progress updates        | high-frequency non-terminal emissions                          | increase `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS`                                  |
+
+### 5) Guardrail env knobs
+
+- `OHM_SUBAGENTS_TASK_RETENTION_MS` — terminal task retention window
+- `OHM_SUBAGENTS_TASK_MAX_EVENTS` — per-task structured event cap
+- `OHM_SUBAGENTS_TASK_MAX_ENTRIES` — in-memory task registry cap
+- `OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES` — expired-task reason cache cap
+- `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS` — non-terminal onUpdate emission throttle
+- `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` — terminal output payload cap
+
 ### Output truncation policy
 
 Task output returned in tool payloads is capped to prevent oversized context injection.
