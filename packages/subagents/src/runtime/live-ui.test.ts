@@ -36,6 +36,7 @@ function makePresentation(input: {
 defineTest("live UI coordinator dedupes identical status/widget frames", async () => {
   const statusCalls: (string | undefined)[] = [];
   const widgetCalls: (readonly string[] | undefined)[] = [];
+  const headerCalls: ((...args: readonly unknown[]) => unknown)[] = [];
 
   const coordinator = createTaskLiveUiCoordinator(
     {
@@ -44,6 +45,11 @@ defineTest("live UI coordinator dedupes identical status/widget frames", async (
       },
       setWidget: (_key, content) => {
         widgetCalls.push(content);
+      },
+      setHeader: (factory) => {
+        if (factory) {
+          headerCalls.push(factory);
+        }
       },
     },
     {
@@ -65,8 +71,53 @@ defineTest("live UI coordinator dedupes identical status/widget frames", async (
   coordinator.publish(running);
   await sleep(25);
 
-  assert.equal(statusCalls.length, 1);
+  assert.equal(statusCalls.length, 0);
   assert.equal(widgetCalls.length, 1);
+  assert.equal(headerCalls.length, 1);
+
+  coordinator.dispose();
+});
+
+defineTest("live UI coordinator uses header surface when available", async () => {
+  const statusCalls: (string | undefined)[] = [];
+  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const headerFactories: (((...args: readonly unknown[]) => unknown) | undefined)[] = [];
+
+  const coordinator = createTaskLiveUiCoordinator(
+    {
+      setStatus: (_key, text) => {
+        statusCalls.push(text);
+      },
+      setWidget: (_key, content) => {
+        widgetCalls.push(content);
+      },
+      setHeader: (factory) => {
+        headerFactories.push(factory);
+      },
+    },
+    {
+      updateIntervalMs: 10,
+      idleGraceMs: 20,
+      mode: "compact",
+    },
+  );
+
+  coordinator.publish(
+    makePresentation({
+      statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
+      compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+      hasActiveTasks: true,
+    }),
+  );
+
+  await sleep(20);
+  coordinator.clear();
+
+  assert.equal(headerFactories.length >= 2, true);
+  assert.notEqual(headerFactories[0], undefined);
+  assert.equal(headerFactories.at(-1), undefined);
+  assert.equal(statusCalls.includes(undefined), false);
+  assert.notEqual(widgetCalls.at(0), undefined);
 
   coordinator.dispose();
 });

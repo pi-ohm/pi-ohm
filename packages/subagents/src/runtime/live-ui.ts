@@ -1,4 +1,5 @@
 import type { TaskRuntimePresentation } from "./ui";
+import { TruncatedText } from "@mariozechner/pi-tui";
 
 export type TaskLiveUiMode = "off" | "compact" | "verbose";
 
@@ -9,6 +10,15 @@ export interface TaskLiveUiSurface {
     content: string[] | undefined,
     options?: { readonly placement?: "aboveEditor" | "belowEditor" },
   ): void;
+  setHeader?: (
+    factory:
+      | ((...args: readonly unknown[]) => {
+          render(width: number): string[];
+          invalidate(): void;
+          dispose?(): void;
+        })
+      | undefined,
+  ) => void;
 }
 
 export interface TaskLiveUiCoordinator {
@@ -103,6 +113,7 @@ export function createTaskLiveUiCoordinator(
 
   let lastStatusText: string | undefined;
   let lastWidgetSignature = "";
+  let lastHeaderText: string | undefined;
 
   const clearIdleTimeout = (): void => {
     if (!idleClearTimeout) return;
@@ -111,14 +122,30 @@ export function createTaskLiveUiCoordinator(
   };
 
   const apply = (statusText: string | undefined, widgetLines: string[] | undefined): void => {
-    if (lastStatusText !== statusText) {
+    if (surface.setHeader) {
+      if (lastHeaderText !== statusText) {
+        surface.setHeader(
+          statusText === undefined
+            ? undefined
+            : () => {
+                return new TruncatedText(statusText, 0, 0);
+              },
+        );
+        lastHeaderText = statusText;
+      }
+
+      if (lastStatusText !== undefined) {
+        surface.setStatus(key, undefined);
+        lastStatusText = undefined;
+      }
+    } else if (lastStatusText !== statusText) {
       surface.setStatus(key, statusText);
       lastStatusText = statusText;
     }
 
     const widgetSignature = toWidgetSignature(widgetLines);
     if (lastWidgetSignature !== widgetSignature) {
-      surface.setWidget(key, widgetLines, { placement: "belowEditor" });
+      surface.setWidget(key, widgetLines, { placement: "aboveEditor" });
       lastWidgetSignature = widgetSignature;
     }
   };

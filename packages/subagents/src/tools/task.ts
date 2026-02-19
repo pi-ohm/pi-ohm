@@ -956,6 +956,15 @@ interface RunTaskToolInput {
           content: string[] | undefined,
           options?: { readonly placement?: "aboveEditor" | "belowEditor" },
         ): void;
+        setHeader?: (
+          factory:
+            | ((...args: readonly unknown[]) => {
+                render(width: number): string[];
+                invalidate(): void;
+                dispose?(): void;
+              })
+            | undefined,
+        ) => void;
       }
     | undefined;
   readonly deps: TaskToolDependencies;
@@ -963,6 +972,8 @@ interface RunTaskToolInput {
 
 type TaskToolUiHandle = NonNullable<RunTaskToolInput["ui"]>;
 const liveUiBySurface = new WeakMap<TaskToolUiHandle, TaskLiveUiCoordinator>();
+const liveUiHeartbeatBySurface = new WeakMap<TaskToolUiHandle, ReturnType<typeof setInterval>>();
+const LIVE_UI_HEARTBEAT_MS = 120;
 
 function getTaskLiveUiCoordinator(ui: TaskToolUiHandle): TaskLiveUiCoordinator {
   const existing = liveUiBySurface.get(ui);
@@ -971,6 +982,36 @@ function getTaskLiveUiCoordinator(ui: TaskToolUiHandle): TaskLiveUiCoordinator {
   const created = createTaskLiveUiCoordinator(ui);
   liveUiBySurface.set(ui, created);
   return created;
+}
+
+function clearTaskLiveUiHeartbeat(ui: TaskToolUiHandle): void {
+  const existing = liveUiHeartbeatBySurface.get(ui);
+  if (!existing) return;
+
+  clearInterval(existing);
+  liveUiHeartbeatBySurface.delete(ui);
+}
+
+function ensureTaskLiveUiHeartbeat(ui: TaskToolUiHandle, deps: TaskToolDependencies): void {
+  const existing = liveUiHeartbeatBySurface.get(ui);
+  if (existing) return;
+
+  const coordinator = getTaskLiveUiCoordinator(ui);
+  const interval = setInterval(() => {
+    const presentation = createTaskRuntimePresentation({
+      snapshots: deps.taskStore.listTasks(),
+      nowEpochMs: Date.now(),
+      maxItems: 5,
+    });
+
+    coordinator.publish(presentation);
+
+    if (!presentation.hasActiveTasks) {
+      clearTaskLiveUiHeartbeat(ui);
+    }
+  }, LIVE_UI_HEARTBEAT_MS);
+
+  liveUiHeartbeatBySurface.set(ui, interval);
 }
 
 function emitTaskRuntimeUpdate(input: {
@@ -987,7 +1028,14 @@ function emitTaskRuntimeUpdate(input: {
   });
 
   if (input.hasUI && input.ui) {
-    getTaskLiveUiCoordinator(input.ui).publish(presentation);
+    const coordinator = getTaskLiveUiCoordinator(input.ui);
+    coordinator.publish(presentation);
+
+    if (presentation.hasActiveTasks) {
+      ensureTaskLiveUiHeartbeat(input.ui, input.deps);
+    } else {
+      clearTaskLiveUiHeartbeat(input.ui);
+    }
   }
 
   if (!input.onUpdate) {

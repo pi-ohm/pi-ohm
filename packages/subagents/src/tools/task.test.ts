@@ -555,6 +555,46 @@ defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () =>
   assert.match(nonEmptyFrame[0] ?? "", /finder/);
 });
 
+defineTest("runTaskToolMvp animates live widget frames while async task is running", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+  const widgetFrames: string[] = [];
+
+  const started = await runTaskToolMvp({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Animated frame check",
+      prompt: "Keep running briefly",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    hasUI: true,
+    ui: {
+      setStatus: () => {},
+      setWidget: (_key, content) => {
+        if (Array.isArray(content) && content.length > 0) {
+          widgetFrames.push(content[0] ?? "");
+        }
+      },
+    },
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  await sleep(360);
+
+  const uniqueFrames = new Set(widgetFrames);
+  assert.equal(widgetFrames.length >= 2, true);
+  assert.equal(uniqueFrames.size >= 2, true);
+
+  backend.resolveSuccess(0, "Finder: Animated frame check", "done");
+  await sleep(80);
+});
+
 defineTest("runTaskToolMvp surfaces multiline output text in tool content", async () => {
   const deps = makeDeps({
     backend: {
