@@ -73,7 +73,7 @@ function parseTaskLiveUiMode(value: string | undefined): TaskLiveUiMode | undefi
 }
 
 let currentTaskLiveUiMode: TaskLiveUiMode =
-  parseTaskLiveUiMode(process.env.OHM_SUBAGENTS_UI_MODE) ?? "compact";
+  parseTaskLiveUiMode(process.env.OHM_SUBAGENTS_UI_MODE) ?? "off";
 
 export function getTaskLiveUiMode(): TaskLiveUiMode {
   return currentTaskLiveUiMode;

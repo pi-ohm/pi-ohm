@@ -446,6 +446,26 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
   assert.match(compact, /╰── done/);
 });
 
+defineTest("formatTaskToolResult uses minimal inline style for running background tasks", () => {
+  const compact = formatTaskToolResult(
+    {
+      op: "start",
+      status: "running",
+      task_id: "task_1",
+      subagent_type: "finder",
+      description: "Background indexing",
+      summary: "Started async Finder: Background indexing",
+      backend: "test-backend",
+    },
+    false,
+  );
+
+  assert.match(compact, /^⠋ Finder · Background indexing · background/m);
+  assert.match(compact, /task_id: task_1/);
+  assert.doesNotMatch(compact, /├──/);
+  assert.doesNotMatch(compact, /╰──/);
+});
+
 defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabled", () => {
   const previous = process.env.OHM_DEBUG;
   delete process.env.OHM_DEBUG;
@@ -604,7 +624,7 @@ defineTest("runTaskToolMvp handles sync start success", async () => {
 });
 
 defineTest(
-  "runTaskToolMvp updates sticky UI status and avoids runtime text spam in UI mode",
+  "runTaskToolMvp streams inline updates in UI mode without legacy runtime text",
   async () => {
     const updates: string[] = [];
     const updateStatuses: string[] = [];
@@ -639,18 +659,17 @@ defineTest(
     });
 
     assert.equal(result.details.status, "succeeded");
-    assert.equal(statuses.length >= 1, true);
-    assert.match(statuses.join("\n"), /subagents/);
-    assert.deepEqual(updateStatuses, ["succeeded"]);
-    assert.equal(updates.length, 1);
+    assert.equal(statuses.length, 0);
+    assert.deepEqual(updateStatuses, ["running", "succeeded"]);
+    assert.equal(updates.length >= 2, true);
     for (const update of updates) {
       assert.equal(update.includes("[finder]"), false);
-      assert.match(update, /✓ Finder/);
     }
+    assert.match(updates.at(-1) ?? "", /✓ Finder/);
   },
 );
 
-defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () => {
+defineTest("runTaskToolMvp keeps widget surface empty by default", async () => {
   const widgetFrames: (readonly string[] | undefined)[] = [];
 
   const result = await runTaskToolMvp({
@@ -676,22 +695,13 @@ defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () =>
   await sleep(220);
 
   assert.equal(result.details.status, "succeeded");
-  assert.equal(widgetFrames.length > 0, true);
-
-  const nonEmptyFrame = widgetFrames.find(
-    (frame): frame is readonly string[] => Array.isArray(frame) && frame.length > 0,
+  assert.equal(
+    widgetFrames.every((frame) => frame === undefined),
+    true,
   );
-
-  assert.notEqual(nonEmptyFrame, undefined);
-  if (!nonEmptyFrame) {
-    assert.fail("Expected compact widget lines");
-  }
-
-  assert.equal(nonEmptyFrame.length <= 3, true);
-  assert.match(nonEmptyFrame[0] ?? "", /Finder/);
 });
 
-defineTest("runTaskToolMvp animates live widget frames while async task is running", async () => {
+defineTest("runTaskToolMvp does not animate live widget frames when mode is off", async () => {
   const backend = new DeferredBackend();
   const deps = makeDeps({ backend });
   const widgetFrames: string[] = [];
@@ -724,9 +734,7 @@ defineTest("runTaskToolMvp animates live widget frames while async task is runni
 
   await sleep(360);
 
-  const uniqueFrames = new Set(widgetFrames);
-  assert.equal(widgetFrames.length >= 2, true);
-  assert.equal(uniqueFrames.size >= 2, true);
+  assert.equal(widgetFrames.length, 0);
 
   backend.resolveSuccess(0, "Finder: Animated frame check", "done");
   await sleep(80);
@@ -949,6 +957,63 @@ defineTest("runTaskToolMvp wait returns timeout for unfinished tasks", async () 
   assert.equal(waitedAfter.details.status, "succeeded");
   assert.equal(Reflect.get(waitedAfter.details, "done"), true);
   assert.equal(Reflect.get(waitedAfter.details, "wait_status"), "completed");
+});
+
+defineTest("runTaskToolMvp wait streams live inline updates in UI mode", async () => {
+  const backend = new DeferredBackend();
+  const deps = makeDeps({ backend });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      async: true,
+      subagent_type: "finder",
+      description: "Wait stream",
+      prompt: "Trace auth validation",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(started.details.status, "running");
+
+  setTimeout(() => {
+    backend.resolveSuccess(0, "Finder: Wait stream", "done output");
+  }, 220);
+
+  const updateStatuses: string[] = [];
+  const updates: string[] = [];
+
+  const waited = await runTaskToolMvp({
+    params: {
+      op: "wait",
+      ids: ["task_test_0001"],
+      timeout_ms: 1000,
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: (partial) => {
+      updateStatuses.push(partial.details.status);
+      const text = partial.content.find((part) => part.type === "text");
+      if (text?.type === "text") {
+        updates.push(text.text);
+      }
+    },
+    hasUI: true,
+    ui: {
+      setStatus: () => {},
+      setWidget: () => {},
+    },
+    deps,
+  });
+
+  assert.equal(waited.details.status, "succeeded");
+  assert.equal(updateStatuses.includes("running"), true);
+  assert.equal(updateStatuses.at(-1), "succeeded");
+  assert.equal(updates.length >= 2, true);
+  assert.match(updates.at(-1) ?? "", /✓ Finder · Wait stream/);
 });
 
 defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {
@@ -1765,6 +1830,7 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.equal(registeredNames[0], "task");
   assert.equal(registeredLabels[0], "Task");
   assert.match(registeredDescriptions[0], /start\/status\/wait\/send\/cancel/);
+  assert.match(registeredDescriptions[0], /Default behavior is sync/);
   assert.match(registeredDescriptions[0], /Active subagent roster:/);
   assert.match(registeredDescriptions[0], /whenToUse:/);
   assert.match(registeredDescriptions[0], /search/);

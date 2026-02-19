@@ -1058,3 +1058,43 @@ Collapsed/expanded task tool results render as prompt/tool/result trees in chat 
     - No contract regression for debug-mode consumers.
   - Test evidence:
     - Existing debug-gating tests remain green.
+
+---
+
+## Epic 10 — Sync-by-default guidance + minimal background async UI
+
+### Epic goal
+
+Keep task orchestration sync-first by default and simplify background async visual noise.
+
+### Demo outcome
+
+Tool guidance explicitly recommends non-async unless needed; async/running updates render minimal inline progress messages, while sticky bottom widget is off by default.
+
+### Tickets
+
+- [x] **E10-T1: Document and encode sync-first guidance in task tool description/docs**
+  - Requirements:
+    - Clarify that `async` is optional and defaults to sync.
+    - Recommend async only for long-running/background tasks.
+  - Acceptance criteria:
+    - Tool description + docs reflect sync-first behavior.
+  - Test evidence:
+    - Description snapshot/assertion updates.
+
+- [x] **E10-T2: Default live bottom widget mode to off**
+  - Requirements:
+    - Live widget should not render unless explicitly enabled.
+  - Acceptance criteria:
+    - No sticky bottom runtime widget in default mode.
+  - Test evidence:
+    - UI tests updated for default-off behavior.
+
+- [x] **E10-T3: Minimal inline rendering for running/background task updates**
+  - Requirements:
+    - Running/queued inline updates use concise message lines.
+    - Terminal output remains rich tree rendering.
+  - Acceptance criteria:
+    - Async progress is readable without large repeated trees.
+  - Test evidence:
+    - Formatter + runTask UI update tests.

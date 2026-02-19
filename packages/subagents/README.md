@@ -27,7 +27,8 @@ from profile IDs with deterministic collision handling.
 - direct-tool execution and task-routed execution share the same runtime/result envelope
 
 The orchestration tool name is **`task`**. Async orchestration lifecycle
-operations (`start/status/wait/send/cancel`) are exposed through this tool.
+operations (`start/status/wait/send/cancel`) are exposed through this tool, but
+default execution is sync (`async:false`). Use `async:true` only for background/long tasks.
 
 ## Task tool (current)
 
@@ -37,7 +38,8 @@ Current behavior:
 - supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
 - compatibility aliases: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
-- result text now always labels concise summary explicitly (`summary:`) and keeps canonical result in `output`
+- non-debug result text renders Amp-style inline message trees (prompt -> tool calls -> result)
+- running background updates use minimal inline progress lines
 - returns `task_id`, status, and deterministic task details
 - includes explicit wait/cancel ergonomics fields:
   - `wait_status` (`completed|timeout|aborted`)
@@ -190,6 +192,7 @@ Invocation mode differences are intentional and explicit via `invocation`:
 ## Live TUI feedback
 
 `@pi-ohm/subagents` uses shared component `@pi-ohm/tui` (`SubagentTaskTreeComponent`) for task runtime visuals.
+Live bottom widget mode now defaults to `off`; inline tool-result updates are the primary UX.
 
 Baseline running-task display includes:
 

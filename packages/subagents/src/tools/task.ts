@@ -23,7 +23,11 @@ import {
   type TaskRuntimeSnapshot,
   type TaskRuntimeStore,
 } from "../runtime/tasks";
-import { createTaskLiveUiCoordinator, type TaskLiveUiCoordinator } from "../runtime/live-ui";
+import {
+  createTaskLiveUiCoordinator,
+  getTaskLiveUiMode,
+  type TaskLiveUiCoordinator,
+} from "../runtime/live-ui";
 import { createTaskRuntimePresentation } from "../runtime/ui";
 import {
   renderSubagentTaskTreeLines,
@@ -403,7 +407,8 @@ function withItemObservabilityDefaults(item: TaskToolItemDetails): TaskToolItemD
 
 function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): string {
   const lines: string[] = [
-    "Orchestrate subagent execution. Supports start/status/wait/send/cancel with async task lifecycle.",
+    "Orchestrate subagent execution. Supports start/status/wait/send/cancel with optional async lifecycle.",
+    "Default behavior is sync (async=false). Prefer sync unless background execution is required.",
     "Compatibility: status/wait accept either id or ids. op=result is treated as status.",
     "",
     "Active subagent roster:",
@@ -733,11 +738,31 @@ function treeRenderOptions(expanded: boolean): {
   };
 }
 
+function isBackgroundStatus(status: TaskToolStatus): boolean {
+  return status === "running" || status === "queued";
+}
+
+function renderBackgroundLine(entry: SubagentTaskTreeEntry): string {
+  const marker = entry.status === "running" ? "⠋" : "…";
+  return `${marker} ${entry.title} · background`;
+}
+
 function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
   const entries =
     details.items && details.items.length > 0
       ? details.items.map((item) => buildTreeEntryFromItem(item, expanded))
       : [buildTreeEntryFromDetails(details, expanded)];
+
+  if (!expanded && entries.every((entry) => isBackgroundStatus(entry.status))) {
+    const lines = entries.map((entry) => renderBackgroundLine(entry));
+    if (details.task_id) {
+      lines.push(`task_id: ${details.task_id}`);
+    }
+    if (details.wait_status && details.wait_status !== "completed") {
+      lines.push(`wait: ${details.wait_status}`);
+    }
+    return lines.join("\n");
+  }
 
   const lines = [
     ...renderSubagentTaskTreeLines({
@@ -1460,7 +1485,7 @@ function emitTaskRuntimeUpdate(input: {
     maxItems: 5,
   });
 
-  if (input.hasUI && input.ui) {
+  if (input.hasUI && input.ui && getTaskLiveUiMode() !== "off") {
     const coordinator = getTaskLiveUiCoordinator(input.ui);
     coordinator.publish(presentation);
 
@@ -1469,24 +1494,14 @@ function emitTaskRuntimeUpdate(input: {
     } else {
       clearTaskLiveUiHeartbeat(input.ui);
     }
+  } else if (input.ui) {
+    clearTaskLiveUiHeartbeat(input.ui);
+    const coordinator = liveUiBySurface.get(input.ui);
+    coordinator?.clear();
   }
 
   if (!input.onUpdate) {
     return;
-  }
-
-  if (input.hasUI) {
-    const terminal = isTerminalState(input.details.status);
-    const interactiveLifecycleSignal =
-      terminal ||
-      input.details.op === "cancel" ||
-      input.details.wait_status === "timeout" ||
-      input.details.wait_status === "aborted" ||
-      input.details.error_code !== undefined;
-
-    if (!interactiveLifecycleSignal) {
-      return;
-    }
   }
 
   {
@@ -1545,15 +1560,22 @@ async function waitForTasks(input: {
   readonly timeoutMs: number | undefined;
   readonly signal: AbortSignal | undefined;
   readonly deps: TaskToolDependencies;
+  readonly onProgress?: (lookups: readonly TaskRuntimeLookup[]) => void;
 }): Promise<{
   readonly lookups: readonly TaskRuntimeLookup[];
   readonly timedOut: boolean;
   readonly timeoutReason: "timeout" | "aborted" | undefined;
 }> {
   const started = Date.now();
+  let lastProgressAtEpochMs = 0;
 
   while (true) {
     const lookups = input.deps.taskStore.getTasks(input.ids);
+    const nowEpochMs = Date.now();
+    if (nowEpochMs - lastProgressAtEpochMs >= 150) {
+      input.onProgress?.(lookups);
+      lastProgressAtEpochMs = nowEpochMs;
+    }
     const allResolved = lookups.every((lookup) => {
       if (!lookup.found || !lookup.snapshot) return true;
       return isTerminalState(lookup.snapshot.state);
@@ -2191,6 +2213,31 @@ async function runTaskWait(
     timeoutMs: params.timeout_ms,
     signal: input.signal,
     deps: input.deps,
+    onProgress: (lookups) => {
+      const items = lookups.map((lookup) => lookupToItem(lookup));
+      const backend = resolveCollectionBackend(items, input.deps.backend.id);
+      const observability = resolveCollectionObservability(items, backend);
+      const progress = toAgentToolResult({
+        op: "wait",
+        status: aggregateStatus(items),
+        summary: `wait for ${items.length} task(s)`,
+        backend,
+        provider: observability.provider,
+        model: observability.model,
+        runtime: observability.runtime,
+        route: observability.route,
+        items,
+        done: false,
+      });
+
+      emitTaskRuntimeUpdate({
+        details: progress.details,
+        deps: input.deps,
+        hasUI: input.hasUI,
+        ui: input.ui,
+        onUpdate: input.onUpdate,
+      });
+    },
   });
 
   const items = waited.lookups.map((lookup) => lookupToItem(lookup));
@@ -2231,7 +2278,7 @@ async function runTaskWait(
     deps: input.deps,
     hasUI: input.hasUI,
     ui: input.ui,
-    onUpdate: undefined,
+    onUpdate: input.onUpdate,
   });
 
   return result;
