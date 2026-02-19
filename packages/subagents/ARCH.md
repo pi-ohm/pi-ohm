@@ -229,8 +229,8 @@ Planned surfaces:
    - Example: `subagents 1 running · tools 3 active · elapsed 00:18`
 
 2. **Widget (`setWidget`)**
-   - Top N running tasks with spinner/check/error indicators, descriptions, tool counts, and elapsed time.
-   - Each task entry renders as a compact two-line block.
+   - Top N running tasks rendered as Amp-style tree blocks via `@pi-ohm/tui`.
+   - Each task entry renders: header (`✓/⠋ title`), prompt row, parsed tool-call rows, terminal/result row.
 
 3. **Tool renderer (`renderCall` / `renderResult`)**
    - Collapsed summary by default, expanded drilldown for details.
@@ -245,25 +245,30 @@ Planned surfaces:
 Required baseline for every running task surfaced in UI:
 
 - spinner indicator
-- source `description` from task `start` payload
-- active tool-call count
-- elapsed time (`mm:ss`)
+- source `prompt` from task `start` payload
+- parsed tool-call rows when available (best effort)
+- terminal/result row with deterministic fallback when tool rows are unavailable
 
 Minimal target line format:
 
 ```bash
-⠋ [finder] Auth flow scan
-  Tools 3/3 · Elapsed 00:18
+  ⠋ Finder · Auth flow scan
+    ├── Trace auth validation
+    ├── ✓ Read packages/subagents/src
+    ╰── Working...
 ```
 
 Terminal state line format examples:
 
 ```bash
-✓ [finder] Auth flow scan
-  Tools 5/5 · Elapsed 00:42
+  ✓ Finder · Auth flow scan
+    ├── Trace auth validation
+    ├── ✓ Read packages/subagents/src
+    ╰── Auth validation path uses task permission policy + runtime store transitions.
 
-✕ [finder] Auth flow scan
-  Tools 2/3 · Elapsed 00:11
+  ✕ Finder · Auth flow scan
+    ├── Trace auth validation
+    ╰── Task failed: backend timeout while reading repository files.
 ```
 
 Behavior requirements:
@@ -352,7 +357,8 @@ Harness-level multi-tool parallel wrappers are optional accelerators, not correc
 - `@pi-ohm/core/errors` — shared `better-result` TaggedError definitions + error unions
 - `src/runtime/tasks.ts` — task registry + lifecycle state machine
 - `src/runtime/executor.ts` — task execution engine + concurrency control
-- `src/runtime/ui.ts` — status/widget snapshot formatter
+- `src/runtime/ui.ts` — status snapshot + tree-entry mapping
+- `@pi-ohm/tui` — reusable Amp-style tree component (`SubagentTaskTreeComponent`)
 - `src/tools/task.ts` — task tool registration + op routing
 - `src/tools/primary/*.ts` — direct tools generated for `primary: true` agents
 - `src/extension.ts` — wiring + events + status synchronization

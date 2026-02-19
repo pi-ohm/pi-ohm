@@ -1,13 +1,21 @@
+import type { SubagentTaskTreeEntry } from "@pi-ohm/tui";
+import { createSubagentTaskTreeComponent, type SubagentTaskTreeRenderOptions } from "@pi-ohm/tui";
 import type { TaskRuntimePresentation } from "./ui";
 import { TruncatedText } from "@mariozechner/pi-tui";
 
 export type TaskLiveUiMode = "off" | "compact" | "verbose";
 
+type TaskLiveUiWidgetFactory = (...args: readonly unknown[]) => {
+  render(width: number): string[];
+  invalidate(): void;
+  dispose?(): void;
+};
+
 export interface TaskLiveUiSurface {
   setStatus(key: string, text: string | undefined): void;
   setWidget(
     key: string,
-    content: string[] | undefined,
+    content: readonly string[] | TaskLiveUiWidgetFactory | undefined,
     options?: { readonly placement?: "aboveEditor" | "belowEditor" },
   ): void;
   setHeader?: (
@@ -34,6 +42,12 @@ interface CreateTaskLiveUiCoordinatorOptions {
   readonly maxWidgetItems?: number;
   readonly mode?: TaskLiveUiMode;
   readonly resolveMode?: () => TaskLiveUiMode;
+}
+
+interface TaskLiveUiWidgetFrame {
+  readonly signature: string;
+  readonly entries: readonly SubagentTaskTreeEntry[];
+  readonly componentOptions: SubagentTaskTreeRenderOptions;
 }
 
 const DEFAULT_STATUS_KEY = "ohm-subagents";
@@ -73,21 +87,40 @@ export function parseTaskLiveUiModeInput(value: string): TaskLiveUiMode | undefi
   return parseTaskLiveUiMode(value.trim().toLowerCase());
 }
 
-function toWidgetLines(
+function toWidgetFrame(
   presentation: TaskRuntimePresentation,
   mode: TaskLiveUiMode,
   maxItems: number,
-): string[] | undefined {
+): TaskLiveUiWidgetFrame | undefined {
   if (mode === "off") return undefined;
 
-  const source = mode === "verbose" ? presentation.widgetLines : presentation.compactWidgetLines;
-  const limited = source.slice(0, Math.max(maxItems, 0));
-  return limited.length > 0 ? [...limited] : undefined;
-}
+  const sourceEntries =
+    mode === "verbose" ? presentation.widgetEntries : presentation.compactWidgetEntries;
+  const limited = sourceEntries.slice(0, Math.max(0, maxItems));
+  if (limited.length === 0) {
+    return undefined;
+  }
 
-function toWidgetSignature(lines: readonly string[] | undefined): string {
-  if (!lines) return "";
-  return lines.join("\n");
+  const componentOptions: SubagentTaskTreeRenderOptions =
+    mode === "verbose"
+      ? {
+          compact: false,
+        }
+      : {
+          compact: true,
+          maxPromptLines: 1,
+          maxToolCalls: 2,
+          maxResultLines: 1,
+        };
+
+  return {
+    signature: JSON.stringify({
+      mode,
+      entries: limited,
+    }),
+    entries: limited,
+    componentOptions,
+  };
 }
 
 export function createTaskLiveUiCoordinator(
@@ -121,7 +154,10 @@ export function createTaskLiveUiCoordinator(
     idleClearTimeout = undefined;
   };
 
-  const apply = (statusText: string | undefined, widgetLines: string[] | undefined): void => {
+  const apply = (
+    statusText: string | undefined,
+    widgetFrame: TaskLiveUiWidgetFrame | undefined,
+  ): void => {
     if (surface.setHeader) {
       if (lastHeaderText !== statusText) {
         surface.setHeader(
@@ -143,10 +179,20 @@ export function createTaskLiveUiCoordinator(
       lastStatusText = statusText;
     }
 
-    const widgetSignature = toWidgetSignature(widgetLines);
-    if (lastWidgetSignature !== widgetSignature) {
-      surface.setWidget(key, widgetLines, { placement: "aboveEditor" });
-      lastWidgetSignature = widgetSignature;
+    const signature = widgetFrame?.signature ?? "";
+    if (lastWidgetSignature !== signature) {
+      surface.setWidget(
+        key,
+        widgetFrame
+          ? () =>
+              createSubagentTaskTreeComponent({
+                entries: widgetFrame.entries,
+                options: widgetFrame.componentOptions,
+              })
+          : undefined,
+        { placement: "aboveEditor" },
+      );
+      lastWidgetSignature = signature;
     }
   };
 
@@ -183,8 +229,8 @@ export function createTaskLiveUiCoordinator(
       return;
     }
 
-    const widgetLines = toWidgetLines(presentation, mode, maxWidgetItems);
-    apply(presentation.statusLine, widgetLines);
+    const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems);
+    apply(presentation.statusLine, widgetFrame);
 
     if (presentation.hasActiveTasks) {
       clearIdleTimeout();

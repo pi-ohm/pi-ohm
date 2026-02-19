@@ -961,3 +961,59 @@ With debug disabled, task results render as embedded transcript snippets (`assis
     - debug mode keeps backend/provider/model/runtime/route fields in text output.
   - Test evidence:
     - tests toggling `OHM_DEBUG` env and expanded formatting behavior.
+
+---
+
+## Epic 8 — Amp-style live subagent tree widget via dedicated `@pi-ohm/tui`
+
+### Epic goal
+
+Replace current sticky subagent runtime text with an Amp-like tree widget: prompt line, live tool-call rows, and terminal result row.
+
+### Demo outcome
+
+`task` live surface renders a tree block per active task (`✓/⠋ title`, `├── prompt`, `├── tool calls`, `╰── result`) using a reusable `@pi-ohm/tui` component, wired into `@pi-ohm/subagents`.
+
+### Tickets
+
+- [x] **E8-T1: Create dedicated `@pi-ohm/tui` package with reusable subagent tree component**
+  - Requirements:
+    - Add workspace package `packages/tui`.
+    - Export a pi-tui `Component` for Amp-style task tree rendering.
+    - Include deterministic line-wrapping/truncation behavior for narrow terminals.
+  - Acceptance criteria:
+    - Component can be imported from `@pi-ohm/tui` and rendered by extensions.
+  - Test evidence:
+    - Unit tests for tree rendering/wrapping/branch structure.
+
+- [x] **E8-T2: Add standalone extension preview for `@pi-ohm/tui` (`pi -e` smokeable)**
+  - Requirements:
+    - Register command(s) that render the tree widget with fixture data.
+    - Ensure package can be smoke-tested directly via `pi -e ./packages/tui/src/extension.ts`.
+  - Acceptance criteria:
+    - Preview command visibly renders Amp-style tree format.
+  - Test evidence:
+    - Extension tests for command registration/output shape.
+    - Required smoke run with `pi -e`.
+
+- [x] **E8-T3: Integrate `@pi-ohm/tui` component into subagents live surface**
+  - Requirements:
+    - Replace current string-line widget path with new tree component in live coordinator/runtime presentation.
+    - Preserve existing mode controls (`off|compact|verbose`) and idle clear semantics.
+  - Acceptance criteria:
+    - Sticky widget no longer uses legacy 2-line rows; renders tree blocks.
+    - Only active tasks appear in widget.
+  - Test evidence:
+    - Updated live-ui/runtime-ui tests validating component integration + active filtering.
+
+- [x] **E8-T4: Task output-to-tree mapping for prompt/tool/result rows**
+  - Requirements:
+    - Map runtime snapshot fields into tree sections:
+      - prompt (main-agent instruction)
+      - tool rows (best-effort parsed call lines)
+      - final result row
+    - Keep robust fallback when tool-call rows are unavailable.
+  - Acceptance criteria:
+    - Tree format remains readable even with sparse output.
+  - Test evidence:
+    - Formatter tests for parsed tool rows + fallback behavior.

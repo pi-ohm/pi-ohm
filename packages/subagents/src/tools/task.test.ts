@@ -25,6 +25,28 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
+function isRenderableWidget(value: unknown): value is { render(width: number): string[] } {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const render = Reflect.get(value, "render");
+  return typeof render === "function";
+}
+
+function renderWidgetLines(content: unknown): readonly string[] | undefined {
+  if (typeof content !== "function") {
+    return undefined;
+  }
+
+  const component = content();
+  if (!isRenderableWidget(component)) {
+    return undefined;
+  }
+
+  return component.render(120);
+}
+
 const runtimeSubagentsFixture = {
   taskMaxConcurrency: 2,
   taskRetentionMs: 1000 * 60 * 60,
@@ -624,7 +646,7 @@ defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () =>
     ui: {
       setStatus: () => {},
       setWidget: (_key, content) => {
-        widgetFrames.push(content);
+        widgetFrames.push(renderWidgetLines(content));
       },
     },
     deps: makeDeps(),
@@ -645,7 +667,7 @@ defineTest("runTaskToolMvp renders compact widget lines in UI mode", async () =>
   }
 
   assert.equal(nonEmptyFrame.length <= 3, true);
-  assert.match(nonEmptyFrame[0] ?? "", /finder/);
+  assert.match(nonEmptyFrame[0] ?? "", /Finder/);
 });
 
 defineTest("runTaskToolMvp animates live widget frames while async task is running", async () => {
@@ -668,8 +690,9 @@ defineTest("runTaskToolMvp animates live widget frames while async task is runni
     ui: {
       setStatus: () => {},
       setWidget: (_key, content) => {
-        if (Array.isArray(content) && content.length > 0) {
-          widgetFrames.push(content[0] ?? "");
+        const lines = renderWidgetLines(content);
+        if (Array.isArray(lines) && lines.length > 0) {
+          widgetFrames.push(lines[0] ?? "");
         }
       },
     },

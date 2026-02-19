@@ -1551,12 +1551,30 @@ __metadata:
   dependencies:
     "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/tui": "workspace:*"
     better-result: "catalog:"
     zod: "catalog:"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
     "@mariozechner/pi-tui": "*"
     "@sinclair/typebox": "*"
+  peerDependenciesMeta:
+    "@mariozechner/pi-tui":
+      optional: true
+    "@sinclair/typebox":
+      optional: true
+  languageName: unknown
+  linkType: soft
+
+"@pi-ohm/tui@workspace:*, @pi-ohm/tui@workspace:packages/tui":
+  version: 0.0.0-use.local
+  resolution: "@pi-ohm/tui@workspace:packages/tui"
+  dependencies:
+    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi"
+  peerDependencies:
+    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-tui": "*"
   languageName: unknown
   linkType: soft
 

@@ -113,9 +113,13 @@ defineTest("createTaskRuntimePresentation synchronizes status + widget summaries
 
   assert.match(presentation.statusLine, /subagents 1 running/);
   assert.match(presentation.statusLine, /tools 2 active/);
-  assert.equal(presentation.widgetLines.length, 2);
-  assert.equal(presentation.widgetLines[0]?.includes("task_failed"), false);
-  assert.match(presentation.plainText, /Tools/);
+  assert.equal(presentation.widgetEntries.length, 1);
+  assert.equal(presentation.widgetEntries[0]?.id, "task_running");
+  assert.equal(
+    presentation.widgetLines.some((line) => line.includes("Auth flow scan")),
+    true,
+  );
+  assert.match(presentation.plainText, /Auth flow scan/);
 });
 
 defineTest("createTaskRuntimePresentation omits idle terminal-only widget rows", () => {
@@ -207,6 +211,39 @@ defineTest("createTaskRuntimePresentation applies maxItems and truncation", () =
     maxWidth: 40,
   });
 
-  assert.equal(presentation.widgetLines.length, 2);
-  assert.match(presentation.widgetLines[0] ?? "", /…$/);
+  assert.equal(presentation.widgetEntries.length, 1);
+  assert.equal(presentation.widgetEntries[0]?.id, "task_1");
+  assert.equal(presentation.widgetLines.length > 0, true);
+  assert.match(presentation.widgetLines[0] ?? "", /Finder/);
+});
+
+defineTest("createTaskRuntimePresentation maps output into tool rows + result row", () => {
+  const running = makeSnapshot({
+    id: "task_search",
+    state: "running",
+    prompt: "Find all delegation code",
+    output: [
+      "assistant> ✓ Read packages/subagents",
+      "assistant> ✓ Glob packages/subagents/**/*.ts",
+      "assistant> Found task orchestration exports in extension.ts",
+    ].join("\n"),
+    updatedAtEpochMs: 2000,
+  });
+
+  const presentation = createTaskRuntimePresentation({
+    snapshots: [running],
+    nowEpochMs: 3000,
+  });
+
+  assert.equal(presentation.widgetEntries.length, 1);
+  const entry = presentation.widgetEntries[0];
+  assert.notEqual(entry, undefined);
+  if (!entry) {
+    assert.fail("Expected one widget entry");
+  }
+
+  assert.match(entry.prompt, /Find all delegation code/);
+  assert.equal(entry.toolCalls.length >= 2, true);
+  assert.match(entry.toolCalls[0] ?? "", /Read packages\/subagents/);
+  assert.match(entry.result, /Working/);
 });

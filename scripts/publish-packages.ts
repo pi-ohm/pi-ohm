@@ -29,6 +29,7 @@ const PACKAGE_DIRS = [
   "packages/modes",
   "packages/handoff",
   "packages/subagents",
+  "packages/tui",
   "packages/session-search",
   "packages/painter",
   "packages/extension",

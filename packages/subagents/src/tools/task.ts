@@ -1196,7 +1196,14 @@ interface RunTaskToolInput {
         setStatus(key: string, text: string | undefined): void;
         setWidget(
           key: string,
-          content: string[] | undefined,
+          content:
+            | readonly string[]
+            | ((...args: readonly unknown[]) => {
+                render(width: number): string[];
+                invalidate(): void;
+                dispose?(): void;
+              })
+            | undefined,
           options?: { readonly placement?: "aboveEditor" | "belowEditor" },
         ): void;
         setHeader?: (

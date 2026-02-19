@@ -1,0 +1,80 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  createSubagentTaskTreeComponent,
+  renderSubagentTaskTreeLines,
+  type SubagentTaskTreeEntry,
+} from "./subagent-task-tree";
+
+function defineTest(name: string, run: () => void | Promise<void>): void {
+  void test(name, run);
+}
+
+function makeEntry(overrides: Partial<SubagentTaskTreeEntry> = {}): SubagentTaskTreeEntry {
+  return {
+    id: "task_1",
+    status: "succeeded",
+    title: "Search",
+    prompt: "Find delegation and selection code under packages/subagents",
+    toolCalls: ["Read packages/subagents", "Glob packages/subagents/**/*.ts"],
+    result: "Subagents package uses task orchestration with primary direct tools.",
+    ...overrides,
+  };
+}
+
+defineTest("renderSubagentTaskTreeLines renders amp-style tree sections", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [makeEntry()],
+    width: 120,
+  });
+
+  assert.match(lines[0] ?? "", /^\s{2}✓ Search/);
+  assert.match(lines.join("\n"), /├── Find delegation and selection code/);
+  assert.match(lines.join("\n"), /├── ✓ Read packages\/subagents/);
+  assert.match(lines.join("\n"), /╰── Subagents package uses task orchestration/);
+});
+
+defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        status: "running",
+        prompt:
+          "Prompt line one. Prompt line two. Prompt line three. Prompt line four. Prompt line five.",
+        toolCalls: ["Read x", "Glob y", "Grep z", "Find q"],
+      }),
+    ],
+    width: 50,
+    options: {
+      compact: true,
+      maxPromptLines: 1,
+      maxToolCalls: 2,
+      maxResultLines: 1,
+    },
+  });
+
+  const rendered = lines.join("\n");
+  assert.match(rendered, /├── Prompt line one/);
+  assert.match(rendered, /├── ✓ Read x/);
+  assert.match(rendered, /├── ✓ Glob y/);
+  assert.match(rendered, /├── … 2 more tool call\(s\)/);
+});
+
+defineTest("SubagentTaskTreeComponent caches by width and invalidates", () => {
+  const component = createSubagentTaskTreeComponent({
+    entries: [makeEntry()],
+  });
+
+  const first = component.render(80);
+  const second = component.render(80);
+  assert.deepEqual(second, first);
+
+  component.setEntries([
+    makeEntry({
+      result: "Updated result",
+    }),
+  ]);
+
+  const third = component.render(80);
+  assert.match(third.join("\n"), /Updated result/);
+});

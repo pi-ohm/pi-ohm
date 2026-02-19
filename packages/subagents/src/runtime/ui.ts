@@ -1,3 +1,8 @@
+import {
+  renderSubagentTaskTreeLines,
+  type SubagentTaskTreeEntry,
+  type SubagentTaskTreeStatus,
+} from "@pi-ohm/tui";
 import type { TaskRuntimeSnapshot } from "./tasks";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
@@ -6,6 +11,8 @@ export interface TaskRuntimePresentation {
   readonly statusLine: string;
   readonly widgetLines: readonly string[];
   readonly compactWidgetLines: readonly string[];
+  readonly widgetEntries: readonly SubagentTaskTreeEntry[];
+  readonly compactWidgetEntries: readonly SubagentTaskTreeEntry[];
   readonly plainText: string;
   readonly hasActiveTasks: boolean;
   readonly runningCount: number;
@@ -96,6 +103,106 @@ function sortSnapshots(snapshots: readonly TaskRuntimeSnapshot[]): readonly Task
   });
 }
 
+function toTreeStatus(state: TaskRuntimeSnapshot["state"]): SubagentTaskTreeStatus {
+  if (state === "queued") return "queued";
+  if (state === "running") return "running";
+  if (state === "succeeded") return "succeeded";
+  if (state === "failed") return "failed";
+  return "cancelled";
+}
+
+function normalizeTranscriptPrefix(line: string): string {
+  const roleTrimmed = line.replace(/^(assistant|user|system)\s*[:>]\s*/iu, "").trim();
+  const toolTrimmed = roleTrimmed.replace(/^tool(?:\([^)]+\))?\s*[:>]\s*/iu, "").trim();
+  return toolTrimmed;
+}
+
+function looksLikeToolCallLine(line: string): boolean {
+  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
+    return true;
+  }
+
+  if (/^(Read|Glob|Grep|Find|Search|Bash|Edit|Write|Ls)\b/u.test(line)) {
+    return true;
+  }
+
+  if (/^tool_call\s*[:>]/iu.test(line)) {
+    return true;
+  }
+
+  if (/^\$\s+.+/u.test(line)) {
+    return true;
+  }
+
+  return false;
+}
+
+function parseOutputSections(output: string): {
+  readonly toolCalls: readonly string[];
+  readonly result: string;
+} {
+  const lines = output
+    .split(/\r?\n/u)
+    .map((line) => normalizeTranscriptPrefix(line.trim()))
+    .filter((line) => line.length > 0);
+
+  if (lines.length === 0) {
+    return {
+      toolCalls: [],
+      result: "(no output)",
+    };
+  }
+
+  const toolCalls: string[] = [];
+  const narrative: string[] = [];
+  for (const line of lines) {
+    if (looksLikeToolCallLine(line)) {
+      toolCalls.push(line);
+      continue;
+    }
+
+    narrative.push(line);
+  }
+
+  if (narrative.length === 0) {
+    return {
+      toolCalls,
+      result: toolCalls[toolCalls.length - 1] ?? "(no output)",
+    };
+  }
+
+  return {
+    toolCalls,
+    result: narrative[narrative.length - 1] ?? "(no output)",
+  };
+}
+
+function capitalize(input: string): string {
+  if (input.length === 0) return input;
+  return input[0].toUpperCase() + input.slice(1);
+}
+
+function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): SubagentTaskTreeEntry {
+  const parsed = snapshot.output ? parseOutputSections(snapshot.output) : undefined;
+  const active = snapshot.state === "queued" || snapshot.state === "running";
+
+  const result = active
+    ? "Working..."
+    : (parsed?.result ?? snapshot.errorMessage ?? snapshot.summary ?? "(no output)");
+
+  const spinnerFrame = Math.floor(Math.max(0, nowEpochMs - snapshot.startedAtEpochMs) / 120);
+
+  return {
+    id: snapshot.id,
+    status: toTreeStatus(snapshot.state),
+    title: `${capitalize(snapshot.subagentType)} · ${snapshot.description}`,
+    prompt: snapshot.prompt,
+    toolCalls: parsed?.toolCalls ?? [],
+    result,
+    spinnerFrame,
+  };
+}
+
 export function createTaskRuntimePresentation(input: {
   readonly snapshots: readonly TaskRuntimeSnapshot[];
   readonly nowEpochMs: number;
@@ -103,6 +210,7 @@ export function createTaskRuntimePresentation(input: {
   readonly maxWidth?: number;
 }): TaskRuntimePresentation {
   const maxItems = input.maxItems ?? 5;
+  const maxWidth = input.maxWidth ?? 100;
   const sorted = sortSnapshots(input.snapshots);
   const active = sorted.filter(
     (snapshot) => snapshot.state === "running" || snapshot.state === "queued",
@@ -120,23 +228,27 @@ export function createTaskRuntimePresentation(input: {
       ? `subagents ${running} running · tools ${activeTools} active · done ${completed} · failed ${failed} · cancelled ${cancelled}`
       : `subagents idle · done ${completed} · failed ${failed} · cancelled ${cancelled}`;
 
-  const widgetLines: string[] = [];
-  const compactWidgetLines: string[] = [];
-  for (const snapshot of visible) {
-    const [line1, line2] = renderTaskSnapshotLines({
-      snapshot,
-      nowEpochMs: input.nowEpochMs,
-      maxWidth: input.maxWidth,
-    });
-    const compactLine = renderTaskSnapshotCompactLine({
-      snapshot,
-      nowEpochMs: input.nowEpochMs,
-      maxWidth: input.maxWidth,
-    });
+  const widgetEntries = visible.map((snapshot) => toTreeEntry(snapshot, input.nowEpochMs));
+  const compactWidgetEntries = [...widgetEntries];
 
-    widgetLines.push(line1, line2);
-    compactWidgetLines.push(compactLine);
-  }
+  const widgetLines = renderSubagentTaskTreeLines({
+    entries: widgetEntries,
+    width: maxWidth,
+    options: {
+      compact: false,
+    },
+  });
+
+  const compactWidgetLines = renderSubagentTaskTreeLines({
+    entries: compactWidgetEntries,
+    width: maxWidth,
+    options: {
+      compact: true,
+      maxPromptLines: 1,
+      maxToolCalls: 2,
+      maxResultLines: 1,
+    },
+  });
 
   const plainText = widgetLines.length > 0 ? widgetLines.join("\n") : "No task activity";
 
@@ -144,6 +256,8 @@ export function createTaskRuntimePresentation(input: {
     statusLine,
     widgetLines,
     compactWidgetLines,
+    widgetEntries,
+    compactWidgetEntries,
     plainText,
     hasActiveTasks: running > 0,
     runningCount: running,

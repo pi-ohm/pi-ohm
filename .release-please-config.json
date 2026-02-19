@@ -18,6 +18,7 @@
         "modes",
         "handoff",
         "subagents",
+        "tui",
         "session-search",
         "painter",
         "pi-ohm"
@@ -43,6 +44,11 @@
     "packages/subagents": {
       "component": "subagents",
       "package-name": "@pi-ohm/subagents",
+      "skip-github-release": true
+    },
+    "packages/tui": {
+      "component": "tui",
+      "package-name": "@pi-ohm/tui",
       "skip-github-release": true
     },
     "packages/session-search": {

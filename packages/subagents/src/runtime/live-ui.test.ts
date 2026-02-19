@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SubagentTaskTreeEntry } from "@pi-ohm/tui";
 import type { TaskRuntimePresentation } from "./ui";
 import { createTaskLiveUiCoordinator, getTaskLiveUiMode, setTaskLiveUiMode } from "./live-ui";
 
@@ -13,16 +14,33 @@ async function sleep(ms: number): Promise<void> {
   });
 }
 
+function makeEntry(overrides: Partial<SubagentTaskTreeEntry> = {}): SubagentTaskTreeEntry {
+  return {
+    id: "task_1",
+    status: "running",
+    title: "Finder · Auth flow scan",
+    prompt: "Trace auth validation",
+    toolCalls: ["Read packages/subagents"],
+    result: "Working...",
+    spinnerFrame: 0,
+    ...overrides,
+  };
+}
+
 function makePresentation(input: {
   readonly statusLine: string;
   readonly widgetLines?: readonly string[];
   readonly compactWidgetLines?: readonly string[];
+  readonly widgetEntries?: readonly SubagentTaskTreeEntry[];
+  readonly compactWidgetEntries?: readonly SubagentTaskTreeEntry[];
   readonly hasActiveTasks: boolean;
 }): TaskRuntimePresentation {
   return {
     statusLine: input.statusLine,
     widgetLines: input.widgetLines ?? [],
     compactWidgetLines: input.compactWidgetLines ?? [],
+    widgetEntries: input.widgetEntries ?? [],
+    compactWidgetEntries: input.compactWidgetEntries ?? [],
     plainText: (input.widgetLines ?? []).join("\n"),
     hasActiveTasks: input.hasActiveTasks,
     runningCount: input.hasActiveTasks ? 1 : 0,
@@ -33,9 +51,32 @@ function makePresentation(input: {
   };
 }
 
+function renderWidgetPreview(content: unknown): readonly string[] | undefined {
+  if (typeof content !== "function") {
+    return undefined;
+  }
+
+  const component = content();
+  if (!component || typeof component !== "object") {
+    return undefined;
+  }
+
+  const render = Reflect.get(component, "render");
+  if (typeof render !== "function") {
+    return undefined;
+  }
+
+  const rendered = render.call(component, 120);
+  if (!Array.isArray(rendered)) {
+    return undefined;
+  }
+
+  return rendered.filter((line): line is string => typeof line === "string");
+}
+
 defineTest("live UI coordinator dedupes identical status/widget frames", async () => {
   const statusCalls: (string | undefined)[] = [];
-  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const widgetCalls: unknown[] = [];
   const headerCalls: ((...args: readonly unknown[]) => unknown)[] = [];
 
   const coordinator = createTaskLiveUiCoordinator(
@@ -61,8 +102,8 @@ defineTest("live UI coordinator dedupes identical status/widget frames", async (
 
   const running = makePresentation({
     statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
-    widgetLines: ["⠋ [finder] Auth flow scan", "  Tools 1/3 · Elapsed 00:01"],
-    compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+    widgetEntries: [makeEntry()],
+    compactWidgetEntries: [makeEntry()],
     hasActiveTasks: true,
   });
 
@@ -80,7 +121,7 @@ defineTest("live UI coordinator dedupes identical status/widget frames", async (
 
 defineTest("live UI coordinator uses header surface when available", async () => {
   const statusCalls: (string | undefined)[] = [];
-  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const widgetCalls: unknown[] = [];
   const headerFactories: (((...args: readonly unknown[]) => unknown) | undefined)[] = [];
 
   const coordinator = createTaskLiveUiCoordinator(
@@ -105,7 +146,7 @@ defineTest("live UI coordinator uses header surface when available", async () =>
   coordinator.publish(
     makePresentation({
       statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
-      compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+      compactWidgetEntries: [makeEntry()],
       hasActiveTasks: true,
     }),
   );
@@ -124,7 +165,7 @@ defineTest("live UI coordinator uses header surface when available", async () =>
 
 defineTest("live UI coordinator clears status/widget after idle grace", async () => {
   const statusCalls: (string | undefined)[] = [];
-  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const widgetCalls: unknown[] = [];
 
   const coordinator = createTaskLiveUiCoordinator(
     {
@@ -145,7 +186,7 @@ defineTest("live UI coordinator clears status/widget after idle grace", async ()
   coordinator.publish(
     makePresentation({
       statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
-      compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+      compactWidgetEntries: [makeEntry()],
       hasActiveTasks: true,
     }),
   );
@@ -155,7 +196,7 @@ defineTest("live UI coordinator clears status/widget after idle grace", async ()
   coordinator.publish(
     makePresentation({
       statusLine: "subagents idle · done 1 · failed 0 · cancelled 0",
-      compactWidgetLines: ["✓ finder · Auth flow scan · 00:04 · tools 0/3"],
+      compactWidgetEntries: [makeEntry({ status: "succeeded", result: "done" })],
       hasActiveTasks: false,
     }),
   );
@@ -172,7 +213,7 @@ defineTest("live UI coordinator clears status/widget after idle grace", async ()
 });
 
 defineTest("live UI coordinator respects off/compact/verbose mode changes", async () => {
-  const widgetCalls: (readonly string[] | undefined)[] = [];
+  const widgetCalls: unknown[] = [];
   const statusCalls: (string | undefined)[] = [];
 
   const priorMode = getTaskLiveUiMode();
@@ -196,16 +237,18 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
 
     const activePresentation = makePresentation({
       statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
-      widgetLines: ["⠋ [finder] Auth flow scan", "  Tools 1/3 · Elapsed 00:01"],
-      compactWidgetLines: ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"],
+      widgetEntries: [makeEntry({ toolCalls: ["Read path", "Grep value", "Find target"] })],
+      compactWidgetEntries: [makeEntry({ toolCalls: ["Read path", "Grep value", "Find target"] })],
       hasActiveTasks: true,
     });
 
     coordinator.publish(activePresentation);
     await sleep(20);
 
-    const compactFrame = widgetCalls.at(-1);
-    assert.deepEqual(compactFrame, ["⠋ finder · Auth flow scan · 00:01 · tools 1/3"]);
+    const compactFrame = renderWidgetPreview(widgetCalls.at(-1));
+    assert.notEqual(compactFrame, undefined);
+    assert.match((compactFrame ?? [""])[0] ?? "", /Finder/);
+    assert.equal((compactFrame ?? []).join("\n").includes("Find target"), false);
 
     setTaskLiveUiMode("off");
     coordinator.publish(activePresentation);
@@ -218,8 +261,9 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
     coordinator.publish(activePresentation);
     await sleep(20);
 
-    const verboseFrame = widgetCalls.at(-1);
-    assert.deepEqual(verboseFrame, ["⠋ [finder] Auth flow scan", "  Tools 1/3 · Elapsed 00:01"]);
+    const verboseFrame = renderWidgetPreview(widgetCalls.at(-1));
+    assert.notEqual(verboseFrame, undefined);
+    assert.equal((verboseFrame ?? []).join("\n").includes("Find target"), true);
 
     coordinator.dispose();
   } finally {

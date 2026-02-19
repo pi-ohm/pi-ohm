@@ -189,36 +189,42 @@ Invocation mode differences are intentional and explicit via `invocation`:
 
 ## Live TUI feedback
 
-`@pi-ohm/subagents` uses `@mariozechner/pi-tui` for task runtime visuals.
+`@pi-ohm/subagents` uses shared component `@pi-ohm/tui` (`SubagentTaskTreeComponent`) for task runtime visuals.
 
 Baseline running-task display includes:
 
 - spinner
-- task description (from original `task` start payload)
-- in-flight tool call count
-- elapsed time (`mm:ss`)
+- prompt line from task start payload (main-agent instruction)
+- best-effort parsed tool-call rows
+- terminal/final result row
 
 Runtime UI surfaces are synchronized from one task snapshot model:
 
 - footer status (`setStatus`) with running/active counters
-- widget task list (`setWidget`) using two-line per-task renderer
+- widget task tree (`setWidget`) using Amp-style tree component
 - headless fallback `onUpdate` text with equivalent description/tool-count/elapsed info
 
 Example running block:
 
 ```bash
-⠋ [finder] Auth flow scan
-  Tools 3/3 · Elapsed 00:18
+  ⠋ Finder · Auth flow scan
+    ├── Trace auth validation
+    ├── ✓ Read packages/subagents/src
+    ├── ✓ Grep auth|token in packages/subagents/src
+    ╰── Working...
 ```
 
 Terminal examples:
 
 ```bash
-✓ [finder] Auth flow scan
-  Tools 5/5 · Elapsed 00:42
+  ✓ Finder · Auth flow scan
+    ├── Trace auth validation
+    ├── ✓ Read packages/subagents/src
+    ╰── Auth validation path uses task permission policy + runtime store transitions.
 
-✕ [finder] Auth flow scan
-  Tools 2/3 · Elapsed 00:11
+  ✕ Finder · Auth flow scan
+    ├── Trace auth validation
+    ╰── Task failed: backend timeout while reading repository files.
 ```
 
 ## Error handling
