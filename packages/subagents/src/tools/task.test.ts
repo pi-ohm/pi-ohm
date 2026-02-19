@@ -348,8 +348,8 @@ defineTest("formatTaskToolResult renders collection items", () => {
   );
 
   assert.match(compact, /items:/);
-  assert.match(compact, /task_1: running finder/);
-  assert.match(compact, /task_missing: unknown/);
+  assert.match(compact, /- ⠋ task_1 finder · Auth flow scan/);
+  assert.match(compact, /- \? task_missing · Unknown task id/);
 });
 
 defineTest("formatTaskToolResult preserves multiline output in compact text", () => {
@@ -400,7 +400,70 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
   assert.match(compact, /items:/);
   assert.match(compact, /output:/);
   assert.match(compact, /tool_call: read/);
-  assert.match(compact, /assistant: done/);
+  assert.match(compact, /assistant> done/);
+});
+
+defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabled", () => {
+  const previous = process.env.OHM_DEBUG;
+  delete process.env.OHM_DEBUG;
+
+  try {
+    const compact = formatTaskToolResult(
+      {
+        op: "wait",
+        status: "succeeded",
+        summary: "wait for 1 task(s)",
+        backend: "interactive-shell",
+        provider: "unavailable",
+        model: "unavailable",
+        runtime: "pi-cli",
+        route: "interactive-shell",
+      },
+      false,
+    );
+
+    assert.doesNotMatch(compact, /backend:/);
+    assert.doesNotMatch(compact, /provider:/);
+    assert.doesNotMatch(compact, /runtime:/);
+    assert.match(compact, /^✓ wait for 1 task\(s\) · done/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OHM_DEBUG;
+    } else {
+      process.env.OHM_DEBUG = previous;
+    }
+  }
+});
+
+defineTest("formatTaskToolResult shows verbose metadata when OHM_DEBUG=true", () => {
+  const previous = process.env.OHM_DEBUG;
+  process.env.OHM_DEBUG = "true";
+
+  try {
+    const verbose = formatTaskToolResult(
+      {
+        op: "wait",
+        status: "succeeded",
+        summary: "wait for 1 task(s)",
+        backend: "interactive-shell",
+        provider: "unavailable",
+        model: "unavailable",
+        runtime: "pi-cli",
+        route: "interactive-shell",
+      },
+      false,
+    );
+
+    assert.match(verbose, /backend: interactive-shell/);
+    assert.match(verbose, /provider: unavailable/);
+    assert.match(verbose, /runtime: pi-cli/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OHM_DEBUG;
+    } else {
+      process.env.OHM_DEBUG = previous;
+    }
+  }
 });
 
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
@@ -539,7 +602,7 @@ defineTest(
     assert.equal(updates.length, 1);
     for (const update of updates) {
       assert.equal(update.includes("[finder]"), false);
-      assert.match(update, /^summary:/);
+      assert.match(update, /^✓/);
     }
   },
 );

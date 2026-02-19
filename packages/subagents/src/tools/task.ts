@@ -415,7 +415,171 @@ function buildTaskToolDescription(subagents: readonly OhmSubagentDefinition[]): 
   return lines.join("\n");
 }
 
-function detailsToText(details: TaskToolResultDetails, expanded: boolean): string {
+function isOhmDebugEnabled(): boolean {
+  const raw = process.env.OHM_DEBUG?.trim().toLowerCase();
+  if (!raw) return false;
+  return raw === "1" || raw === "true";
+}
+
+function resolveCollapsedTranscriptTailLines(): number {
+  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_TRANSCRIPT_TAIL_LINES");
+  if (fromEnv !== undefined) return fromEnv;
+  return 4;
+}
+
+function statusIcon(status: TaskToolStatus): string {
+  if (status === "succeeded") return "✓";
+  if (status === "failed") return "✕";
+  if (status === "cancelled") return "○";
+  if (status === "running") return "⠋";
+  return "…";
+}
+
+function statusLabel(details: TaskToolResultDetails): string {
+  if (details.status === "succeeded") return "done";
+  if (details.status === "failed") return "failed";
+  if (details.status === "cancelled") return "cancelled";
+  if (details.status === "running") return "running";
+  return "queued";
+}
+
+function classifyTranscriptLine(line: string): string {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) return "";
+
+  const roleMatch = trimmed.match(/^(assistant|user|system)\s*[:>]\s*(.+)$/iu);
+  if (roleMatch) {
+    return `${roleMatch[1]?.toLowerCase()}> ${roleMatch[2]?.trim() ?? ""}`;
+  }
+
+  const toolMatch = trimmed.match(/^tool(?:\(([^)]+)\))?\s*[:>]\s*(.+)$/iu);
+  if (toolMatch) {
+    const tool = toolMatch[1]?.trim();
+    const payload = toolMatch[2]?.trim() ?? "";
+    return tool ? `tool(${tool})> ${payload}` : `tool> ${payload}`;
+  }
+
+  const shellMatch = trimmed.match(/^\$\s+(.+)$/u);
+  if (shellMatch) {
+    return `tool(shell)> ${shellMatch[1]?.trim() ?? ""}`;
+  }
+
+  return `assistant> ${trimmed}`;
+}
+
+function transcriptLines(output: string): readonly string[] {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => classifyTranscriptLine(line))
+    .filter((line) => line.length > 0);
+}
+
+function appendTranscriptBlock(
+  lines: string[],
+  input: {
+    readonly output: string;
+    readonly expanded: boolean;
+    readonly indent: string;
+  },
+): void {
+  const transcript = transcriptLines(input.output);
+  if (transcript.length === 0) return;
+
+  const tailLines = resolveCollapsedTranscriptTailLines();
+  const visible = input.expanded ? transcript : transcript.slice(-tailLines);
+
+  for (const line of visible) {
+    lines.push(`${input.indent}${line}`);
+  }
+
+  if (!input.expanded && transcript.length > visible.length) {
+    lines.push(
+      `${input.indent}... (${transcript.length - visible.length} earlier lines, ctrl+o to expand)`,
+    );
+  }
+}
+
+function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
+  const lines: string[] = [
+    `${statusIcon(details.status)} ${details.summary} · ${statusLabel(details)}`,
+  ];
+
+  if (details.task_id) lines.push(`task_id: ${details.task_id}`);
+  if (details.wait_status) {
+    lines.push(`wait: ${details.wait_status}${details.done ? " (done)" : ""}`);
+  }
+
+  if (typeof details.accepted_count === "number" && typeof details.total_count === "number") {
+    lines.push(`batch: accepted ${details.accepted_count}/${details.total_count}`);
+  }
+
+  if (details.error_message) {
+    lines.push(`error> ${details.error_message}`);
+  }
+
+  if (details.output_available && details.output) {
+    lines.push("", "output:");
+    appendTranscriptBlock(lines, {
+      output: details.output,
+      expanded,
+      indent: "  ",
+    });
+
+    if (details.output_truncated) {
+      lines.push("  output_truncated: true");
+      if (typeof details.output_total_chars === "number") {
+        lines.push(`  output_total_chars: ${details.output_total_chars}`);
+      }
+      if (typeof details.output_returned_chars === "number") {
+        lines.push(`  output_returned_chars: ${details.output_returned_chars}`);
+      }
+    }
+  }
+
+  if (details.items && details.items.length > 0) {
+    lines.push("", "items:");
+
+    for (const item of details.items) {
+      if (!item.found) {
+        lines.push(`- ? ${item.id} · ${item.error_message ?? "unknown task"}`);
+        continue;
+      }
+
+      const itemStatus = item.status ?? "failed";
+      const subject = item.description ?? item.summary;
+      lines.push(
+        `- ${statusIcon(itemStatus)} ${item.id} ${item.subagent_type ?? "unknown"} · ${subject}`,
+      );
+
+      if (item.error_message) {
+        lines.push(`  error> ${item.error_message}`);
+      }
+
+      if (item.output_available && item.output) {
+        lines.push("  output:");
+        appendTranscriptBlock(lines, {
+          output: item.output,
+          expanded,
+          indent: "    ",
+        });
+
+        if (item.output_truncated) {
+          lines.push("    output_truncated: true");
+          if (typeof item.output_total_chars === "number") {
+            lines.push(`    output_total_chars: ${item.output_total_chars}`);
+          }
+          if (typeof item.output_returned_chars === "number") {
+            lines.push(`    output_returned_chars: ${item.output_returned_chars}`);
+          }
+        }
+      }
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): string {
   const lines: string[] = [`summary: ${details.summary}`];
 
   if (details.task_id) lines.push(`task_id: ${details.task_id}`);
@@ -527,6 +691,35 @@ function detailsToText(details: TaskToolResultDetails, expanded: boolean): strin
   }
 
   return lines.join("\n");
+}
+
+function detailsToText(details: TaskToolResultDetails, expanded: boolean): string {
+  if (isOhmDebugEnabled()) {
+    return detailsToDebugText(details, expanded);
+  }
+
+  return detailsToCompactText(details, expanded);
+}
+
+function isTaskToolResultDetails(value: unknown): value is TaskToolResultDetails {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const op = Reflect.get(value, "op");
+  const status = Reflect.get(value, "status");
+  const summary = Reflect.get(value, "summary");
+
+  const validOp =
+    op === "start" || op === "status" || op === "wait" || op === "send" || op === "cancel";
+  const validStatus =
+    status === "queued" ||
+    status === "running" ||
+    status === "succeeded" ||
+    status === "failed" ||
+    status === "cancelled";
+
+  return validOp && validStatus && typeof summary === "string";
 }
 
 export function formatTaskToolCall(args: TaskToolParameters): string {
@@ -2242,18 +2435,23 @@ export function registerTaskTool(
     },
     renderCall: (args, _theme) => new Text(formatTaskToolCallFromRegistrationArgs(args), 0, 0),
     renderResult: (result, _options, _theme) => {
-      const textBlocks = result.content.filter(
-        (part): part is { readonly type: "text"; readonly text: string } => part.type === "text",
-      );
-      const joined = textBlocks.map((part) => part.text).join("\n\n");
-      const text = joined.length > 0 ? joined : "task tool result unavailable";
+      const text = isTaskToolResultDetails(result.details)
+        ? detailsToText(result.details, _options.expanded)
+        : result.content
+            .filter(
+              (part): part is { readonly type: "text"; readonly text: string } =>
+                part.type === "text",
+            )
+            .map((part) => part.text)
+            .join("\n\n");
+      const resolvedText = text.length > 0 ? text : "task tool result unavailable";
 
       if (_options.expanded) {
-        return new Text(text, 0, 0);
+        return new Text(resolvedText, 0, 0);
       }
 
       return createCollapsedTaskToolResultComponent(
-        text,
+        resolvedText,
         resolveCollapsedResultPreviewVisualLines(),
       );
     },

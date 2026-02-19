@@ -927,3 +927,37 @@ Task tool results show subagent output in chat history; collapsed view uses `...
     - Users can inspect subagent message/tool-call output directly in task tool history entries.
   - Test evidence:
     - Regression tests around multiline item output visibility in renderer.
+
+---
+
+## Epic 7 — Embedded transcript-style task result formatting + debug gating
+
+### Epic goal
+
+Make default task result history concise and chat-like while preserving full diagnostic visibility behind `OHM_DEBUG`.
+
+### Demo outcome
+
+With debug disabled, task results render as embedded transcript snippets (`assistant>`/`tool(...)>`) and hide backend metadata; with debug enabled, full contract diagnostics remain visible.
+
+### Tickets
+
+- [x] **E7-T1: Default non-debug formatter for task results**
+  - Requirements:
+    - Collapse verbose metadata in non-debug mode.
+    - Render output as transcript-style lines and include ctrl+o expandable omission hint for earlier lines.
+  - Acceptance criteria:
+    - wait/status/start/send/cancel text output is concise by default.
+    - history still shows subagent/tool transcript snippets.
+  - Test evidence:
+    - Formatter tests for non-debug concise output + transcript lines.
+
+- [x] **E7-T2: Preserve verbose format behind `OHM_DEBUG` and expanded renderer path**
+  - Requirements:
+    - Keep existing full metadata formatter when `OHM_DEBUG=1|true`.
+    - Ensure renderResult recomputes text from details per expanded state.
+  - Acceptance criteria:
+    - ctrl+o expanded task history shows full output body.
+    - debug mode keeps backend/provider/model/runtime/route fields in text output.
+  - Test evidence:
+    - tests toggling `OHM_DEBUG` env and expanded formatting behavior.
