@@ -150,7 +150,7 @@ Policy:
     - terminal completion
     - timeout/aborted/cancel/error
 - while `hasUI === false` (print/json/rpc consumers):
-  - keep current `onUpdate` behavior for backward compatibility
+  - keep current `onUpdate` behavior for headless consumers
 
 This gives low-noise interactive UX without breaking headless/automation flows.
 
@@ -338,4 +338,4 @@ Add focused tests to avoid regressions:
 - Users always have one persistent runtime indicator while tasks run.
 - Transcript/tool panel no longer feels spammy during long subagent jobs.
 - No regression in task lifecycle payload contracts.
-- UI remains compatible with other extensions and powerbar-like status usage.
+- UI remains additive with other extensions and powerbar-like status usage.

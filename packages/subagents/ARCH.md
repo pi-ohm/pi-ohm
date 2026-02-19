@@ -6,7 +6,6 @@
 
 - a lifecycle `task` tool (`start|status|wait|send|cancel`)
 - dual invocation model (`task-routed` + optional direct `primary-tool`)
-- stable machine contract (`task.v1`)
 - typed recoverable failures (`better-result`)
 - inline-first UX (sync-first by default, async optional)
 
@@ -17,7 +16,7 @@
 - No required third-party extension dependency for core runtime.
 - Must run in plain Pi extension environments.
 - Recoverable failures use typed `Result<T,E>` flows (no broad throw/catch propagation).
-- Tool boundary schemas stay TypeBox-compatible with Pi tool registration.
+- Tool boundary schemas use TypeBox for Pi tool registration.
 - Internal domain validation/parsing stays Zod v4.
 
 ---
@@ -56,7 +55,7 @@ Merge semantics:
 
 ---
 
-## 5) Task tool contract (`task.v1`)
+## 5) Task tool payload shape (current)
 
 ## 5.1 Input operations
 
@@ -70,7 +69,7 @@ Merge semantics:
   - `send` `{ op:"send", id, prompt }`
   - `cancel` `{ op:"cancel", id }`
 
-Compatibility:
+Input normalization:
 
 - `id` normalized to `ids` for `status`/`wait`
 - `op:"result"` normalized to `status`
@@ -168,7 +167,7 @@ Primary user surface is inline tool-result messaging.
 
 Boundary schemas:
 
-- TypeBox for tool registration payload compatibility.
+- TypeBox for tool registration payload shape.
 
 Internal schemas/state:
 
@@ -286,10 +285,10 @@ Bottom widget remains optional and off by default.
 
 1. Add `interactive-sdk` backend behind config gate.
 2. Keep CLI backend intact as fallback.
-3. Validate parity:
-   - task.v1 fields
+3. Validate behavior:
    - error code/category mapping
    - wait/cancel/batch semantics
+   - inline tool-call fidelity from SDK events
 4. If stable, optionally flip default backend.
 
 ## 10.8 Risks + mitigations
@@ -300,8 +299,8 @@ Bottom widget remains optional and off by default.
 - **Risk:** event flood memory growth
   - **Mitigation:** bounded timeline + throttled updates + retention policy.
 
-- **Risk:** contract drift across backends
-  - **Mitigation:** shared normalization layer + parity tests per op.
+- **Risk:** backend behavior drift across CLI vs SDK paths
+  - **Mitigation:** shared normalization layer + cross-backend behavior tests.
 
 ---
 
@@ -313,9 +312,9 @@ Required coverage:
 - lifecycle (`start/status/wait/send/cancel`)
 - batch determinism + bounded concurrency
 - rendering (inline running vs terminal; collapsed/expanded)
-- primary-tool parity vs task-routed
+- primary-tool behavior vs task-routed behavior
 - better-result error-path mapping
-- backend parity matrix (CLI vs SDK once added)
+- backend comparison matrix (CLI vs SDK once added)
 
 Verification gate:
 
@@ -330,4 +329,3 @@ Verification gate:
 
 - Removing CLI backend immediately.
 - Auto-enabling bottom widget by default.
-- Breaking `task.v1` contract for existing consumers.

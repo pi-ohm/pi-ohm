@@ -37,7 +37,7 @@ Current behavior:
 - supports `op: "start"` for a single task payload (sync + `async:true`)
 - supports batched `op: "start"` payloads via `tasks[]` with optional `parallel:true`
 - supports lifecycle operations: `status`, `wait`, `send`, `cancel`
-- compatibility aliases: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
+- input normalization: `status`/`wait` accept `id` or `ids`; `op:"result"` is normalized to `status`
 - non-debug result text renders Amp-style inline message trees (prompt -> tool calls -> result)
 - running background updates use minimal inline progress lines
 - returns `task_id`, status, and deterministic task details
@@ -56,9 +56,9 @@ Current behavior:
   - `output_truncated`
   - `output_total_chars`
   - `output_returned_chars`
-- includes stable machine contract marker on every tool details payload:
+- includes machine marker on every tool details payload:
   - `contract_version: "task.v1"`
-- includes stable observability fields on details/items:
+- includes observability fields on details/items:
   - `provider`
   - `model`
   - `runtime`
@@ -166,11 +166,11 @@ Existing slash commands remain unchanged:
 - `/ohm-subagents`
 - `/ohm-subagent <id>`
 
-## Invocation mode parity
+## Invocation mode behavior
 
 `task-routed` and `primary-tool` invocation paths share one runtime/result envelope.
 
-Expected parity fields:
+Current shared fields:
 
 - `contract_version`
 - `status`
@@ -261,4 +261,4 @@ Normalization behavior:
 
 - `context` is forwarded in a dedicated prompt section (`Context:`)
 - oracle `files[]` is forwarded in a dedicated prompt block (`Files:` + bullet paths)
-- task lifecycle/result contract remains identical after primary normalization
+- task lifecycle/result payload remains the same shape after primary normalization

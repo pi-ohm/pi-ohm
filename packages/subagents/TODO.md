@@ -4,11 +4,11 @@
 
 This replaces prior ticket-by-ticket log with a technical summary of what is already done.
 
-### Runtime + contract foundations
+### Runtime foundations
 
 - Task lifecycle implemented end-to-end: `start | status | wait | send | cancel`.
 - Strong payload boundary normalization exists (`id|ids`, `op:"result" -> status`, strict validation envelopes).
-- Stable machine contract exists (`contract_version: "task.v1"`) with explicit fields for wait/cancel/batch ergonomics.
+- Current payload includes `contract_version: "task.v1"` plus explicit fields for wait/cancel/batch ergonomics.
 - Structured observability propagated (`backend/provider/model/runtime/route`) and aggregated across collections.
 - Persistence/hydration implemented, including stale non-terminal recovery (`task_rehydrated_incomplete`).
 - Typed recoverable error strategy established with `better-result` + tagged domain errors.
@@ -95,19 +95,19 @@ Prove we can execute subagent tasks via `createAgentSession()` safely in-process
     - `message_update` deltas
     - `tool_execution_start/update/end`
     - `agent_end` finalization marker
-- [ ] **S11-T4: Abort/timeout parity**
+- [ ] **S11-T4: Abort/timeout behavior mapping**
   - Map existing semantics to SDK path:
     - timeout -> `task_backend_timeout`
     - abort signal -> `task_aborted`
 
 ### Acceptance
 
-- SDK backend can run a single sync task and return terminal result parity with existing contract.
+- SDK backend can run a single sync task and return expected terminal result fields.
 - No extension recursion, no persistent nested session files.
 
 ### Test evidence
 
-- backend unit tests for success/error/timeout/abort parity.
+- backend unit tests for success/error/timeout/abort behavior.
 - smoke run with `subagentBackend=interactive-sdk` (new opt-in value).
 
 ---
@@ -189,7 +189,7 @@ Render one evolving inline task message per running task/tool call path (no spam
 
 ---
 
-## Sprint 14 — Contract hardening + migration safety
+## Sprint 14 — Backend hardening + migration safety
 
 ### Goal
 
@@ -204,7 +204,7 @@ Ship SDK path safely with explicit migration and fallback controls.
 - [ ] **S14-T1: Config + backend selection policy**
   - Add `interactive-sdk` backend option docs + validation.
   - Add optional fallback policy (`sdk->cli`) for recoverable bootstrap failures.
-- [ ] **S14-T2: Error taxonomy parity matrix**
+- [ ] **S14-T2: Error taxonomy mapping matrix**
   - Ensure SDK path maps to existing stable error codes/categories.
 - [ ] **S14-T3: Throughput + memory guardrails**
   - Enforce timeline caps, update throttles, and runtime cleanup for async-heavy runs.
@@ -213,8 +213,7 @@ Ship SDK path safely with explicit migration and fallback controls.
 
 ### Acceptance
 
-- SDK backend can be enabled confidently with no contract break for existing consumers.
-- Rollback path is immediate via config.
+- SDK backend can be enabled confidently with clear rollback path via config.
 
 ### Test evidence
 
@@ -237,8 +236,7 @@ If S11-S14 metrics are good, make SDK backend default.
 
 ### Gate criteria (must all pass)
 
-- parity tests green
-- no regression in task.v1 fields
+- backend tests green
 - async inline UX validated in manual smoke + automated tests
 - memory/runtime telemetry acceptable under batch stress
 
@@ -249,8 +247,8 @@ If S11-S14 metrics are good, make SDK backend default.
 - Keep type safety strict (no `any`, no non-null assertions, no type assertions).
 - Parse SDK stream events at boundary into discriminated unions.
 - Make illegal states unrepresentable in event timeline model.
-- Preserve current `task.v1` contract compatibility; only additive fields unless explicitly versioned.
 - Keep current CLI backend until SDK path is proven and gated.
+- This is preproduction: breaking API changes are allowed when they improve architecture.
 
 ---
 
