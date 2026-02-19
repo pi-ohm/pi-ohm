@@ -91,11 +91,14 @@ Per-subagent model override is supported via `ohm.json`:
   "subagents": {
     "finder": { "model": "openai/gpt-4o" },
     "oracle": { "model": "anthropic/claude-sonnet-4-5" },
+    "librarian": { "model": "openai/gpt-5:high" },
   },
 }
 ```
 
 - format is required: `<provider>/<model>`
+- optional thinking suffix: `<provider>/<model>:<thinking>`
+- valid thinking values: `off|minimal|low|medium|high|xhigh`
 - provider is normalized to lowercase
 - SDK backend validates against Pi model registry (built-ins + custom `models.json`)
 - interactive-shell backend forwards the same `--model` pattern to nested `pi`

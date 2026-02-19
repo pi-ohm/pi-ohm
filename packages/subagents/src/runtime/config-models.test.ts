@@ -52,6 +52,41 @@ defineTest("loadOhmRuntimeConfig parses subagents.<id>.model overrides", async (
   });
 });
 
+defineTest(
+  "loadOhmRuntimeConfig preserves optional :thinking suffix in subagent model overrides",
+  async () => {
+    await withTempDir(async (cwd) => {
+      const configDir = join(cwd, ".pi-global");
+      mkdirSync(configDir, { recursive: true });
+      mkdirSync(join(cwd, ".pi"), { recursive: true });
+
+      writeFileSync(
+        join(cwd, ".pi", "ohm.json"),
+        JSON.stringify({
+          subagents: {
+            finder: { model: "openai/gpt-5:high" },
+          },
+        }),
+        "utf8",
+      );
+
+      const previousPiConfigDir = process.env.PI_CONFIG_DIR;
+      process.env.PI_CONFIG_DIR = configDir;
+
+      try {
+        const loaded = await loadOhmRuntimeConfig(cwd);
+        assert.equal(loaded.config.subagents?.profiles.finder?.model, "openai/gpt-5:high");
+      } finally {
+        if (previousPiConfigDir === undefined) {
+          delete process.env.PI_CONFIG_DIR;
+        } else {
+          process.env.PI_CONFIG_DIR = previousPiConfigDir;
+        }
+      }
+    });
+  },
+);
+
 defineTest("loadOhmRuntimeConfig ignores invalid subagent model overrides", async () => {
   await withTempDir(async (cwd) => {
     const configDir = join(cwd, ".pi-global");

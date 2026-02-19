@@ -11,6 +11,7 @@ import {
   finalizePiSdkStreamCapture,
   PiCliTaskExecutionBackend,
   PiSdkTaskExecutionBackend,
+  parseSubagentModelSelection,
   ScaffoldTaskExecutionBackend,
   type PiCliRunner,
   type PiSdkRunner,
@@ -71,6 +72,63 @@ const subagentFixture: OhmSubagentDefinition = {
   whenToUse: ["search"],
   scaffoldPrompt: "search prompt",
 };
+
+defineTest("parseSubagentModelSelection parses provider/model", () => {
+  const parsed = parseSubagentModelSelection({
+    modelPattern: "OpenAI/gpt-4o",
+    hasModel: (provider, modelId) => provider === "openai" && modelId === "gpt-4o",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) {
+    assert.fail("Expected model selection parse to succeed");
+  }
+  assert.equal(parsed.value.provider, "openai");
+  assert.equal(parsed.value.modelId, "gpt-4o");
+  assert.equal(parsed.value.thinkingLevel, undefined);
+});
+
+defineTest("parseSubagentModelSelection parses optional :thinking suffix", () => {
+  const parsed = parseSubagentModelSelection({
+    modelPattern: "openai/gpt-5:high",
+    hasModel: (provider, modelId) => provider === "openai" && modelId === "gpt-5",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) {
+    assert.fail("Expected model+thinking parse to succeed");
+  }
+  assert.equal(parsed.value.provider, "openai");
+  assert.equal(parsed.value.modelId, "gpt-5");
+  assert.equal(parsed.value.thinkingLevel, "high");
+});
+
+defineTest("parseSubagentModelSelection prefers full model IDs containing colons", () => {
+  const parsed = parseSubagentModelSelection({
+    modelPattern: "openrouter/vendor/model:exacto",
+    hasModel: (provider, modelId) => provider === "openrouter" && modelId === "vendor/model:exacto",
+  });
+
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) {
+    assert.fail("Expected full model id parse to succeed");
+  }
+  assert.equal(parsed.value.modelId, "vendor/model:exacto");
+  assert.equal(parsed.value.thinkingLevel, undefined);
+});
+
+defineTest("parseSubagentModelSelection rejects invalid thinking suffix", () => {
+  const parsed = parseSubagentModelSelection({
+    modelPattern: "openai/gpt-5:mega",
+    hasModel: (provider, modelId) => provider === "openai" && modelId === "gpt-5",
+  });
+
+  assert.equal(parsed.ok, false);
+  if (parsed.ok) {
+    assert.fail("Expected invalid thinking parse failure");
+  }
+  assert.equal(parsed.reason, "invalid_thinking_level");
+});
 
 defineTest("ScaffoldTaskExecutionBackend returns deterministic summary/output", async () => {
   const backend = new ScaffoldTaskExecutionBackend();
@@ -251,6 +309,43 @@ defineTest("PiCliTaskExecutionBackend forwards configured subagent model pattern
 });
 
 defineTest(
+  "PiCliTaskExecutionBackend forwards configured subagent model pattern with thinking suffix",
+  async () => {
+    const requestedModels: string[] = [];
+
+    const runner: PiCliRunner = async (input) => {
+      if (input.modelPattern) {
+        requestedModels.push(input.modelPattern);
+      }
+
+      return {
+        exitCode: 0,
+        stdout: "finder online",
+        stderr: "",
+        timedOut: false,
+        aborted: false,
+      };
+    };
+
+    const backend = new PiCliTaskExecutionBackend(runner, 1_000);
+    const result = await backend.executeStart({
+      taskId: "task_4_model_thinking",
+      subagent: subagentFixture,
+      description: "Auth flow scan",
+      prompt: "Find auth validation path and refresh flow",
+      cwd: "/tmp/project",
+      config: makeConfig("interactive-shell", {
+        finder: { model: "openai/gpt-5:high" },
+      }),
+      signal: undefined,
+    });
+
+    assert.equal(Result.isOk(result), true);
+    assert.deepEqual(requestedModels, ["openai/gpt-5:high"]);
+  },
+);
+
+defineTest(
   "PiCliTaskExecutionBackend falls back to scaffold mode when backend is none",
   async () => {
     let called = false;
@@ -409,6 +504,45 @@ defineTest("PiSdkTaskExecutionBackend forwards configured subagent model pattern
   assert.equal(Result.isOk(result), true);
   assert.deepEqual(requestedModels, ["anthropic/claude-sonnet-4-5"]);
 });
+
+defineTest(
+  "PiSdkTaskExecutionBackend forwards configured subagent model pattern with thinking suffix",
+  async () => {
+    const requestedModels: string[] = [];
+
+    const runner: PiSdkRunner = async (input) => {
+      if (input.modelPattern) {
+        requestedModels.push(input.modelPattern);
+      }
+
+      return {
+        output: "sdk online",
+        events: [],
+        provider: "sdk-provider",
+        model: "sdk-model",
+        runtime: "pi-sdk",
+        timedOut: false,
+        aborted: false,
+      };
+    };
+
+    const backend = new PiSdkTaskExecutionBackend(runner, 1_000);
+    const result = await backend.executeStart({
+      taskId: "task_sdk_model_thinking",
+      subagent: subagentFixture,
+      description: "Auth flow scan",
+      prompt: "Trace auth validation path",
+      cwd: "/tmp/project",
+      config: makeConfig("interactive-sdk", {
+        finder: { model: "openai/gpt-5:high" },
+      }),
+      signal: undefined,
+    });
+
+    assert.equal(Result.isOk(result), true);
+    assert.deepEqual(requestedModels, ["openai/gpt-5:high"]);
+  },
+);
 
 defineTest("Pi SDK stream capture records tool lifecycle and assistant deltas", () => {
   const capture = createPiSdkStreamCaptureState();

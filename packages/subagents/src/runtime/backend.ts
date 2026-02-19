@@ -10,6 +10,7 @@ import {
   SettingsManager,
   type ResourceLoader,
 } from "@mariozechner/pi-coding-agent";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { Result } from "better-result";
 import { getSubagentConfiguredModel, type OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../catalog";
@@ -356,6 +357,106 @@ function parseProviderModelPattern(
   return { provider, modelId };
 }
 
+function isThinkingLevel(value: string): value is ThinkingLevel {
+  return (
+    value === "off" ||
+    value === "minimal" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh"
+  );
+}
+
+export interface ParsedSubagentModelSelection {
+  readonly provider: string;
+  readonly modelId: string;
+  readonly thinkingLevel?: ThinkingLevel;
+}
+
+export type ParseSubagentModelSelectionResult =
+  | {
+      readonly ok: true;
+      readonly value: ParsedSubagentModelSelection;
+    }
+  | {
+      readonly ok: false;
+      readonly reason: "invalid_format" | "invalid_thinking_level" | "model_not_found";
+      readonly message: string;
+    };
+
+export function parseSubagentModelSelection(input: {
+  readonly modelPattern: string;
+  readonly hasModel: (provider: string, modelId: string) => boolean;
+}): ParseSubagentModelSelectionResult {
+  const parsedBase = parseProviderModelPattern(input.modelPattern);
+  if (!parsedBase) {
+    return {
+      ok: false,
+      reason: "invalid_format",
+      message: `Invalid subagent model '${input.modelPattern}'. Expected '<provider>/<model>' or '<provider>/<model>:<thinking>'.`,
+    };
+  }
+
+  const fullModelId = parsedBase.modelId;
+  if (input.hasModel(parsedBase.provider, fullModelId)) {
+    return {
+      ok: true,
+      value: {
+        provider: parsedBase.provider,
+        modelId: fullModelId,
+      },
+    };
+  }
+
+  const colonIndex = fullModelId.lastIndexOf(":");
+  if (colonIndex <= 0 || colonIndex >= fullModelId.length - 1) {
+    return {
+      ok: false,
+      reason: "model_not_found",
+      message: `Configured subagent model '${input.modelPattern}' was not found.`,
+    };
+  }
+
+  const thinkingRaw = fullModelId
+    .slice(colonIndex + 1)
+    .trim()
+    .toLowerCase();
+  if (!isThinkingLevel(thinkingRaw)) {
+    return {
+      ok: false,
+      reason: "invalid_thinking_level",
+      message: `Invalid subagent thinking level '${thinkingRaw}' in '${input.modelPattern}'.`,
+    };
+  }
+
+  const modelId = fullModelId.slice(0, colonIndex).trim();
+  if (modelId.length === 0) {
+    return {
+      ok: false,
+      reason: "invalid_format",
+      message: `Invalid subagent model '${input.modelPattern}'. Expected '<provider>/<model>' or '<provider>/<model>:<thinking>'.`,
+    };
+  }
+
+  if (!input.hasModel(parsedBase.provider, modelId)) {
+    return {
+      ok: false,
+      reason: "model_not_found",
+      message: `Configured subagent model '${input.modelPattern}' was not found.`,
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      provider: parsedBase.provider,
+      modelId,
+      thinkingLevel: thinkingRaw,
+    },
+  };
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     const trimmed = error.message.trim();
@@ -416,43 +517,57 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     });
 
     session = created.session;
+    const activeSession = session;
 
     if (input.modelPattern) {
-      const parsed = parseProviderModelPattern(input.modelPattern);
-      if (!parsed) {
-        session.dispose();
-        return {
-          output: "",
-          events: [],
-          timedOut: false,
-          aborted: false,
-          error: `Invalid subagent model '${input.modelPattern}'. Expected '<provider>/<model>'.`,
-        };
-      }
-
-      const model = session.modelRegistry.find(parsed.provider, parsed.modelId);
-      if (!model) {
-        const providerCandidates = session.modelRegistry
-          .getAll()
-          .filter((candidate) => candidate.provider === parsed.provider)
-          .map((candidate) => candidate.id)
-          .slice(0, 8);
+      const selection = parseSubagentModelSelection({
+        modelPattern: input.modelPattern,
+        hasModel: (provider, modelId) =>
+          activeSession.modelRegistry.find(provider, modelId) !== undefined,
+      });
+      if (!selection.ok) {
+        const providerCandidatePattern = parseProviderModelPattern(input.modelPattern);
+        const providerCandidates = providerCandidatePattern
+          ? activeSession.modelRegistry
+              .getAll()
+              .filter((candidate) => candidate.provider === providerCandidatePattern.provider)
+              .map((candidate) => candidate.id)
+              .slice(0, 8)
+          : [];
         const providerHint =
-          providerCandidates.length > 0
-            ? ` Available for '${parsed.provider}': ${providerCandidates.join(", ")}.`
+          selection.reason === "model_not_found" && providerCandidates.length > 0
+            ? ` Available for '${providerCandidatePattern?.provider ?? ""}': ${providerCandidates.join(", ")}.`
             : "";
 
-        session.dispose();
+        activeSession.dispose();
         return {
           output: "",
           events: [],
           timedOut: false,
           aborted: false,
-          error: `Configured subagent model '${input.modelPattern}' was not found.${providerHint}`,
+          error: `${selection.message}${providerHint}`,
         };
       }
 
-      await session.setModel(model);
+      const model = activeSession.modelRegistry.find(
+        selection.value.provider,
+        selection.value.modelId,
+      );
+      if (!model) {
+        activeSession.dispose();
+        return {
+          output: "",
+          events: [],
+          timedOut: false,
+          aborted: false,
+          error: `Configured subagent model '${input.modelPattern}' was not found.`,
+        };
+      }
+
+      await activeSession.setModel(model);
+      if (selection.value.thinkingLevel) {
+        activeSession.setThinkingLevel(selection.value.thinkingLevel);
+      }
       resolvedModelProvider = model.provider;
       resolvedModelId = model.id;
     }
@@ -463,6 +578,16 @@ export const runPiSdkPrompt: PiSdkRunner = async (
       timedOut: false,
       aborted: false,
       error: toErrorMessage(error),
+    };
+  }
+
+  if (!session) {
+    return {
+      output: "",
+      events: [],
+      timedOut: false,
+      aborted: false,
+      error: "Failed to create subagent sdk session",
     };
   }
 
