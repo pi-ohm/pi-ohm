@@ -73,6 +73,7 @@ export interface TaskToolItemDetails {
   readonly error_message?: string;
   readonly tool_rows?: readonly string[];
   readonly event_count?: number;
+  readonly assistant_text?: string;
 }
 
 export interface TaskToolResultDetails {
@@ -100,6 +101,7 @@ export interface TaskToolResultDetails {
   readonly error_message?: string;
   readonly tool_rows?: readonly string[];
   readonly event_count?: number;
+  readonly assistant_text?: string;
   readonly items?: readonly TaskToolItemDetails[];
   readonly timed_out?: boolean;
   readonly done?: boolean;
@@ -509,6 +511,17 @@ function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
   return rows;
 }
 
+function assistantTextFromEvents(events: readonly TaskExecutionEvent[]): string | undefined {
+  const deltas = events
+    .filter((event) => event.type === "assistant_text_delta")
+    .map((event) => event.delta);
+
+  if (deltas.length === 0) return undefined;
+  const text = deltas.join("").trim();
+  if (text.length === 0) return undefined;
+  return text;
+}
+
 function toTreeStatus(status: TaskToolStatus): SubagentTaskTreeStatus {
   if (status === "queued") return "queued";
   if (status === "running") return "running";
@@ -629,6 +642,7 @@ function defaultTreeResult(input: {
   readonly status: TaskToolStatus;
   readonly summary: string;
   readonly errorMessage: string | undefined;
+  readonly assistantText: string | undefined;
 }): string {
   if (input.status === "running" || input.status === "queued") {
     return "Working...";
@@ -640,6 +654,10 @@ function defaultTreeResult(input: {
 
   if (input.status === "cancelled") {
     return input.errorMessage ?? "Task cancelled.";
+  }
+
+  if (input.assistantText && input.assistantText.length > 0) {
+    return input.assistantText;
   }
 
   return input.errorMessage ?? input.summary;
@@ -682,6 +700,7 @@ function buildTreeEntryFromDetails(
         status: details.status,
         summary: details.summary,
         errorMessage: details.error_message,
+        assistantText: details.assistant_text,
       }),
     outputTruncated: details.output_truncated,
     outputReturnedChars: details.output_returned_chars,
@@ -732,6 +751,7 @@ function buildTreeEntryFromItem(
         status,
         summary: item.summary,
         errorMessage: item.error_message,
+        assistantText: item.assistant_text,
       }),
     outputTruncated: item.output_truncated,
     outputReturnedChars: item.output_returned_chars,
@@ -854,6 +874,7 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (details.error_category) lines.push(`error_category: ${details.error_category}`);
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
   if (typeof details.event_count === "number") lines.push(`event_count: ${details.event_count}`);
+  if (details.assistant_text) lines.push(`assistant_text: ${details.assistant_text}`);
   if (details.timed_out) lines.push("timed_out: true");
   if (details.tool_rows && details.tool_rows.length > 0) {
     lines.push("", "tool_rows:");
@@ -924,6 +945,7 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
         if (item.error_category) lines.push(`  error_category: ${item.error_category}`);
         if (item.error_message) lines.push(`  error_message: ${item.error_message}`);
         if (typeof item.event_count === "number") lines.push(`  event_count: ${item.event_count}`);
+        if (item.assistant_text) lines.push(`  assistant_text: ${item.assistant_text}`);
         if (item.tool_rows && item.tool_rows.length > 0) {
           lines.push("  tool_rows:");
           for (const toolRow of item.tool_rows) {
@@ -1166,6 +1188,7 @@ function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
 function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
   const output = resolveSnapshotOutput(snapshot);
   const toolRows = toToolRows(snapshot.events);
+  const assistantText = assistantTextFromEvents(snapshot.events);
 
   return {
     id: snapshot.id,
@@ -1192,6 +1215,7 @@ function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
     error_message: snapshot.errorMessage,
     tool_rows: toolRows,
     event_count: snapshot.events.length,
+    assistant_text: assistantText,
   };
 }
 
@@ -1205,6 +1229,7 @@ function snapshotToTaskResultDetails(
       ? toTaskOutputPayload(output)
       : resolveSnapshotOutput(snapshot);
   const toolRows = toToolRows(snapshot.events);
+  const assistantText = assistantTextFromEvents(snapshot.events);
 
   return {
     op,
@@ -1229,6 +1254,7 @@ function snapshotToTaskResultDetails(
     error_message: snapshot.errorMessage,
     tool_rows: toolRows,
     event_count: snapshot.events.length,
+    assistant_text: assistantText,
   };
 }
 

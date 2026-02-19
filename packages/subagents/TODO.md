@@ -164,7 +164,7 @@ Render one evolving inline task message per running task/tool call path (no spam
 
 ### Tickets
 
-- [ ] **S13-T1: Inline live renderer model**
+- [x] **S13-T1: Inline live renderer model**
   - Build rendering from structured event timeline:
     - header
     - prompt row

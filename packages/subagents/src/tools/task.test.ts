@@ -1762,6 +1762,59 @@ defineTest("runTaskToolMvp exposes tool_rows from structured backend events", as
   assert.equal(Reflect.get(started.details, "event_count"), 2);
 });
 
+defineTest("runTaskToolMvp uses assistant_text from events for terminal result row", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "interactive-sdk",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: assistant text",
+          output: "",
+          provider: "unavailable",
+          model: "unavailable",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+          events: [
+            {
+              type: "assistant_text_delta",
+              delta: "structured final answer",
+              atEpochMs: 1001,
+            },
+          ],
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+        });
+      },
+    },
+  });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Assistant text fallback",
+      prompt: "Prefer assistant text",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  assert.equal(Reflect.get(started.details, "assistant_text"), "structured final answer");
+  const textBlock = started.content.find((part) => part.type === "text");
+  assert.notEqual(textBlock, undefined);
+  if (textBlock?.type !== "text") {
+    assert.fail("Expected text block");
+  }
+
+  assert.match(textBlock.text, /structured final answer/);
+});
+
 defineTest("runTaskToolMvp status aggregates runtime observability from task items", async () => {
   const deps = makeDeps({
     backend: {

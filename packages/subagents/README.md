@@ -59,6 +59,7 @@ Current behavior:
 - includes structured SDK-derived tool transcript rows in details/items when available:
   - `tool_rows` (deterministic per-tool lifecycle rows)
   - `event_count` (captured structured event count)
+  - `assistant_text` (event-derived assistant transcript tail)
 - includes machine marker on every tool details payload:
   - `contract_version: "task.v1"`
 - includes observability fields on details/items:
