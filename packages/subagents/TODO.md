@@ -90,12 +90,12 @@ Prove we can execute subagent tasks via `createAgentSession()` safely in-process
   - Add backend alongside existing CLI backend; no default switch yet.
 - [ ] **S11-T2: SDK session boot profile for subagents**
   - In-memory session/settings, isolated loader, deterministic model selection policy.
-- [ ] **S11-T3: Structured stream capture**
+- [x] **S11-T3: Structured stream capture**
   - Subscribe to SDK session events and capture:
     - `message_update` deltas
     - `tool_execution_start/update/end`
     - `agent_end` finalization marker
-- [ ] **S11-T4: Abort/timeout behavior mapping**
+- [x] **S11-T4: Abort/timeout behavior mapping**
   - Map existing semantics to SDK path:
     - timeout -> `task_backend_timeout`
     - abort signal -> `task_aborted`

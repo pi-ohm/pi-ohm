@@ -180,6 +180,232 @@ export type PiSdkRunner = (input: PiSdkRunnerInput) => Promise<PiSdkRunnerResult
 const PI_CLI_TOOLS = "read,bash,edit,write,grep,find,ls";
 const SDK_BACKEND_RUNTIME = "pi-sdk";
 
+export interface PiSdkStreamCaptureState {
+  assistantChunks: string[];
+  toolLines: string[];
+  sawAgentEnd: boolean;
+  capturedEventCount: number;
+}
+
+export interface PiSdkStreamCaptureResult {
+  readonly output: string;
+  readonly sawAgentEnd: boolean;
+  readonly capturedEventCount: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = Reflect.get(record, key);
+  if (typeof value !== "string") return undefined;
+  return value;
+}
+
+function normalizePayloadText(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return undefined;
+    return truncate(trimmed, 240);
+  }
+
+  try {
+    const serialized = JSON.stringify(value);
+    if (!serialized) return undefined;
+
+    const trimmed = serialized.trim();
+    if (trimmed.length === 0) return undefined;
+    return truncate(trimmed, 240);
+  } catch {
+    if (value === null) return "null";
+    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+      return truncate(`${value}`, 240);
+    }
+    if (typeof value === "symbol") {
+      const description = value.description;
+      return description ? truncate(`symbol(${description})`, 240) : "symbol";
+    }
+    if (typeof value === "function") return "function";
+    return "(unserializable)";
+  }
+}
+
+type PiSdkParsedSessionEvent =
+  | {
+      readonly type: "assistant_text_delta";
+      readonly delta: string;
+    }
+  | {
+      readonly type: "tool_start";
+      readonly toolName: string;
+      readonly payload: string | undefined;
+    }
+  | {
+      readonly type: "tool_update";
+      readonly toolName: string;
+      readonly payload: string | undefined;
+    }
+  | {
+      readonly type: "tool_end";
+      readonly toolName: string;
+      readonly payload: string | undefined;
+      readonly isError: boolean;
+    }
+  | {
+      readonly type: "agent_end";
+    };
+
+function parsePiSdkSessionEvent(event: unknown): PiSdkParsedSessionEvent | undefined {
+  if (!isRecord(event)) return undefined;
+
+  const eventType = readStringField(event, "type");
+  if (!eventType) return undefined;
+
+  if (eventType === "message_update") {
+    const assistantMessageEvent = Reflect.get(event, "assistantMessageEvent");
+    if (!isRecord(assistantMessageEvent)) return undefined;
+
+    const assistantEventType = readStringField(assistantMessageEvent, "type");
+    if (assistantEventType !== "text_delta") return undefined;
+
+    const delta = readStringField(assistantMessageEvent, "delta");
+    if (!delta || delta.length === 0) return undefined;
+
+    return {
+      type: "assistant_text_delta",
+      delta,
+    };
+  }
+
+  if (eventType === "tool_execution_start") {
+    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
+    const payload = normalizePayloadText(Reflect.get(event, "args"));
+
+    return {
+      type: "tool_start",
+      toolName,
+      payload,
+    };
+  }
+
+  if (eventType === "tool_execution_update") {
+    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
+    const payload = normalizePayloadText(Reflect.get(event, "partialResult"));
+
+    return {
+      type: "tool_update",
+      toolName,
+      payload,
+    };
+  }
+
+  if (eventType === "tool_execution_end") {
+    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
+    const payload = normalizePayloadText(Reflect.get(event, "result"));
+    const rawIsError = Reflect.get(event, "isError");
+    const isError = typeof rawIsError === "boolean" ? rawIsError : false;
+
+    return {
+      type: "tool_end",
+      toolName,
+      payload,
+      isError,
+    };
+  }
+
+  if (eventType === "agent_end") {
+    return { type: "agent_end" };
+  }
+
+  return undefined;
+}
+
+function formatToolLifecycleLine(input: {
+  readonly toolName: string;
+  readonly phase: "start" | "update" | "end success" | "end error";
+  readonly payload: string | undefined;
+}): string {
+  const base = `tool_call: ${input.toolName} ${input.phase}`;
+  if (!input.payload) return base;
+  return `${base} ${input.payload}`;
+}
+
+export function createPiSdkStreamCaptureState(): PiSdkStreamCaptureState {
+  return {
+    assistantChunks: [],
+    toolLines: [],
+    sawAgentEnd: false,
+    capturedEventCount: 0,
+  };
+}
+
+export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: unknown): void {
+  const parsed = parsePiSdkSessionEvent(event);
+  if (!parsed) return;
+
+  state.capturedEventCount += 1;
+
+  if (parsed.type === "assistant_text_delta") {
+    state.assistantChunks.push(parsed.delta);
+    return;
+  }
+
+  if (parsed.type === "tool_start") {
+    state.toolLines.push(
+      formatToolLifecycleLine({
+        toolName: parsed.toolName,
+        phase: "start",
+        payload: parsed.payload,
+      }),
+    );
+    return;
+  }
+
+  if (parsed.type === "tool_update") {
+    state.toolLines.push(
+      formatToolLifecycleLine({
+        toolName: parsed.toolName,
+        phase: "update",
+        payload: parsed.payload,
+      }),
+    );
+    return;
+  }
+
+  if (parsed.type === "tool_end") {
+    state.toolLines.push(
+      formatToolLifecycleLine({
+        toolName: parsed.toolName,
+        phase: parsed.isError ? "end error" : "end success",
+        payload: parsed.payload,
+      }),
+    );
+    return;
+  }
+
+  state.sawAgentEnd = true;
+}
+
+export function finalizePiSdkStreamCapture(
+  state: PiSdkStreamCaptureState,
+): PiSdkStreamCaptureResult {
+  const assistantText = normalizeRunnerOutput(state.assistantChunks.join(""));
+  const parts: string[] = [...state.toolLines];
+
+  if (assistantText !== "(no output)") {
+    parts.push(assistantText);
+  }
+
+  return {
+    output: parts.length > 0 ? parts.join("\n").trim() : "(no output)",
+    sawAgentEnd: state.sawAgentEnd,
+    capturedEventCount: state.capturedEventCount,
+  };
+}
+
 function createSdkResourceLoader(): ResourceLoader {
   const runtime = createExtensionRuntime();
 
@@ -255,7 +481,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     };
   }
 
-  const outputChunks: string[] = [];
+  const captureState = createPiSdkStreamCaptureState();
   let timedOut = false;
   let aborted = false;
   let errorText: string | undefined;
@@ -304,13 +530,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   }
 
   const unsubscribe = session.subscribe((event) => {
-    if (event.type !== "message_update") return;
-    const assistantMessageEvent = event.assistantMessageEvent;
-    if (!assistantMessageEvent) return;
-    if (assistantMessageEvent.type !== "text_delta") return;
-    if (typeof assistantMessageEvent.delta !== "string") return;
-
-    outputChunks.push(assistantMessageEvent.delta);
+    applyPiSdkSessionEvent(captureState, event);
   });
 
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
@@ -366,8 +586,10 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     };
   }
 
+  const finalized = finalizePiSdkStreamCapture(captureState);
+
   return {
-    output: normalizeRunnerOutput(outputChunks.join("")),
+    output: finalized.output,
     provider: "unavailable",
     model: "unavailable",
     runtime: SDK_BACKEND_RUNTIME,

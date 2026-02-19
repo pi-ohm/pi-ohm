@@ -4,7 +4,10 @@ import type { OhmRuntimeConfig, OhmSubagentBackend } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
 import {
+  applyPiSdkSessionEvent,
   createDefaultTaskExecutionBackend,
+  createPiSdkStreamCaptureState,
+  finalizePiSdkStreamCapture,
   PiCliTaskExecutionBackend,
   PiSdkTaskExecutionBackend,
   ScaffoldTaskExecutionBackend,
@@ -329,6 +332,133 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
   assert.equal(result.value.model, "sdk-model");
   assert.equal(result.value.runtime, "pi-sdk");
   assert.equal(result.value.route, "interactive-sdk");
+});
+
+defineTest("Pi SDK stream capture records tool lifecycle and assistant deltas", () => {
+  const capture = createPiSdkStreamCaptureState();
+
+  applyPiSdkSessionEvent(capture, {
+    type: "tool_execution_start",
+    toolName: "read",
+    args: { path: "src/index.ts" },
+  });
+  applyPiSdkSessionEvent(capture, {
+    type: "tool_execution_update",
+    toolName: "read",
+    partialResult: { progress: "50%" },
+  });
+  applyPiSdkSessionEvent(capture, {
+    type: "tool_execution_end",
+    toolName: "read",
+    result: { ok: true },
+    isError: false,
+  });
+  applyPiSdkSessionEvent(capture, {
+    type: "message_update",
+    assistantMessageEvent: { type: "text_delta", delta: "Found auth flow." },
+  });
+  applyPiSdkSessionEvent(capture, {
+    type: "agent_end",
+  });
+
+  const finalized = finalizePiSdkStreamCapture(capture);
+  assert.equal(finalized.sawAgentEnd, true);
+  assert.equal(finalized.capturedEventCount, 5);
+  assert.match(finalized.output, /tool_call: read start/);
+  assert.match(finalized.output, /tool_call: read update/);
+  assert.match(finalized.output, /tool_call: read end success/);
+  assert.match(finalized.output, /Found auth flow\./);
+});
+
+defineTest("Pi SDK stream capture ignores unsupported events", () => {
+  const capture = createPiSdkStreamCaptureState();
+
+  applyPiSdkSessionEvent(capture, { type: "turn_start", turnIndex: 1 });
+  applyPiSdkSessionEvent(capture, {
+    type: "message_update",
+    assistantMessageEvent: { type: "thinking_delta", delta: "..." },
+  });
+  applyPiSdkSessionEvent(capture, {
+    type: "tool_execution_start",
+    toolName: "bash",
+    args: undefined,
+  });
+
+  const finalized = finalizePiSdkStreamCapture(capture);
+  assert.equal(finalized.capturedEventCount, 1);
+  assert.equal(finalized.sawAgentEnd, false);
+  assert.match(finalized.output, /tool_call: bash start/);
+});
+
+defineTest("PiSdkTaskExecutionBackend maps timeout/abort/execution failures", async () => {
+  const timeoutBackend = new PiSdkTaskExecutionBackend(async () => ({
+    output: "",
+    timedOut: true,
+    aborted: false,
+  }));
+
+  const timedOut = await timeoutBackend.executeStart({
+    taskId: "task_sdk_timeout",
+    subagent: subagentFixture,
+    description: "timeout",
+    prompt: "timeout",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isError(timedOut), true);
+  if (Result.isOk(timedOut)) {
+    assert.fail("Expected timeout error");
+  }
+  assert.equal(timedOut.error.code, "task_backend_timeout");
+
+  const abortedBackend = new PiSdkTaskExecutionBackend(async () => ({
+    output: "",
+    timedOut: false,
+    aborted: true,
+  }));
+
+  const aborted = await abortedBackend.executeStart({
+    taskId: "task_sdk_abort",
+    subagent: subagentFixture,
+    description: "abort",
+    prompt: "abort",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isError(aborted), true);
+  if (Result.isOk(aborted)) {
+    assert.fail("Expected aborted error");
+  }
+  assert.equal(aborted.error.code, "task_aborted");
+
+  const failedBackend = new PiSdkTaskExecutionBackend(async () => ({
+    output: "",
+    timedOut: false,
+    aborted: false,
+    error: "sdk failed",
+  }));
+
+  const failed = await failedBackend.executeSend({
+    taskId: "task_sdk_fail",
+    subagent: subagentFixture,
+    description: "failure",
+    initialPrompt: "initial",
+    followUpPrompts: [],
+    prompt: "follow-up",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isError(failed), true);
+  if (Result.isOk(failed)) {
+    assert.fail("Expected execution failure");
+  }
+  assert.equal(failed.error.code, "task_backend_execution_failed");
 });
 
 defineTest("PiCliTaskExecutionBackend delegates to sdk backend when configured", async () => {
