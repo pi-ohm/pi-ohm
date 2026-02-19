@@ -339,16 +339,19 @@ defineTest("Pi SDK stream capture records tool lifecycle and assistant deltas", 
 
   applyPiSdkSessionEvent(capture, {
     type: "tool_execution_start",
+    toolCallId: "tool_1",
     toolName: "read",
     args: { path: "src/index.ts" },
   });
   applyPiSdkSessionEvent(capture, {
     type: "tool_execution_update",
+    toolCallId: "tool_1",
     toolName: "read",
     partialResult: { progress: "50%" },
   });
   applyPiSdkSessionEvent(capture, {
     type: "tool_execution_end",
+    toolCallId: "tool_1",
     toolName: "read",
     result: { ok: true },
     isError: false,
@@ -380,6 +383,7 @@ defineTest("Pi SDK stream capture ignores unsupported events", () => {
   });
   applyPiSdkSessionEvent(capture, {
     type: "tool_execution_start",
+    toolCallId: "tool_1",
     toolName: "bash",
     args: undefined,
   });

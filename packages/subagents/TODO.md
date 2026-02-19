@@ -125,14 +125,14 @@ Replace heuristic output parsing with structured runtime events captured from SD
 
 ### Tickets
 
-- [ ] **S12-T1: Add `TaskExecutionEvent` domain model**
+- [x] **S12-T1: Add `TaskExecutionEvent` domain model**
   - Discriminated union, e.g.:
     - `assistant_text_delta`
     - `tool_start`
     - `tool_update`
     - `tool_end`
     - `task_terminal`
-- [ ] **S12-T2: Event sink wiring in SDK backend**
+- [x] **S12-T2: Event sink wiring in SDK backend**
   - Convert session events to domain events at boundary.
 - [ ] **S12-T3: Task store event timeline support**
   - Add bounded `events[]` per task; enforce retention/size caps.

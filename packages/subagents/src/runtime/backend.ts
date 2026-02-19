@@ -14,6 +14,7 @@ import { Result } from "better-result";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../catalog";
 import { SubagentRuntimeError, type SubagentResult } from "../errors";
+import { parseTaskExecutionEventFromSdk } from "./events";
 
 export interface TaskBackendStartInput {
   readonly taskId: string;
@@ -193,136 +194,6 @@ export interface PiSdkStreamCaptureResult {
   readonly capturedEventCount: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function readStringField(record: Record<string, unknown>, key: string): string | undefined {
-  const value = Reflect.get(record, key);
-  if (typeof value !== "string") return undefined;
-  return value;
-}
-
-function normalizePayloadText(value: unknown): string | undefined {
-  if (value === undefined) return undefined;
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return undefined;
-    return truncate(trimmed, 240);
-  }
-
-  try {
-    const serialized = JSON.stringify(value);
-    if (!serialized) return undefined;
-
-    const trimmed = serialized.trim();
-    if (trimmed.length === 0) return undefined;
-    return truncate(trimmed, 240);
-  } catch {
-    if (value === null) return "null";
-    if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-      return truncate(`${value}`, 240);
-    }
-    if (typeof value === "symbol") {
-      const description = value.description;
-      return description ? truncate(`symbol(${description})`, 240) : "symbol";
-    }
-    if (typeof value === "function") return "function";
-    return "(unserializable)";
-  }
-}
-
-type PiSdkParsedSessionEvent =
-  | {
-      readonly type: "assistant_text_delta";
-      readonly delta: string;
-    }
-  | {
-      readonly type: "tool_start";
-      readonly toolName: string;
-      readonly payload: string | undefined;
-    }
-  | {
-      readonly type: "tool_update";
-      readonly toolName: string;
-      readonly payload: string | undefined;
-    }
-  | {
-      readonly type: "tool_end";
-      readonly toolName: string;
-      readonly payload: string | undefined;
-      readonly isError: boolean;
-    }
-  | {
-      readonly type: "agent_end";
-    };
-
-function parsePiSdkSessionEvent(event: unknown): PiSdkParsedSessionEvent | undefined {
-  if (!isRecord(event)) return undefined;
-
-  const eventType = readStringField(event, "type");
-  if (!eventType) return undefined;
-
-  if (eventType === "message_update") {
-    const assistantMessageEvent = Reflect.get(event, "assistantMessageEvent");
-    if (!isRecord(assistantMessageEvent)) return undefined;
-
-    const assistantEventType = readStringField(assistantMessageEvent, "type");
-    if (assistantEventType !== "text_delta") return undefined;
-
-    const delta = readStringField(assistantMessageEvent, "delta");
-    if (!delta || delta.length === 0) return undefined;
-
-    return {
-      type: "assistant_text_delta",
-      delta,
-    };
-  }
-
-  if (eventType === "tool_execution_start") {
-    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
-    const payload = normalizePayloadText(Reflect.get(event, "args"));
-
-    return {
-      type: "tool_start",
-      toolName,
-      payload,
-    };
-  }
-
-  if (eventType === "tool_execution_update") {
-    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
-    const payload = normalizePayloadText(Reflect.get(event, "partialResult"));
-
-    return {
-      type: "tool_update",
-      toolName,
-      payload,
-    };
-  }
-
-  if (eventType === "tool_execution_end") {
-    const toolName = readStringField(event, "toolName") ?? "unknown_tool";
-    const payload = normalizePayloadText(Reflect.get(event, "result"));
-    const rawIsError = Reflect.get(event, "isError");
-    const isError = typeof rawIsError === "boolean" ? rawIsError : false;
-
-    return {
-      type: "tool_end",
-      toolName,
-      payload,
-      isError,
-    };
-  }
-
-  if (eventType === "agent_end") {
-    return { type: "agent_end" };
-  }
-
-  return undefined;
-}
-
 function formatToolLifecycleLine(input: {
   readonly toolName: string;
   readonly phase: "start" | "update" | "end success" | "end error";
@@ -343,50 +214,53 @@ export function createPiSdkStreamCaptureState(): PiSdkStreamCaptureState {
 }
 
 export function applyPiSdkSessionEvent(state: PiSdkStreamCaptureState, event: unknown): void {
-  const parsed = parsePiSdkSessionEvent(event);
-  if (!parsed) return;
+  const parsed = parseTaskExecutionEventFromSdk(event);
+  if (Result.isError(parsed)) return;
+  if (!parsed.value) return;
 
   state.capturedEventCount += 1;
 
-  if (parsed.type === "assistant_text_delta") {
-    state.assistantChunks.push(parsed.delta);
+  if (parsed.value.type === "assistant_text_delta") {
+    state.assistantChunks.push(parsed.value.delta);
     return;
   }
 
-  if (parsed.type === "tool_start") {
+  if (parsed.value.type === "tool_start") {
     state.toolLines.push(
       formatToolLifecycleLine({
-        toolName: parsed.toolName,
+        toolName: parsed.value.toolName,
         phase: "start",
-        payload: parsed.payload,
+        payload: parsed.value.argsText,
       }),
     );
     return;
   }
 
-  if (parsed.type === "tool_update") {
+  if (parsed.value.type === "tool_update") {
     state.toolLines.push(
       formatToolLifecycleLine({
-        toolName: parsed.toolName,
+        toolName: parsed.value.toolName,
         phase: "update",
-        payload: parsed.payload,
+        payload: parsed.value.partialText,
       }),
     );
     return;
   }
 
-  if (parsed.type === "tool_end") {
+  if (parsed.value.type === "tool_end") {
     state.toolLines.push(
       formatToolLifecycleLine({
-        toolName: parsed.toolName,
-        phase: parsed.isError ? "end error" : "end success",
-        payload: parsed.payload,
+        toolName: parsed.value.toolName,
+        phase: parsed.value.status === "error" ? "end error" : "end success",
+        payload: parsed.value.resultText,
       }),
     );
     return;
   }
 
-  state.sawAgentEnd = true;
+  if (parsed.value.type === "task_terminal") {
+    state.sawAgentEnd = true;
+  }
 }
 
 export function finalizePiSdkStreamCapture(
