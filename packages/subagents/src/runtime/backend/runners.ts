@@ -16,6 +16,7 @@ import {
   finalizePiSdkStreamCapture,
 } from "./sdk-stream-capture";
 import { parseSubagentModelSelection } from "./model-selection";
+import { buildSubagentSdkSystemPrompt } from "./system-prompts";
 import type {
   PiCliRunner,
   PiCliRunnerInput,
@@ -91,7 +92,7 @@ export const SDK_BACKEND_RUNTIME = "pi-sdk";
 export const SDK_BACKEND_ROUTE = "interactive-sdk";
 export const CLI_BACKEND_ROUTE = "interactive-shell";
 
-function createSdkResourceLoader(): ResourceLoader {
+function createSdkResourceLoader(systemPrompt: string): ResourceLoader {
   const runtime = createExtensionRuntime();
 
   return {
@@ -115,12 +116,7 @@ function createSdkResourceLoader(): ResourceLoader {
     getAgentsFiles: () => ({
       agentsFiles: [],
     }),
-    getSystemPrompt: () =>
-      [
-        "You are the Pi OHM subagent runtime.",
-        "Use available tools only when required.",
-        "Return concise concrete findings.",
-      ].join(" "),
+    getSystemPrompt: () => systemPrompt,
     getAppendSystemPrompt: () => [],
     getPathMetadata: () => new Map(),
     extendResources: () => {},
@@ -192,9 +188,12 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   let resolvedModelId = "unavailable";
 
   try {
+    const bootstrapSystemPrompt = buildSubagentSdkSystemPrompt({
+      modelPattern: input.modelPattern,
+    });
     const created = await createAgentSession({
       cwd: input.cwd,
-      resourceLoader: createSdkResourceLoader(),
+      resourceLoader: createSdkResourceLoader(bootstrapSystemPrompt),
       tools: [
         createReadTool(input.cwd),
         createBashTool(input.cwd),
@@ -263,6 +262,20 @@ export const runPiSdkPrompt: PiSdkRunner = async (
       resolvedModelProvider = model.provider;
       resolvedModelId = model.id;
     }
+
+    const activeModel = activeSession.model;
+    if (activeModel) {
+      resolvedModelProvider = activeModel.provider;
+      resolvedModelId = activeModel.id;
+    }
+
+    activeSession.agent.setSystemPrompt(
+      buildSubagentSdkSystemPrompt({
+        provider: resolvedModelProvider,
+        modelId: resolvedModelId,
+        modelPattern: input.modelPattern,
+      }),
+    );
   } catch (error) {
     return {
       output: "",
