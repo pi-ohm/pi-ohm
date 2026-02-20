@@ -30,6 +30,9 @@ export interface TaskToolItemDetails {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly prompt_profile?: string;
+  readonly prompt_profile_source?: string;
+  readonly prompt_profile_reason?: string;
   readonly output?: string;
   readonly output_available?: boolean;
   readonly output_truncated?: boolean;
@@ -64,6 +67,9 @@ export interface TaskToolResultDetails {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly prompt_profile?: string;
+  readonly prompt_profile_source?: string;
+  readonly prompt_profile_reason?: string;
   readonly invocation?: SubagentInvocationMode;
   readonly error_code?: string;
   readonly error_category?: TaskErrorCategory;

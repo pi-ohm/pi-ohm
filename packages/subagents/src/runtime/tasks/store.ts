@@ -30,6 +30,9 @@ interface TaskRuntimeEntry {
   readonly model: string;
   readonly runtime: string;
   readonly route: string;
+  readonly promptProfile?: string;
+  readonly promptProfileSource?: string;
+  readonly promptProfileReason?: string;
   readonly invocation: TaskInvocationMode;
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;
@@ -123,6 +126,9 @@ function toTaskRuntimeSnapshot(entry: TaskRuntimeEntry): TaskRuntimeSnapshot {
     model: entry.model,
     runtime: entry.runtime,
     route: entry.route,
+    ...(entry.promptProfile ? { promptProfile: entry.promptProfile } : {}),
+    ...(entry.promptProfileSource ? { promptProfileSource: entry.promptProfileSource } : {}),
+    ...(entry.promptProfileReason ? { promptProfileReason: entry.promptProfileReason } : {}),
     invocation: entry.invocation,
     totalToolCalls: entry.record.totalToolCalls,
     activeToolCalls: entry.record.activeToolCalls,
@@ -178,6 +184,9 @@ function normalizeObservability(
     model: observability?.model ?? "unavailable",
     runtime: observability?.runtime ?? backend,
     route: observability?.route ?? backend,
+    promptProfile: observability?.promptProfile,
+    promptProfileSource: observability?.promptProfileSource,
+    promptProfileReason: observability?.promptProfileReason,
   };
 }
 
@@ -371,6 +380,9 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         model: observability?.model ?? current.model,
         runtime: observability?.runtime ?? current.runtime,
         route: observability?.route ?? current.route,
+        promptProfile: observability?.promptProfile ?? current.promptProfile,
+        promptProfileSource: observability?.promptProfileSource ?? current.promptProfileSource,
+        promptProfileReason: observability?.promptProfileReason ?? current.promptProfileReason,
       }),
     };
 
@@ -633,6 +645,11 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         model: options.observability?.model ?? current.model,
         runtime: options.observability?.runtime ?? current.runtime,
         route: options.observability?.route ?? current.route,
+        promptProfile: options.observability?.promptProfile ?? current.promptProfile,
+        promptProfileSource:
+          options.observability?.promptProfileSource ?? current.promptProfileSource,
+        promptProfileReason:
+          options.observability?.promptProfileReason ?? current.promptProfileReason,
       }),
       errorCode: options.errorCode,
       errorMessage: options.errorMessage,
@@ -696,6 +713,9 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         model: entry.model,
         runtime: entry.runtime,
         route: entry.route,
+        promptProfile: entry.promptProfile,
+        promptProfileSource: entry.promptProfileSource,
+        promptProfileReason: entry.promptProfileReason,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
         events: trimEvents(entry.events, this.maxEventsPerTask),
@@ -817,6 +837,9 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         model: entry.model,
         runtime: entry.runtime,
         route: entry.route,
+        promptProfile: entry.promptProfile,
+        promptProfileSource: entry.promptProfileSource,
+        promptProfileReason: entry.promptProfileReason,
         invocation: entry.invocation,
         followUpPrompts: entry.followUpPrompts,
         errorCode: entry.errorCode,

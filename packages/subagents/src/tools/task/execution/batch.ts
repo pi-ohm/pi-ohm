@@ -325,6 +325,13 @@ export async function runTaskStartBatch(
         model: observability.model,
         runtime: observability.runtime,
         route: observability.route,
+        ...(observability.promptProfile ? { prompt_profile: observability.promptProfile } : {}),
+        ...(observability.promptProfileSource
+          ? { prompt_profile_source: observability.promptProfileSource }
+          : {}),
+        ...(observability.promptProfileReason
+          ? { prompt_profile_reason: observability.promptProfileReason }
+          : {}),
         items: hydratedItems,
         total_count: batch.totalCount,
         accepted_count: batch.acceptedCount,
@@ -383,6 +390,13 @@ export async function runTaskStartBatch(
     model: observability.model,
     runtime: observability.runtime,
     route: observability.route,
+    ...(observability.promptProfile ? { prompt_profile: observability.promptProfile } : {}),
+    ...(observability.promptProfileSource
+      ? { prompt_profile_source: observability.promptProfileSource }
+      : {}),
+    ...(observability.promptProfileReason
+      ? { prompt_profile_reason: observability.promptProfileReason }
+      : {}),
     items: normalizedItems,
     total_count: batch.totalCount,
     accepted_count: batch.acceptedCount,

@@ -91,6 +91,12 @@ export function isOhmDebugEnabled(): boolean {
   return raw === "1" || raw === "true";
 }
 
+export function isPromptProfileDebugEnabled(): boolean {
+  const raw = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG?.trim().toLowerCase();
+  if (!raw) return false;
+  return raw === "1" || raw === "true";
+}
+
 function toTreeStatus(status: TaskToolStatus): SubagentTaskTreeStatus {
   if (status === "queued") return "queued";
   if (status === "running") return "running";
@@ -372,6 +378,15 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (details.model) lines.push(`model: ${details.model}`);
   if (details.runtime) lines.push(`runtime: ${details.runtime}`);
   if (details.route) lines.push(`route: ${details.route}`);
+  if (isPromptProfileDebugEnabled()) {
+    if (details.prompt_profile) lines.push(`prompt_profile: ${details.prompt_profile}`);
+    if (details.prompt_profile_source) {
+      lines.push(`prompt_profile_source: ${details.prompt_profile_source}`);
+    }
+    if (details.prompt_profile_reason) {
+      lines.push(`prompt_profile_reason: ${details.prompt_profile_reason}`);
+    }
+  }
   if (details.invocation) lines.push(`invocation: ${details.invocation}`);
   if (details.wait_status) lines.push(`wait_status: ${details.wait_status}`);
   if (typeof details.done === "boolean") lines.push(`done: ${details.done ? "true" : "false"}`);
@@ -441,6 +456,15 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
         if (item.model) lines.push(`  model: ${item.model}`);
         if (item.runtime) lines.push(`  runtime: ${item.runtime}`);
         if (item.route) lines.push(`  route: ${item.route}`);
+        if (isPromptProfileDebugEnabled()) {
+          if (item.prompt_profile) lines.push(`  prompt_profile: ${item.prompt_profile}`);
+          if (item.prompt_profile_source) {
+            lines.push(`  prompt_profile_source: ${item.prompt_profile_source}`);
+          }
+          if (item.prompt_profile_reason) {
+            lines.push(`  prompt_profile_reason: ${item.prompt_profile_reason}`);
+          }
+        }
         if (item.prompt) lines.push(`  prompt: ${item.prompt}`);
         if (item.output_available && item.output) {
           lines.push("  output:");

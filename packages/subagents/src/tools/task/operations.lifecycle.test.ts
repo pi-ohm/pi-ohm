@@ -575,6 +575,96 @@ defineTest("formatTaskToolResult shows verbose metadata when OHM_DEBUG=true", ()
   }
 });
 
+defineTest(
+  "formatTaskToolResult hides prompt profile tracing metadata unless explicit toggle is enabled",
+  () => {
+    const previousDebug = process.env.OHM_DEBUG;
+    const previousPromptDebug = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+    process.env.OHM_DEBUG = "true";
+    delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+
+    try {
+      const verbose = formatTaskToolResult(
+        {
+          op: "wait",
+          status: "succeeded",
+          summary: "wait for 1 task(s)",
+          backend: "interactive-sdk",
+          provider: "openai",
+          model: "gpt-5",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+          prompt_profile: "openai",
+          prompt_profile_source: "active_model",
+          prompt_profile_reason: "active_model_direct_match",
+        },
+        false,
+      );
+
+      assert.doesNotMatch(verbose, /prompt_profile:/);
+      assert.doesNotMatch(verbose, /prompt_profile_source:/);
+      assert.doesNotMatch(verbose, /prompt_profile_reason:/);
+    } finally {
+      if (previousDebug === undefined) {
+        delete process.env.OHM_DEBUG;
+      } else {
+        process.env.OHM_DEBUG = previousDebug;
+      }
+
+      if (previousPromptDebug === undefined) {
+        delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+      } else {
+        process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = previousPromptDebug;
+      }
+    }
+  },
+);
+
+defineTest(
+  "formatTaskToolResult shows prompt profile tracing metadata when debug toggle is enabled",
+  () => {
+    const previousDebug = process.env.OHM_DEBUG;
+    const previousPromptDebug = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+    process.env.OHM_DEBUG = "true";
+    process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = "true";
+
+    try {
+      const verbose = formatTaskToolResult(
+        {
+          op: "wait",
+          status: "succeeded",
+          summary: "wait for 1 task(s)",
+          backend: "interactive-sdk",
+          provider: "openai",
+          model: "gpt-5",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+          prompt_profile: "openai",
+          prompt_profile_source: "active_model",
+          prompt_profile_reason: "active_model_direct_match",
+        },
+        false,
+      );
+
+      assert.match(verbose, /prompt_profile: openai/);
+      assert.match(verbose, /prompt_profile_source: active_model/);
+      assert.match(verbose, /prompt_profile_reason: active_model_direct_match/);
+    } finally {
+      if (previousDebug === undefined) {
+        delete process.env.OHM_DEBUG;
+      } else {
+        process.env.OHM_DEBUG = previousDebug;
+      }
+
+      if (previousPromptDebug === undefined) {
+        delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+      } else {
+        process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = previousPromptDebug;
+      }
+    }
+  },
+);
+
 defineTest("formatTaskToolResult surfaces non-debug route fallback hints", () => {
   const previous = process.env.OHM_DEBUG;
   delete process.env.OHM_DEBUG;
@@ -2038,6 +2128,56 @@ defineTest("runTaskToolMvp exposes observability fields in lifecycle payload", a
   assert.equal(Reflect.get(started.details, "provider"), "unavailable");
   assert.equal(Reflect.get(started.details, "model"), "unavailable");
 });
+
+defineTest(
+  "runTaskToolMvp exposes prompt profile observability fields in lifecycle payload",
+  async () => {
+    const deps = makeDeps({
+      backend: {
+        id: "interactive-sdk",
+        async executeStart() {
+          return Result.ok({
+            summary: "Finder: prompt profile observability",
+            output: "done",
+            provider: "openai",
+            model: "gpt-5",
+            runtime: "pi-sdk",
+            route: "interactive-sdk",
+            promptProfile: "openai",
+            promptProfileSource: "active_model",
+            promptProfileReason: "active_model_direct_match",
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const started = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Prompt profile observability scan",
+        prompt: "Trace prompt profile",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    assert.equal(Reflect.get(started.details, "prompt_profile"), "openai");
+    assert.equal(Reflect.get(started.details, "prompt_profile_source"), "active_model");
+    assert.equal(
+      Reflect.get(started.details, "prompt_profile_reason"),
+      "active_model_direct_match",
+    );
+  },
+);
 
 defineTest("runTaskToolMvp exposes tool_rows from structured backend events", async () => {
   const deps = makeDeps({

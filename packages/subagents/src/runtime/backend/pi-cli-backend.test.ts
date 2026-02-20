@@ -447,6 +447,9 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
       provider: "sdk-provider",
       model: "sdk-model",
       runtime: "pi-sdk",
+      promptProfile: "openai",
+      promptProfileSource: "active_model",
+      promptProfileReason: "active_model_direct_match",
       timedOut: false,
       aborted: false,
     };
@@ -475,6 +478,9 @@ defineTest("PiSdkTaskExecutionBackend executes sdk runner for interactive-sdk", 
   assert.equal(result.value.model, "sdk-model");
   assert.equal(result.value.runtime, "pi-sdk");
   assert.equal(result.value.route, "interactive-sdk");
+  assert.equal(result.value.promptProfile, "openai");
+  assert.equal(result.value.promptProfileSource, "active_model");
+  assert.equal(result.value.promptProfileReason, "active_model_direct_match");
 });
 
 defineTest("PiSdkTaskExecutionBackend forwards streamed events to caller", async () => {

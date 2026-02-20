@@ -23,6 +23,9 @@ export async function runTaskStatus(
     model: observability.model,
     runtime: observability.runtime,
     route: observability.route,
+    promptProfile: observability.promptProfile,
+    promptProfileSource: observability.promptProfileSource,
+    promptProfileReason: observability.promptProfileReason,
   });
 
   emitTaskRuntimeUpdate({

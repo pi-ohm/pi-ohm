@@ -227,3 +227,40 @@ defineTest("buildSubagentSdkSystemPrompt includes provider profile header", () =
   assert.match(prompt, /Pi OHM subagent runtime/);
   assert.match(prompt, /Use available tools only when required/);
 });
+
+defineTest("buildSubagentSdkSystemPrompt routes unknown provider to generic pack", () => {
+  const prompt = buildSubagentSdkSystemPrompt({
+    provider: "router-unknown",
+    modelId: "custom-model",
+  });
+
+  assert.match(prompt, /Provider profile: generic/);
+  assert.match(prompt, /Use neutral provider style: concise, concrete, and tool-grounded/);
+});
+
+defineTest(
+  "buildSubagentSdkSystemPrompt emits distinct profile labels across provider families",
+  () => {
+    const anthropic = buildSubagentSdkSystemPrompt({
+      provider: "anthropic",
+      modelId: "claude-opus-4.6",
+    });
+    const openai = buildSubagentSdkSystemPrompt({
+      provider: "openai",
+      modelId: "gpt-5",
+    });
+    const google = buildSubagentSdkSystemPrompt({
+      provider: "google",
+      modelId: "gemini-3-pro-preview",
+    });
+    const moonshot = buildSubagentSdkSystemPrompt({
+      provider: "moonshot.ai",
+      modelId: "kimi-k2",
+    });
+
+    assert.match(anthropic, /Provider profile: anthropic/);
+    assert.match(openai, /Provider profile: openai/);
+    assert.match(google, /Provider profile: google/);
+    assert.match(moonshot, /Provider profile: moonshot/);
+  },
+);

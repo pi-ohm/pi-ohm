@@ -80,6 +80,13 @@ export function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetai
     model: snapshot.model,
     runtime: snapshot.runtime,
     route: snapshot.route,
+    ...(snapshot.promptProfile ? { prompt_profile: snapshot.promptProfile } : {}),
+    ...(snapshot.promptProfileSource
+      ? { prompt_profile_source: snapshot.promptProfileSource }
+      : {}),
+    ...(snapshot.promptProfileReason
+      ? { prompt_profile_reason: snapshot.promptProfileReason }
+      : {}),
     output: output.output,
     output_available: output.output_available,
     output_truncated: output.output_truncated,
@@ -139,6 +146,13 @@ export function snapshotToTaskResultDetails(
     model: snapshot.model,
     runtime: snapshot.runtime,
     route: snapshot.route,
+    ...(snapshot.promptProfile ? { prompt_profile: snapshot.promptProfile } : {}),
+    ...(snapshot.promptProfileSource
+      ? { prompt_profile_source: snapshot.promptProfileSource }
+      : {}),
+    ...(snapshot.promptProfileReason
+      ? { prompt_profile_reason: snapshot.promptProfileReason }
+      : {}),
     invocation: snapshot.invocation,
     error_code: snapshot.errorCode,
     error_message: snapshot.errorMessage,

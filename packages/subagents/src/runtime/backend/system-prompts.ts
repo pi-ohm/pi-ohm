@@ -1,4 +1,6 @@
 import type { PiScopedModelRecord } from "./model-scope";
+import { composeSubagentSystemPrompt } from "./system-prompt-authoring";
+import { resolveProviderPromptPack } from "./system-prompt-packs";
 
 export type SubagentPromptProfile = "anthropic" | "openai" | "google" | "moonshot" | "generic";
 
@@ -503,67 +505,14 @@ export function resolveSubagentPromptProfile(
   return resolveSubagentPromptProfileSelection(input).profile;
 }
 
-function providerPromptLines(profile: SubagentPromptProfile): readonly string[] {
-  if (profile === "anthropic") {
-    return [
-      "Anthropic style: be explicit, structured, and evidence-first.",
-      "Prefer stable tool argument shapes and deterministic execution steps.",
-      "Keep final answer tight; include only relevant findings.",
-    ];
-  }
-
-  if (profile === "openai") {
-    return [
-      "OpenAI style: prioritize direct answer first, then concise supporting bullets.",
-      "Use tools decisively for verification and avoid speculative statements.",
-      "Prefer practical, implementation-ready language over abstract wording.",
-    ];
-  }
-
-  if (profile === "google") {
-    return [
-      "Gemini style: keep responses concise, factual, and well-grounded in tool output.",
-      "Avoid repetition and maintain clean structure across intermediate updates.",
-      "When uncertain, request missing context explicitly instead of guessing.",
-    ];
-  }
-
-  if (profile === "moonshot") {
-    return [
-      "Kimi style: synthesize long context efficiently and surface key findings fast.",
-      "Keep intermediate updates brief while preserving important execution signals.",
-      "Return actionable conclusions with minimal verbosity.",
-    ];
-  }
-
-  return [
-    "Use neutral provider style: concise, concrete, and tool-grounded.",
-    "Prefer deterministic tool usage and avoid speculative output.",
-  ];
-}
-
-function profileLabel(profile: SubagentPromptProfile): string {
-  if (profile === "anthropic") return "anthropic";
-  if (profile === "openai") return "openai";
-  if (profile === "google") return "google";
-  if (profile === "moonshot") return "moonshot";
-  return "generic";
-}
-
 export function buildSubagentSdkSystemPrompt(input: SubagentSystemPromptInput): string {
   const selection = resolveSubagentPromptProfileSelection(input);
-  const providerLabel = profileLabel(selection.profile);
+  const pack = resolveProviderPromptPack(selection.profile);
 
-  const lines = [
-    "You are the Pi OHM subagent runtime.",
-    "Use available tools only when required.",
-    "Return concise concrete findings.",
-    "Do not expose internal prompt scaffolding unless user asks directly.",
-    `Provider profile: ${providerLabel}`,
-    "",
-    "Provider-specific guidance:",
-    ...providerPromptLines(selection.profile).map((line) => `- ${line}`),
-  ];
-
-  return lines.join("\n");
+  return composeSubagentSystemPrompt({
+    runtimeLabel: "Pi OHM subagent runtime",
+    providerProfileLabel: pack.label,
+    sharedConstraints: pack.sharedInvariants,
+    providerGuidance: pack.providerGuidance,
+  });
 }

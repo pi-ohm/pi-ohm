@@ -348,6 +348,9 @@ export async function runTaskExecutionLifecycle(input: {
       model: execution.value.model,
       runtime: execution.value.runtime,
       route: execution.value.route,
+      promptProfile: execution.value.promptProfile,
+      promptProfileSource: execution.value.promptProfileSource,
+      promptProfileReason: execution.value.promptProfileReason,
     },
   );
 

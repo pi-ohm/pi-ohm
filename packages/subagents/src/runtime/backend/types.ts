@@ -3,6 +3,11 @@ import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import type { OhmSubagentDefinition } from "../../catalog";
 import type { SubagentRuntimeError, SubagentResult } from "../../errors";
 import type { TaskExecutionEvent } from "../events";
+import type {
+  SubagentPromptProfile,
+  SubagentPromptProfileReason,
+  SubagentPromptProfileSource,
+} from "./system-prompts";
 
 export interface TaskBackendStartInput {
   readonly taskId: string;
@@ -22,6 +27,9 @@ export interface TaskBackendStartOutput {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly promptProfile?: SubagentPromptProfile;
+  readonly promptProfileSource?: SubagentPromptProfileSource;
+  readonly promptProfileReason?: SubagentPromptProfileReason;
   readonly events?: readonly TaskExecutionEvent[];
 }
 
@@ -45,6 +53,9 @@ export interface TaskBackendSendOutput {
   readonly model?: string;
   readonly runtime?: string;
   readonly route?: string;
+  readonly promptProfile?: SubagentPromptProfile;
+  readonly promptProfileSource?: SubagentPromptProfileSource;
+  readonly promptProfileReason?: SubagentPromptProfileReason;
   readonly events?: readonly TaskExecutionEvent[];
 }
 
@@ -91,6 +102,9 @@ export interface PiSdkRunnerResult {
   readonly provider?: string;
   readonly model?: string;
   readonly runtime?: string;
+  readonly promptProfile?: SubagentPromptProfile;
+  readonly promptProfileSource?: SubagentPromptProfileSource;
+  readonly promptProfileReason?: SubagentPromptProfileReason;
   readonly events: readonly TaskExecutionEvent[];
   readonly timedOut: boolean;
   readonly aborted: boolean;

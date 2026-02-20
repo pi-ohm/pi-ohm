@@ -45,32 +45,32 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 
 ### Sprint H4 — Modular prompt authoring surface (TS/TSX-style)
 
-- [ ] **H4-001:** Introduce typed prompt composition surface for provider prompts (base sections + provider sections + shared constraints).
-- [ ] **H4-002:** Support modular prompt definitions in code (TS-first; TSX-compatible composition style) with deterministic render output.
-- [ ] **H4-003:** Ensure prompt modules are side-effect free and composable per provider/profile.
-- [ ] **H4-004:** Add snapshot/golden tests for rendered prompts by provider/profile.
-- [ ] **H4-005 (demo):** Provider prompt update via module-only edit, verified by prompt snapshots and runtime smoke.
+- [x] **H4-001:** Introduce typed prompt composition surface for provider prompts (base sections + provider sections + shared constraints).
+- [x] **H4-002:** Support modular prompt definitions in code (TS-first; TSX-compatible composition style) with deterministic render output.
+- [x] **H4-003:** Ensure prompt modules are side-effect free and composable per provider/profile.
+- [x] **H4-004:** Add snapshot/golden tests for rendered prompts by provider/profile.
+- [x] **H4-005 (demo):** Provider prompt update via module-only edit, verified by prompt snapshots and runtime smoke.
 
 ### Sprint H5 — Provider packs (Anthropic/OpenAI/Google/Moonshot)
 
-- [ ] **H5-001:** Deliver first-party provider prompt packs for:
+- [x] **H5-001:** Deliver first-party provider prompt packs for:
   - anthropic / claude
   - openai / gpt
   - google / gemini
   - moonshot / kimi
-- [ ] **H5-002:** Keep shared invariant section across providers (tooling safety, concise output, non-leak constraints).
-- [ ] **H5-003:** Add provider-specific behavior tuning requirements per pack (format style, tool-call bias, verbosity budget).
-- [ ] **H5-004:** Ensure unknown providers always route to generic pack.
-- [ ] **H5-005 (tests):** Contract tests proving each known provider resolves to expected pack.
-- [ ] **H5-006 (demo):** 4-provider smoke pass showing distinct selected profile labels in runtime diagnostics.
+- [x] **H5-002:** Keep shared invariant section across providers (tooling safety, concise output, non-leak constraints).
+- [x] **H5-003:** Add provider-specific behavior tuning requirements per pack (format style, tool-call bias, verbosity budget).
+- [x] **H5-004:** Ensure unknown providers always route to generic pack.
+- [x] **H5-005 (tests):** Contract tests proving each known provider resolves to expected pack.
+- [x] **H5-006 (demo):** 4-provider smoke pass showing distinct selected profile labels in runtime diagnostics.
 
 ### Sprint H6 — Runtime integration + observability
 
-- [ ] **H6-001:** Integrate dynamic prompt resolver into SDK backend prompt bootstrap + post-model-selection prompt application.
-- [ ] **H6-002:** Add prompt/profile observability fields to runtime diagnostics (without leaking full system prompt in normal mode).
-- [ ] **H6-003:** Add safe debug toggle for prompt profile/source tracing.
-- [ ] **H6-004:** Preserve existing task-tool external contract; no breaking payload schema changes.
-- [ ] **H6-005 (tests):** End-to-end backend tests asserting selected profile path and fallback behavior.
+- [x] **H6-001:** Integrate dynamic prompt resolver into SDK backend prompt bootstrap + post-model-selection prompt application.
+- [x] **H6-002:** Add prompt/profile observability fields to runtime diagnostics (without leaking full system prompt in normal mode).
+- [x] **H6-003:** Add safe debug toggle for prompt profile/source tracing.
+- [x] **H6-004:** Preserve existing task-tool external contract; no breaking payload schema changes.
+- [x] **H6-005 (tests):** End-to-end backend tests asserting selected profile path and fallback behavior.
 - [ ] **H6-006 (demo):** Interactive run proving runtime picks profile from active model in-session.
 
 ### Sprint H7 — Docs + rollout hardening

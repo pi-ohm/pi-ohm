@@ -12,6 +12,9 @@ export interface TaskRuntimeObservability {
   readonly model: string;
   readonly runtime: string;
   readonly route: string;
+  readonly promptProfile?: string;
+  readonly promptProfileSource?: string;
+  readonly promptProfileReason?: string;
 }
 
 export interface TaskRuntimeSnapshot {
@@ -28,6 +31,9 @@ export interface TaskRuntimeSnapshot {
   readonly model: string;
   readonly runtime: string;
   readonly route: string;
+  readonly promptProfile?: string;
+  readonly promptProfileSource?: string;
+  readonly promptProfileReason?: string;
   readonly invocation: TaskInvocationMode;
   readonly totalToolCalls: number;
   readonly activeToolCalls: number;
@@ -66,6 +72,9 @@ export interface PersistedTaskRuntimeEntry {
   readonly model: string;
   readonly runtime: string;
   readonly route: string;
+  readonly promptProfile?: string;
+  readonly promptProfileSource?: string;
+  readonly promptProfileReason?: string;
   readonly invocation: TaskInvocationMode;
   readonly followUpPrompts: readonly string[];
   readonly errorCode?: string;

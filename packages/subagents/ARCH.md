@@ -29,6 +29,8 @@
 - Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
 - Provider/profile routing rules are now config-driven from `ohm.providers.json` (`subagents.promptProfiles.rules`) with typed parsing, validation diagnostics, and default-rule fallback.
+- System prompt authoring is now modularized into typed composition + provider packs (`system-prompt-authoring.ts`, `system-prompt-packs.ts`) with deterministic golden coverage.
+- Prompt profile observability is threaded through task runtime details (`prompt_profile`, source/reason), with trace lines gated behind `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG` and no system-prompt text leakage.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 
@@ -62,6 +64,8 @@
 - `src/runtime/backend/model-selection.ts`
 - `src/runtime/backend/model-scope.ts`
 - `src/runtime/backend/prompt-profile-rules.ts`
+- `src/runtime/backend/system-prompt-authoring.ts`
+- `src/runtime/backend/system-prompt-packs.ts`
 - `src/runtime/backend/sdk-stream-capture.ts`
 - `src/runtime/backend/prompts.ts`
 - `src/runtime/backend/runners.ts`

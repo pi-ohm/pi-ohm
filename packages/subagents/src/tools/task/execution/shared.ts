@@ -159,6 +159,15 @@ function resolveCollectionField(
   return first;
 }
 
+function resolveOptionalCollectionField(
+  items: readonly TaskToolItemDetails[],
+  select: (item: TaskToolItemDetails) => string | undefined,
+): string | undefined {
+  const resolved = resolveCollectionField(items, select, "");
+  if (resolved.length === 0) return undefined;
+  return resolved;
+}
+
 export function resolveCollectionObservability(
   items: readonly TaskToolItemDetails[],
   backend: string,
@@ -168,6 +177,15 @@ export function resolveCollectionObservability(
     model: resolveCollectionField(items, (item) => item.model, "unavailable"),
     runtime: resolveCollectionField(items, (item) => item.runtime, backend),
     route: resolveCollectionField(items, (item) => item.route, backend),
+    promptProfile: resolveOptionalCollectionField(items, (item) => item.prompt_profile),
+    promptProfileSource: resolveOptionalCollectionField(
+      items,
+      (item) => item.prompt_profile_source,
+    ),
+    promptProfileReason: resolveOptionalCollectionField(
+      items,
+      (item) => item.prompt_profile_reason,
+    ),
   };
 }
 
@@ -183,6 +201,9 @@ export function buildCollectionResult(
     readonly model?: string;
     readonly runtime?: string;
     readonly route?: string;
+    readonly promptProfile?: string;
+    readonly promptProfileSource?: string;
+    readonly promptProfileReason?: string;
   } = {},
 ): AgentToolResult<TaskToolResultDetails> {
   const status = aggregateStatus(items);
@@ -198,6 +219,9 @@ export function buildCollectionResult(
     model: options.model,
     runtime: options.runtime,
     route: options.route,
+    ...(options.promptProfile ? { prompt_profile: options.promptProfile } : {}),
+    ...(options.promptProfileSource ? { prompt_profile_source: options.promptProfileSource } : {}),
+    ...(options.promptProfileReason ? { prompt_profile_reason: options.promptProfileReason } : {}),
     items,
     timed_out: timedOut,
     done: options.done,

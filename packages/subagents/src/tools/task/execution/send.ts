@@ -256,6 +256,9 @@ export async function runTaskSend(
       model: sendResult.value.model,
       runtime: sendResult.value.runtime,
       route: sendResult.value.route,
+      promptProfile: sendResult.value.promptProfile,
+      promptProfileSource: sendResult.value.promptProfileSource,
+      promptProfileReason: sendResult.value.promptProfileReason,
     },
   );
 

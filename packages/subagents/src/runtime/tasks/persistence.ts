@@ -247,6 +247,9 @@ function normalizeObservability(
     model: observability?.model ?? "unavailable",
     runtime: observability?.runtime ?? backend,
     route: observability?.route ?? backend,
+    promptProfile: observability?.promptProfile,
+    promptProfileSource: observability?.promptProfileSource,
+    promptProfileReason: observability?.promptProfileReason,
   };
 }
 
@@ -323,6 +326,9 @@ function parsePersistedEntry(
       model: parseOptionalString(input.model),
       runtime: parseOptionalString(input.runtime),
       route: parseOptionalString(input.route),
+      promptProfile: parseOptionalString(input.promptProfile),
+      promptProfileSource: parseOptionalString(input.promptProfileSource),
+      promptProfileReason: parseOptionalString(input.promptProfileReason),
     }),
     invocation,
     output: parseOptionalString(input.output),

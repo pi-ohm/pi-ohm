@@ -18,7 +18,13 @@ import {
 import { loadSubagentPromptProfileRules } from "./prompt-profile-rules";
 import { loadPiScopedModelCatalog } from "./model-scope";
 import { parseSubagentModelSelection } from "./model-selection";
-import { buildSubagentSdkSystemPrompt } from "./system-prompts";
+import {
+  buildSubagentSdkSystemPrompt,
+  resolveSubagentPromptProfileSelection,
+  type SubagentPromptProfile,
+  type SubagentPromptProfileReason,
+  type SubagentPromptProfileSource,
+} from "./system-prompts";
 import type {
   PiCliRunner,
   PiCliRunnerInput,
@@ -188,6 +194,9 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
   let resolvedModelProvider = "unavailable";
   let resolvedModelId = "unavailable";
+  let promptProfile: SubagentPromptProfile = "generic";
+  let promptProfileSource: SubagentPromptProfileSource = "generic_fallback";
+  let promptProfileReason: SubagentPromptProfileReason = "no_profile_match";
   const scopedModelCatalog = await loadPiScopedModelCatalog(input.cwd);
   const promptProfileRules = await loadSubagentPromptProfileRules(input.cwd);
 
@@ -284,6 +293,17 @@ export const runPiSdkPrompt: PiSdkRunner = async (
         profileRules: promptProfileRules.rules,
       }),
     );
+
+    const selection = resolveSubagentPromptProfileSelection({
+      provider: resolvedModelProvider,
+      modelId: resolvedModelId,
+      modelPattern: input.modelPattern,
+      scopedModels: scopedModelCatalog.models,
+      profileRules: promptProfileRules.rules,
+    });
+    promptProfile = selection.profile;
+    promptProfileSource = selection.source;
+    promptProfileReason = selection.reason;
   } catch (error) {
     return {
       output: "",
@@ -374,6 +394,9 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     provider: resolvedModelProvider,
     model: resolvedModelId,
     runtime: SDK_BACKEND_RUNTIME,
+    promptProfile,
+    promptProfileSource,
+    promptProfileReason,
     timedOut: false,
     aborted: false,
   };

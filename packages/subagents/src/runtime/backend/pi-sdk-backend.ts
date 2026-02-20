@@ -204,6 +204,9 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
       route: SDK_BACKEND_ROUTE,
+      ...(run.promptProfile ? { promptProfile: run.promptProfile } : {}),
+      ...(run.promptProfileSource ? { promptProfileSource: run.promptProfileSource } : {}),
+      ...(run.promptProfileReason ? { promptProfileReason: run.promptProfileReason } : {}),
       events: run.events,
     });
   }
@@ -268,6 +271,9 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       model: run.model ?? "unavailable",
       runtime: run.runtime ?? SDK_BACKEND_RUNTIME,
       route: SDK_BACKEND_ROUTE,
+      ...(run.promptProfile ? { promptProfile: run.promptProfile } : {}),
+      ...(run.promptProfileSource ? { promptProfileSource: run.promptProfileSource } : {}),
+      ...(run.promptProfileReason ? { promptProfileReason: run.promptProfileReason } : {}),
       events: run.events,
     });
   }

@@ -148,6 +148,13 @@ export async function runTaskWait(
         model: observability.model,
         runtime: observability.runtime,
         route: observability.route,
+        ...(observability.promptProfile ? { prompt_profile: observability.promptProfile } : {}),
+        ...(observability.promptProfileSource
+          ? { prompt_profile_source: observability.promptProfileSource }
+          : {}),
+        ...(observability.promptProfileReason
+          ? { prompt_profile_reason: observability.promptProfileReason }
+          : {}),
         items,
         done: false,
       });
@@ -179,6 +186,9 @@ export async function runTaskWait(
     model: observability.model,
     runtime: observability.runtime,
     route: observability.route,
+    promptProfile: observability.promptProfile,
+    promptProfileSource: observability.promptProfileSource,
+    promptProfileReason: observability.promptProfileReason,
   });
   const result =
     waited.timeoutReason === "timeout"
