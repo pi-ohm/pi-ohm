@@ -317,6 +317,45 @@ defineTest("PiCliTaskExecutionBackend forwards configured subagent model pattern
 });
 
 defineTest(
+  "PiCliTaskExecutionBackend emits preflight observability during interactive-shell start",
+  async () => {
+    const backend = new PiCliTaskExecutionBackend(async () => ({
+      exitCode: 0,
+      stdout: "finder online",
+      stderr: "",
+      timedOut: false,
+      aborted: false,
+    }));
+
+    const observed: string[] = [];
+    const result = await backend.executeStart({
+      taskId: "task_4_observability",
+      subagent: subagentFixture,
+      description: "Auth flow scan",
+      prompt: "Find auth validation path and refresh flow",
+      cwd: "/tmp/project",
+      config: makeConfig("interactive-shell", {
+        finder: { model: "openai/gpt-5:high" },
+      }),
+      signal: undefined,
+      onObservability: (observability) => {
+        observed.push(
+          [
+            observability.provider ?? "",
+            observability.model ?? "",
+            observability.runtime ?? "",
+            observability.route ?? "",
+          ].join(":"),
+        );
+      },
+    });
+
+    assert.equal(Result.isOk(result), true);
+    assert.deepEqual(observed, ["openai:gpt-5:pi-cli:interactive-shell"]);
+  },
+);
+
+defineTest(
   "PiCliTaskExecutionBackend forwards configured subagent model pattern with thinking suffix",
   async () => {
     const requestedModels: string[] = [];

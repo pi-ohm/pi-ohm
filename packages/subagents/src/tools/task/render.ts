@@ -92,6 +92,7 @@ export function isOhmDebugEnabled(): boolean {
 }
 
 export function isPromptProfileDebugEnabled(): boolean {
+  if (isOhmDebugEnabled()) return true;
   const raw = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG?.trim().toLowerCase();
   if (!raw) return false;
   return raw === "1" || raw === "true";

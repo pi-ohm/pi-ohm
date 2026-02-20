@@ -576,11 +576,11 @@ defineTest("formatTaskToolResult shows verbose metadata when OHM_DEBUG=true", ()
 });
 
 defineTest(
-  "formatTaskToolResult hides prompt profile tracing metadata unless explicit toggle is enabled",
+  "formatTaskToolResult hides prompt profile tracing metadata when OHM_DEBUG is disabled",
   () => {
     const previousDebug = process.env.OHM_DEBUG;
     const previousPromptDebug = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
-    process.env.OHM_DEBUG = "true";
+    delete process.env.OHM_DEBUG;
     delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
 
     try {
@@ -620,50 +620,47 @@ defineTest(
   },
 );
 
-defineTest(
-  "formatTaskToolResult shows prompt profile tracing metadata when debug toggle is enabled",
-  () => {
-    const previousDebug = process.env.OHM_DEBUG;
-    const previousPromptDebug = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
-    process.env.OHM_DEBUG = "true";
-    process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = "true";
+defineTest("formatTaskToolResult shows prompt profile tracing metadata when OHM_DEBUG=true", () => {
+  const previousDebug = process.env.OHM_DEBUG;
+  const previousPromptDebug = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+  process.env.OHM_DEBUG = "true";
+  delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
 
-    try {
-      const verbose = formatTaskToolResult(
-        {
-          op: "wait",
-          status: "succeeded",
-          summary: "wait for 1 task(s)",
-          backend: "interactive-sdk",
-          provider: "openai",
-          model: "gpt-5",
-          runtime: "pi-sdk",
-          route: "interactive-sdk",
-          prompt_profile: "openai",
-          prompt_profile_source: "active_model",
-          prompt_profile_reason: "active_model_direct_match",
-        },
-        false,
-      );
+  try {
+    const verbose = formatTaskToolResult(
+      {
+        op: "wait",
+        status: "succeeded",
+        summary: "wait for 1 task(s)",
+        backend: "interactive-sdk",
+        provider: "openai",
+        model: "gpt-5",
+        runtime: "pi-sdk",
+        route: "interactive-sdk",
+        prompt_profile: "openai",
+        prompt_profile_source: "active_model",
+        prompt_profile_reason: "active_model_direct_match",
+      },
+      false,
+    );
 
-      assert.match(verbose, /prompt_profile: openai/);
-      assert.match(verbose, /prompt_profile_source: active_model/);
-      assert.match(verbose, /prompt_profile_reason: active_model_direct_match/);
-    } finally {
-      if (previousDebug === undefined) {
-        delete process.env.OHM_DEBUG;
-      } else {
-        process.env.OHM_DEBUG = previousDebug;
-      }
-
-      if (previousPromptDebug === undefined) {
-        delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
-      } else {
-        process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = previousPromptDebug;
-      }
+    assert.match(verbose, /prompt_profile: openai/);
+    assert.match(verbose, /prompt_profile_source: active_model/);
+    assert.match(verbose, /prompt_profile_reason: active_model_direct_match/);
+  } finally {
+    if (previousDebug === undefined) {
+      delete process.env.OHM_DEBUG;
+    } else {
+      process.env.OHM_DEBUG = previousDebug;
     }
-  },
-);
+
+    if (previousPromptDebug === undefined) {
+      delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG;
+    } else {
+      process.env.OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG = previousPromptDebug;
+    }
+  }
+});
 
 defineTest("formatTaskToolResult surfaces non-debug route fallback hints", () => {
   const previous = process.env.OHM_DEBUG;
@@ -1041,6 +1038,123 @@ defineTest("runTaskToolMvp bypasses throttle for realtime sdk event updates", as
     }
   }
 });
+
+defineTest(
+  "runTaskToolMvp streams model/provider/prompt profile metadata during running updates",
+  async () => {
+    const previousThrottle = process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+    process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "1";
+
+    try {
+      const deps = makeDeps({
+        backend: {
+          id: "interactive-sdk",
+          async executeStart(input: TaskBackendStartInput) {
+            input.onObservability?.({
+              provider: "openai",
+              model: "gpt-5",
+              runtime: "pi-sdk",
+              route: "interactive-sdk",
+              promptProfile: "openai",
+              promptProfileSource: "active_model",
+              promptProfileReason: "active_model_direct_match",
+            });
+
+            input.onEvent?.({
+              type: "tool_start",
+              toolCallId: "tool_1",
+              toolName: "read",
+              argsText: '{"path":"src/index.ts"}',
+              atEpochMs: 1001,
+            });
+
+            await sleep(20);
+
+            input.onEvent?.({
+              type: "tool_end",
+              toolCallId: "tool_1",
+              toolName: "read",
+              resultText: '{"ok":true}',
+              status: "success",
+              atEpochMs: 1002,
+            });
+
+            return Result.ok({
+              summary: "Finder: streamed metadata",
+              output: "done",
+              provider: "openai",
+              model: "gpt-5",
+              runtime: "pi-sdk",
+              route: "interactive-sdk",
+              promptProfile: "openai",
+              promptProfileSource: "active_model",
+              promptProfileReason: "active_model_direct_match",
+              events: [
+                {
+                  type: "tool_start",
+                  toolCallId: "tool_1",
+                  toolName: "read",
+                  argsText: '{"path":"src/index.ts"}',
+                  atEpochMs: 1001,
+                },
+                {
+                  type: "tool_end",
+                  toolCallId: "tool_1",
+                  toolName: "read",
+                  resultText: '{"ok":true}',
+                  status: "success",
+                  atEpochMs: 1002,
+                },
+              ],
+            });
+          },
+          async executeSend() {
+            return Result.ok({
+              summary: "Finder follow-up",
+              output: "follow-up",
+            });
+          },
+        },
+      });
+
+      const runningUpdates: TaskToolResultDetails[] = [];
+      const result = await runTask({
+        params: {
+          op: "start",
+          subagent_type: "finder",
+          description: "Streaming metadata",
+          prompt: "Trace routing metadata while running",
+        },
+        cwd: "/tmp/project",
+        signal: undefined,
+        onUpdate: (partial) => {
+          if (partial.details.status === "running") {
+            runningUpdates.push(partial.details);
+          }
+        },
+        deps,
+      });
+
+      assert.equal(result.details.status, "succeeded");
+      assert.equal(runningUpdates.length > 0, true);
+      assert.equal(
+        runningUpdates.some(
+          (details) =>
+            details.provider === "openai" &&
+            details.model === "gpt-5" &&
+            details.prompt_profile === "openai",
+        ),
+        true,
+      );
+    } finally {
+      if (previousThrottle === undefined) {
+        delete process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+      } else {
+        process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = previousThrottle;
+      }
+    }
+  },
+);
 
 defineTest("runTaskToolMvp keeps widget surface empty by default", async () => {
   const widgetFrames: (readonly string[] | undefined)[] = [];

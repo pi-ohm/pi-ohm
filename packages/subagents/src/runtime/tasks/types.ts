@@ -135,6 +135,10 @@ export interface TaskRuntimeStore {
   getTask(taskId: string): TaskRuntimeSnapshot | undefined;
   listTasks(): readonly TaskRuntimeSnapshot[];
   getTasks(ids: readonly string[]): readonly TaskRuntimeLookup[];
+  updateObservability(
+    taskId: string,
+    observability: Partial<TaskRuntimeObservability>,
+  ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError>;
   setAbortController(
     taskId: string,
     controller: AbortController,

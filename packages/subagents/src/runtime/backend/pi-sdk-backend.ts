@@ -167,6 +167,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       signal: input.signal,
       timeoutMs,
       onEvent: input.onEvent,
+      onObservability: input.onObservability,
     });
 
     if (run.aborted || input.signal?.aborted) {
@@ -234,6 +235,7 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       signal: input.signal,
       timeoutMs,
       onEvent: input.onEvent,
+      onObservability: input.onObservability,
     });
 
     if (run.aborted || input.signal?.aborted) {

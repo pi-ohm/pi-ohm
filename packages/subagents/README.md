@@ -154,7 +154,10 @@ Prompt-profile observability fields are emitted on task details/items:
 Trace lines are hidden by default. Enable debug rendering with:
 
 - `OHM_DEBUG=true`
-- `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
+
+When `OHM_DEBUG=true`, running stream updates now include current routing metadata
+(`provider`, `model`, `runtime`, `route`, `prompt_profile*`) as soon as backend
+preflight resolves them.
 
 Optional safety fallback:
 
@@ -237,7 +240,6 @@ cat >/tmp/pi-ohm-active-model-demo/ohm.json <<'EOF'
 EOF
 
 OHM_DEBUG=true \
-OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true \
 PI_CONFIG_DIR=/tmp/pi-ohm-active-model-demo \
 pi -e ./packages/subagents/extension.ts
 ```
@@ -265,7 +267,7 @@ yarn test:subagents --test-name-pattern "new provider mapping can be added via r
    - `yarn test:subagents --test-name-pattern "prompt profile mapping changes after config edit"`
    - `yarn test:subagents --test-name-pattern "new provider mapping can be added via rules"`
 3. Validate runtime diagnostics:
-   - run with `OHM_DEBUG=true OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
+   - run with `OHM_DEBUG=true`
    - confirm `prompt_profile/source/reason` in task result details
 4. Only add code-level prompt pack modules when a genuinely new behavior family is needed.
 
@@ -394,7 +396,7 @@ Existing slash commands remain unchanged:
   (`settings.json` + `ohm.providers.json`)
 - static hardcoded/env-driven matcher assumptions should be removed from local forks
 - keep provider additions in config first (`subagents.promptProfiles.rules`) before touching code
-- debug with `OHM_DEBUG=true` + `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
+- debug with `OHM_DEBUG=true`
 
 ## Invocation mode behavior
 

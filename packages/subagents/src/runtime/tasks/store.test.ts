@@ -199,6 +199,47 @@ defineTest(
   },
 );
 
+defineTest("updateObservability refreshes running task metadata without state transition", () => {
+  const { store, tick } = makeStoreWithClock();
+
+  const created = store.createTask({
+    taskId: "task_1",
+    subagent: finderSubagent,
+    description: "Auth flow scan",
+    prompt: "Trace auth validation",
+    backend: "interactive-sdk",
+    invocation: "task-routed",
+  });
+  assert.equal(Result.isOk(created), true);
+
+  tick(10);
+  const running = store.markRunning("task_1", "Starting Finder: Auth flow scan");
+  assert.equal(Result.isOk(running), true);
+
+  const updated = store.updateObservability("task_1", {
+    provider: "openai",
+    model: "gpt-5",
+    runtime: "pi-sdk",
+    route: "interactive-sdk",
+    promptProfile: "openai",
+    promptProfileSource: "active_model",
+    promptProfileReason: "active_model_direct_match",
+  });
+  assert.equal(Result.isOk(updated), true);
+  if (Result.isError(updated)) {
+    assert.fail("Expected updateObservability to succeed");
+  }
+
+  assert.equal(updated.value.state, "running");
+  assert.equal(updated.value.provider, "openai");
+  assert.equal(updated.value.model, "gpt-5");
+  assert.equal(updated.value.runtime, "pi-sdk");
+  assert.equal(updated.value.route, "interactive-sdk");
+  assert.equal(updated.value.promptProfile, "openai");
+  assert.equal(updated.value.promptProfileSource, "active_model");
+  assert.equal(updated.value.promptProfileReason, "active_model_direct_match");
+});
+
 defineTest("markFailed requires terminal metadata and stores error info", () => {
   const { store, tick } = makeStoreWithClock();
 

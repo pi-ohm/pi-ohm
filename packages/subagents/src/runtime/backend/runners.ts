@@ -304,6 +304,16 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     promptProfile = selection.profile;
     promptProfileSource = selection.source;
     promptProfileReason = selection.reason;
+
+    input.onObservability?.({
+      provider: resolvedModelProvider,
+      model: resolvedModelId,
+      runtime: SDK_BACKEND_RUNTIME,
+      route: SDK_BACKEND_ROUTE,
+      promptProfile,
+      promptProfileSource,
+      promptProfileReason,
+    });
   } catch (error) {
     return {
       output: "",

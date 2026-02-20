@@ -30,7 +30,7 @@
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
 - Provider/profile routing rules are now config-driven from `ohm.providers.json` (`subagents.promptProfiles.rules`) with typed parsing, validation diagnostics, and default-rule fallback.
 - System prompt authoring is now modularized into typed composition + provider packs (`system-prompt-authoring.ts`, `system-prompt-packs.ts`) with deterministic golden coverage.
-- Prompt profile observability is threaded through task runtime details (`prompt_profile`, source/reason), with trace lines gated behind `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG` and no system-prompt text leakage.
+- Prompt profile observability is threaded through task runtime details (`prompt_profile`, source/reason), shown in debug mode (`OHM_DEBUG=true`) with no system-prompt text leakage.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 
@@ -135,8 +135,7 @@
   profile packs (`anthropic|openai|google|moonshot`) without router changes.
 - Runtime task payloads may include debug-safe profile observability fields:
   `prompt_profile`, `prompt_profile_source`, `prompt_profile_reason`.
-- Prompt-profile trace rendering is opt-in (`OHM_DEBUG=true` +
-  `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`) and never emits full system prompt text.
+- Prompt-profile trace rendering is opt-in (`OHM_DEBUG=true`) and never emits full system prompt text.
 
 ### Migration direction
 

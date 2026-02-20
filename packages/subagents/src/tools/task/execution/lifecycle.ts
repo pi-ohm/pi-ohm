@@ -2,7 +2,10 @@ import type { AgentToolUpdateCallback } from "@mariozechner/pi-coding-agent";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../../catalog";
-import type { TaskExecutionBackend } from "../../../runtime/backend/types";
+import type {
+  TaskBackendObservability,
+  TaskExecutionBackend,
+} from "../../../runtime/backend/types";
 import type { TaskExecutionEvent } from "../../../runtime/events";
 import type { TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import { getSubagentInvocationMode } from "../../../extension";
@@ -137,6 +140,35 @@ async function sleep(ms: number): Promise<void> {
   });
 }
 
+export function emitTaskObservabilityUpdate(input: {
+  readonly op: TaskRunOp;
+  readonly taskId: string;
+  readonly observability: TaskBackendObservability;
+  readonly deps: TaskToolDependencies;
+  readonly hasUI: boolean;
+  readonly ui: RunTaskToolUiHandle | undefined;
+  readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+}): void {
+  const updated = input.deps.taskStore.updateObservability(input.taskId, {
+    provider: input.observability.provider,
+    model: input.observability.model,
+    runtime: input.observability.runtime,
+    route: input.observability.route,
+    promptProfile: input.observability.promptProfile,
+    promptProfileSource: input.observability.promptProfileSource,
+    promptProfileReason: input.observability.promptProfileReason,
+  });
+  if (Result.isError(updated)) return;
+
+  emitTaskRuntimeUpdate({
+    details: snapshotToTaskResultDetails(input.op, updated.value),
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
+  });
+}
+
 export async function runTaskExecutionLifecycle(input: {
   readonly taskId: string;
   readonly subagent: OhmSubagentDefinition;
@@ -231,6 +263,17 @@ export async function runTaskExecutionLifecycle(input: {
       config: input.config,
       signal: input.signal,
       onEvent: eventAppender.onEvent,
+      onObservability: (observability) => {
+        emitTaskObservabilityUpdate({
+          op: "start",
+          taskId: input.taskId,
+          observability,
+          deps: input.deps,
+          hasUI: input.hasUI,
+          ui: input.ui,
+          onUpdate: input.onUpdate,
+        });
+      },
     });
   } finally {
     stopProgressPulse();

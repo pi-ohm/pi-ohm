@@ -498,6 +498,34 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     });
   }
 
+  updateObservability(
+    taskId: string,
+    observability: Partial<TaskRuntimeObservability>,
+  ): SubagentResult<TaskRuntimeSnapshot, SubagentRuntimeError> {
+    this.pruneExpiredTerminalTasks();
+
+    const currentResult = this.getMutableEntry(taskId);
+    if (Result.isError(currentResult)) return currentResult;
+
+    const current = currentResult.value;
+    const nextEntry: TaskRuntimeEntry = {
+      ...current,
+      ...normalizeObservability(current.backend, {
+        provider: observability.provider ?? current.provider,
+        model: observability.model ?? current.model,
+        runtime: observability.runtime ?? current.runtime,
+        route: observability.route ?? current.route,
+        promptProfile: observability.promptProfile ?? current.promptProfile,
+        promptProfileSource: observability.promptProfileSource ?? current.promptProfileSource,
+        promptProfileReason: observability.promptProfileReason ?? current.promptProfileReason,
+      }),
+    };
+
+    this.tasks.set(taskId, nextEntry);
+    this.requestPersist({ immediate: false });
+    return Result.ok(toTaskRuntimeSnapshot(nextEntry));
+  }
+
   setAbortController(
     taskId: string,
     controller: AbortController,

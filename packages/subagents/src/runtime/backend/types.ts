@@ -18,6 +18,7 @@ export interface TaskBackendStartInput {
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onEvent?: (event: TaskExecutionEvent) => void;
+  readonly onObservability?: (observability: TaskBackendObservability) => void;
 }
 
 export interface TaskBackendStartOutput {
@@ -44,6 +45,7 @@ export interface TaskBackendSendInput {
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onEvent?: (event: TaskExecutionEvent) => void;
+  readonly onObservability?: (observability: TaskBackendObservability) => void;
 }
 
 export interface TaskBackendSendOutput {
@@ -95,6 +97,17 @@ export interface PiSdkRunnerInput {
   readonly signal: AbortSignal | undefined;
   readonly timeoutMs: number;
   readonly onEvent?: (event: TaskExecutionEvent) => void;
+  readonly onObservability?: (observability: TaskBackendObservability) => void;
+}
+
+export interface TaskBackendObservability {
+  readonly provider?: string;
+  readonly model?: string;
+  readonly runtime?: string;
+  readonly route?: string;
+  readonly promptProfile?: SubagentPromptProfile;
+  readonly promptProfileSource?: SubagentPromptProfileSource;
+  readonly promptProfileReason?: SubagentPromptProfileReason;
 }
 
 export interface PiSdkRunnerResult {

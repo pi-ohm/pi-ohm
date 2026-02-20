@@ -6,7 +6,11 @@ import type { TaskToolParameters } from "../../../schema/task-tool";
 import { emitTaskRuntimeUpdate, startTaskProgressPulse } from "../updates";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import { toAgentToolResult } from "../render";
-import { appendRemainingBackendEvents, createSendEventAppender } from "./lifecycle";
+import {
+  appendRemainingBackendEvents,
+  createSendEventAppender,
+  emitTaskObservabilityUpdate,
+} from "./lifecycle";
 import { snapshotToTaskResultDetails } from "./projection";
 import {
   availabilityFailedDetails,
@@ -165,6 +169,17 @@ export async function runTaskSend(
       config: config.config,
       signal: input.signal,
       onEvent: eventAppender.onEvent,
+      onObservability: (observability) => {
+        emitTaskObservabilityUpdate({
+          op: "send",
+          taskId: interaction.value.id,
+          observability,
+          deps: input.deps,
+          hasUI: input.hasUI,
+          ui: input.ui,
+          onUpdate: input.onUpdate,
+        });
+      },
     });
   } finally {
     stopProgressPulse();

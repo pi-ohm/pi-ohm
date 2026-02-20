@@ -153,6 +153,35 @@ function resolveSubagentModelPattern(input: {
   return getSubagentConfiguredModel(input.config, input.subagent.id);
 }
 
+function parseModelPattern(
+  modelPattern: string | undefined,
+): { readonly provider: string; readonly model: string } | undefined {
+  if (!modelPattern) return undefined;
+  const trimmed = modelPattern.trim();
+  if (trimmed.length === 0) return undefined;
+
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex >= trimmed.length - 1) return undefined;
+
+  const provider = trimmed.slice(0, slashIndex).trim().toLowerCase();
+  const modelWithThinking = trimmed
+    .slice(slashIndex + 1)
+    .trim()
+    .toLowerCase();
+  const model =
+    modelWithThinking.endsWith(":off") ||
+    modelWithThinking.endsWith(":minimal") ||
+    modelWithThinking.endsWith(":low") ||
+    modelWithThinking.endsWith(":medium") ||
+    modelWithThinking.endsWith(":high") ||
+    modelWithThinking.endsWith(":xhigh")
+      ? modelWithThinking.slice(0, modelWithThinking.lastIndexOf(":"))
+      : modelWithThinking;
+  if (provider.length === 0 || model.length === 0) return undefined;
+
+  return { provider, model };
+}
+
 export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
   readonly id = SDK_BACKEND_ROUTE;
   private readonly scaffoldBackend = new ScaffoldTaskExecutionBackend();
@@ -187,6 +216,13 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     const timeoutMs = resolveBackendTimeoutMs({
       fallbackTimeoutMs: this.timeoutMs,
       subagent: input.subagent,
+    });
+    const parsedModelPattern = parseModelPattern(modelPattern);
+    input.onObservability?.({
+      provider: parsedModelPattern?.provider ?? "unavailable",
+      model: parsedModelPattern?.model ?? "unavailable",
+      runtime: "pi-cli",
+      route: CLI_BACKEND_ROUTE,
     });
     const run = await this.runner({
       cwd: input.cwd,
@@ -245,6 +281,13 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     const timeoutMs = resolveBackendTimeoutMs({
       fallbackTimeoutMs: this.timeoutMs,
       subagent: input.subagent,
+    });
+    const parsedModelPattern = parseModelPattern(modelPattern);
+    input.onObservability?.({
+      provider: parsedModelPattern?.provider ?? "unavailable",
+      model: parsedModelPattern?.model ?? "unavailable",
+      runtime: "pi-cli",
+      route: CLI_BACKEND_ROUTE,
     });
     const run = await this.runner({
       cwd: input.cwd,
