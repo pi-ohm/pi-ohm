@@ -138,13 +138,39 @@ function sanitizeNestedOutput(output: string): NestedOutputNormalization {
   };
 }
 
-function getTimeoutMsFromEnv(): number {
-  const raw = process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS;
-  if (!raw) return 180_000;
+const DEFAULT_BACKEND_TIMEOUT_MS = 180_000;
+const DEFAULT_ORACLE_TIMEOUT_MS = 420_000;
 
+function parsePositiveInteger(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
   const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 180_000;
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return parsed;
+}
+
+function getTimeoutMsFromEnv(): number {
+  return (
+    parsePositiveInteger(process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS) ?? DEFAULT_BACKEND_TIMEOUT_MS
+  );
+}
+
+function getSubagentTimeoutMsFromEnv(subagentId: string): number | undefined {
+  const key = `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_${subagentId.trim().toUpperCase()}`;
+  return parsePositiveInteger(process.env[key]);
+}
+
+function resolveBackendTimeoutMs(input: {
+  readonly fallbackTimeoutMs: number;
+  readonly subagent: OhmSubagentDefinition;
+}): number {
+  const fromSubagentEnv = getSubagentTimeoutMsFromEnv(input.subagent.id);
+  if (fromSubagentEnv !== undefined) return fromSubagentEnv;
+
+  if (input.subagent.id === "oracle") {
+    return Math.max(input.fallbackTimeoutMs, DEFAULT_ORACLE_TIMEOUT_MS);
+  }
+
+  return input.fallbackTimeoutMs;
 }
 
 function isSdkFallbackToCliEnabled(): boolean {
@@ -798,12 +824,31 @@ function toUnsupportedBackendError(
   });
 }
 
-function toBackendTimeoutError(taskId: string, stage: "execute_start" | "execute_send") {
+function toBackendTimeoutError(input: {
+  readonly taskId: string;
+  readonly stage: "execute_start" | "execute_send";
+  readonly timeoutMs: number;
+  readonly subagentId: string;
+  readonly modelPattern: string | undefined;
+}) {
+  const timeoutSeconds = Math.max(1, Math.round(input.timeoutMs / 1000));
+  const modelHint = input.modelPattern ? ` (model: ${input.modelPattern})` : "";
+  const guidance =
+    input.subagentId === "oracle"
+      ? "Narrow oracle task scope/context/files or raise OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE."
+      : `Narrow task scope or raise OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_${input.subagentId.toUpperCase()} (or OHM_SUBAGENTS_BACKEND_TIMEOUT_MS).`;
+
   return new SubagentRuntimeError({
     code: "task_backend_timeout",
-    stage,
-    message: `Task ${taskId} timed out while waiting for subagent backend response`,
-    meta: { taskId },
+    stage: input.stage,
+    message: `Task ${input.taskId} timed out after ${timeoutSeconds}s while waiting for '${input.subagentId}' backend response${modelHint}. ${guidance}`,
+    meta: {
+      taskId: input.taskId,
+      timeoutMs: input.timeoutMs,
+      timeoutSeconds,
+      subagentId: input.subagentId,
+      modelPattern: input.modelPattern,
+    },
   });
 }
 
@@ -980,12 +1025,16 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       config: input.config,
       subagent: input.subagent,
     });
+    const timeoutMs = resolveBackendTimeoutMs({
+      fallbackTimeoutMs: this.timeoutMs,
+      subagent: input.subagent,
+    });
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildStartPrompt(input),
       modelPattern,
       signal: input.signal,
-      timeoutMs: this.timeoutMs,
+      timeoutMs,
     });
 
     if (run.aborted || input.signal?.aborted) {
@@ -993,7 +1042,15 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     }
 
     if (run.timedOut) {
-      return Result.err(toBackendTimeoutError(input.taskId, "execute_start"));
+      return Result.err(
+        toBackendTimeoutError({
+          taskId: input.taskId,
+          stage: "execute_start",
+          timeoutMs,
+          subagentId: input.subagent.id,
+          modelPattern,
+        }),
+      );
     }
 
     if (run.exitCode !== 0) {
@@ -1026,12 +1083,16 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
       config: input.config,
       subagent: input.subagent,
     });
+    const timeoutMs = resolveBackendTimeoutMs({
+      fallbackTimeoutMs: this.timeoutMs,
+      subagent: input.subagent,
+    });
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildSendPrompt(input),
       modelPattern,
       signal: input.signal,
-      timeoutMs: this.timeoutMs,
+      timeoutMs,
     });
 
     if (run.aborted || input.signal?.aborted) {
@@ -1039,7 +1100,15 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     }
 
     if (run.timedOut) {
-      return Result.err(toBackendTimeoutError(input.taskId, "execute_send"));
+      return Result.err(
+        toBackendTimeoutError({
+          taskId: input.taskId,
+          stage: "execute_send",
+          timeoutMs,
+          subagentId: input.subagent.id,
+          modelPattern,
+        }),
+      );
     }
 
     if (run.exitCode !== 0) {
@@ -1155,13 +1224,17 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       config: input.config,
       subagent: input.subagent,
     });
+    const timeoutMs = resolveBackendTimeoutMs({
+      fallbackTimeoutMs: this.timeoutMs,
+      subagent: input.subagent,
+    });
 
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildStartPrompt(input),
       modelPattern,
       signal: input.signal,
-      timeoutMs: this.timeoutMs,
+      timeoutMs,
       onEvent: input.onEvent,
     });
 
@@ -1170,7 +1243,15 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
     }
 
     if (run.timedOut) {
-      return Result.err(toBackendTimeoutError(input.taskId, "execute_start"));
+      return Result.err(
+        toBackendTimeoutError({
+          taskId: input.taskId,
+          stage: "execute_start",
+          timeoutMs,
+          subagentId: input.subagent.id,
+          modelPattern,
+        }),
+      );
     }
 
     if (run.error) {
@@ -1207,13 +1288,17 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
       config: input.config,
       subagent: input.subagent,
     });
+    const timeoutMs = resolveBackendTimeoutMs({
+      fallbackTimeoutMs: this.timeoutMs,
+      subagent: input.subagent,
+    });
 
     const run = await this.runner({
       cwd: input.cwd,
       prompt: buildSendPrompt(input),
       modelPattern,
       signal: input.signal,
-      timeoutMs: this.timeoutMs,
+      timeoutMs,
       onEvent: input.onEvent,
     });
 
@@ -1222,7 +1307,15 @@ export class PiSdkTaskExecutionBackend implements TaskExecutionBackend {
     }
 
     if (run.timedOut) {
-      return Result.err(toBackendTimeoutError(input.taskId, "execute_send"));
+      return Result.err(
+        toBackendTimeoutError({
+          taskId: input.taskId,
+          stage: "execute_send",
+          timeoutMs,
+          subagentId: input.subagent.id,
+          modelPattern,
+        }),
+      );
     }
 
     if (run.error) {

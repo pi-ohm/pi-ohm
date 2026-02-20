@@ -104,6 +104,10 @@ Output/truncation contract:
 - `output_returned_chars`
 - cap env: `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
 - non-terminal persistence debounce env: `OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS` (default `90`, `0` disables)
+- backend timeout envs:
+  - global: `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS` (default `180000`)
+  - per-subagent override: `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_<SUBAGENT_ID>`
+  - oracle receives an elevated default timeout budget for reasoning-heavy runs
 
 Error category semantics:
 

@@ -73,6 +73,14 @@ const subagentFixture: OhmSubagentDefinition = {
   scaffoldPrompt: "search prompt",
 };
 
+const oracleSubagentFixture: OhmSubagentDefinition = {
+  id: "oracle",
+  name: "Oracle",
+  summary: "Reasoning-heavy advisor",
+  whenToUse: ["deep analysis"],
+  scaffoldPrompt: "challenge assumptions and rank risks",
+};
+
 defineTest("parseSubagentModelSelection parses provider/model", () => {
   const parsed = parseSubagentModelSelection({
     modelPattern: "OpenAI/gpt-4o",
@@ -740,6 +748,33 @@ defineTest("PiSdkTaskExecutionBackend maps timeout/abort/execution failures", as
   assert.equal(failed.error.code, "task_backend_execution_failed");
 });
 
+defineTest("PiSdkTaskExecutionBackend uses extended timeout budget for oracle", async () => {
+  let capturedTimeoutMs: number | undefined;
+  const backend = new PiSdkTaskExecutionBackend(async (input) => {
+    capturedTimeoutMs = input.timeoutMs;
+    return {
+      output: "oracle output",
+      events: [],
+      timedOut: false,
+      aborted: false,
+      runtime: "pi-sdk",
+    };
+  }, 1_000);
+
+  const result = await backend.executeStart({
+    taskId: "task_sdk_oracle_timeout_budget",
+    subagent: oracleSubagentFixture,
+    description: "Deep architecture analysis",
+    prompt: "Do deep analysis",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  assert.equal(capturedTimeoutMs, 420_000);
+});
+
 defineTest("PiCliTaskExecutionBackend delegates to sdk backend when configured", async () => {
   let cliCalled = false;
 
@@ -1006,6 +1041,55 @@ defineTest("PiCliTaskExecutionBackend reports timeout and backend execution fail
   }
   assert.equal(failed.error.code, "task_backend_execution_failed");
 });
+
+defineTest(
+  "PiCliTaskExecutionBackend uses oracle timeout override and reports remediation hints",
+  async () => {
+    const previousOracleTimeout = process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE;
+    process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE = "1500";
+
+    try {
+      let capturedTimeoutMs: number | undefined;
+      const backend = new PiCliTaskExecutionBackend(async (input) => {
+        capturedTimeoutMs = input.timeoutMs;
+        return {
+          exitCode: 124,
+          stdout: "",
+          stderr: "",
+          timedOut: true,
+          aborted: false,
+        };
+      }, 1_000);
+
+      const timedOut = await backend.executeStart({
+        taskId: "task_cli_oracle_timeout",
+        subagent: oracleSubagentFixture,
+        description: "Deep architecture analysis",
+        prompt: "Do deep analysis",
+        cwd: "/tmp/project",
+        config: makeConfig("interactive-shell", {
+          oracle: { model: "openai/gpt-5:high" },
+        }),
+        signal: undefined,
+      });
+
+      assert.equal(capturedTimeoutMs, 1500);
+      assert.equal(Result.isError(timedOut), true);
+      if (Result.isOk(timedOut)) {
+        assert.fail("Expected oracle timeout error");
+      }
+      assert.equal(timedOut.error.code, "task_backend_timeout");
+      assert.match(timedOut.error.message, /OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE/);
+      assert.match(timedOut.error.message, /model: openai\/gpt-5:high/);
+    } finally {
+      if (previousOracleTimeout === undefined) {
+        delete process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE;
+      } else {
+        process.env.OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE = previousOracleTimeout;
+      }
+    }
+  },
+);
 
 defineTest("PiSdkTaskExecutionBackend maps send timeout and abort", async () => {
   const timeoutBackend = new PiSdkTaskExecutionBackend(async () => ({

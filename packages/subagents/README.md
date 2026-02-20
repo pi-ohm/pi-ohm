@@ -168,6 +168,7 @@ Task lifecycle smoke checklist:
 | --------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | output looks scaffolded/echoed          | backend is `none`                                              | set `subagentBackend` to `interactive-shell` or `interactive-sdk`              |
 | sdk selected but execution drops to cli | fallback env enabled and sdk hit recoverable bootstrap failure | inspect `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI`; disable to keep hard sdk failures |
+| `task_backend_timeout` (often oracle)   | backend timeout budget exceeded for reasoning-heavy run        | narrow prompt/files or raise `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_ORACLE`         |
 | `task_wait_timeout`                     | task still non-terminal at timeout                             | increase `timeout_ms`, poll with `status`, or reduce batch size                |
 | `task_wait_aborted`                     | caller signal cancelled wait                                   | retry wait with active signal                                                  |
 | `task_expired` on old IDs               | retention/capacity eviction                                    | increase retention/cap env knobs; treat task IDs as ephemeral                  |
@@ -181,8 +182,15 @@ Task lifecycle smoke checklist:
 - `OHM_SUBAGENTS_TASK_MAX_ENTRIES` — in-memory task registry cap
 - `OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES` — expired-task reason cache cap
 - `OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS` — debounce non-terminal persistence flushes (default `90`, `0` disables)
+- `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS` — global backend timeout budget in ms (default `180000`)
+- `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_<SUBAGENT_ID>` — per-subagent timeout override in ms (e.g. `..._ORACLE`)
 - `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS` — non-terminal onUpdate emission throttle
 - `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` — terminal output payload cap
+
+Notes:
+
+- oracle defaults to a larger backend timeout budget than generic subagents (reasoning-heavy runs)
+- timeout errors now include remediation hints and the effective model when available
 
 ### Output truncation policy
 
