@@ -22,6 +22,7 @@
 - Task tool file layout decomposed under `src/tools/task/*` with `index.ts` as public re-export surface.
 - Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
 - Task runtime store layout decomposed under `src/runtime/tasks/*` with `index.ts` export surface.
+- Schema layout decomposed under `src/schema/*` with `index.ts` re-export surface.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 

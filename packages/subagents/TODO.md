@@ -80,15 +80,15 @@ See @./ARCH.md for more details.
 
 ### Epic E — Schema decomposition (`src/schema/*`)
 
-- [ ] **E-001:** Create `src/schema/shared.ts`.
-- [ ] **E-002:** Create `src/schema/task-tool.ts`.
-- [ ] **E-003:** Create `src/schema/task-record.ts`.
-- [ ] **E-004:** Create `src/schema/runtime-config.ts`.
-- [ ] **E-005:** Keep `src/schema/index.ts` as re-export surface only.
-- [ ] **E-006 (tests):** Create `src/schema/task-tool.test.ts`.
-- [ ] **E-007 (tests):** Create `src/schema/task-record.test.ts`.
-- [ ] **E-008 (tests):** Create `src/schema/runtime-config.test.ts`.
-- [ ] **E-009 (cleanup):** Remove legacy `src/schema.test.ts` after parity.
+- [x] **E-001:** Create `src/schema/shared.ts`.
+- [x] **E-002:** Create `src/schema/task-tool.ts`.
+- [x] **E-003:** Create `src/schema/task-record.ts`.
+- [x] **E-004:** Create `src/schema/runtime-config.ts`.
+- [x] **E-005:** Keep `src/schema/index.ts` as re-export surface only.
+- [x] **E-006 (tests):** Create `src/schema/task-tool.test.ts`.
+- [x] **E-007 (tests):** Create `src/schema/task-record.test.ts`.
+- [x] **E-008 (tests):** Create `src/schema/runtime-config.test.ts`.
+- [x] **E-009 (cleanup):** Remove legacy `src/schema.test.ts` after parity.
 
 ### Epic F — Runtime UI slimdown (`src/runtime/ui.ts`)
 
