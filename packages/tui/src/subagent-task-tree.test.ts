@@ -24,6 +24,8 @@ function stripAnsi(value: string): string {
     .join("")
     .split("\u001b[32m")
     .join("")
+    .split("\u001b[90m")
+    .join("")
     .split("\u001b[39m")
     .join("")
     .split("\u001b[0m")
@@ -74,11 +76,13 @@ defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
     },
   });
 
+  const raw = lines.join("\n");
   const rendered = stripAnsi(lines.join("\n"));
   assert.match(rendered, /├── Prompt line one/);
   assert.match(rendered, /├── ✓ Read x/);
-  assert.match(rendered, /├── \.\.\. \(2 more tool calls, ctrl\+o to expand\)/);
+  assert.match(rendered, /┆\s+\(2 more tool calls, ctrl\+o to expand\)/);
   assert.match(rendered, /├── ✓ Find q/);
+  assert.equal(raw.includes("\u001b[90mctrl+o\u001b[39m"), true);
 });
 
 defineTest("renderSubagentTaskTreeLines underlines path-like tool call tokens", () => {

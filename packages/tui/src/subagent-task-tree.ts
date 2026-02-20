@@ -9,6 +9,7 @@ const ANSI_BOLD_ON = "\u001b[1m";
 const ANSI_BOLD_OFF = "\u001b[22m";
 const ANSI_GREEN_ON = "\u001b[32m";
 const ANSI_RED_ON = "\u001b[31m";
+const ANSI_LIGHT_GREY_ON = "\u001b[90m";
 const ANSI_FG_RESET = "\u001b[39m";
 
 export type SubagentTaskTreeStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -243,13 +244,23 @@ function pluralSuffix(count: number): string {
   return count === 1 ? "" : "s";
 }
 
+type EntryChildKind = "default" | "compact-overflow";
+
+function styleKeybindHint(input: string): string {
+  return input.replaceAll("ctrl+o", `${ANSI_LIGHT_GREY_ON}ctrl+o${ANSI_FG_RESET}`);
+}
+
 function formatEntryChildren(
   entry: SubagentTaskTreeEntry,
   options: SubagentTaskTreeRenderOptions,
-): readonly { text: string; maxLines: number }[] {
-  const children: { text: string; maxLines: number }[] = [];
+): readonly { text: string; maxLines: number; kind: EntryChildKind }[] {
+  const children: { text: string; maxLines: number; kind: EntryChildKind }[] = [];
 
-  children.push({ text: entry.prompt.trim(), maxLines: resolvePromptLineLimit(options) });
+  children.push({
+    text: entry.prompt.trim(),
+    maxLines: resolvePromptLineLimit(options),
+    kind: "default",
+  });
 
   const normalizedToolCalls = entry.toolCalls.map((line) => normalizeToolCall(line));
   const toolCallLimit = resolveToolCallLimit(options);
@@ -257,7 +268,7 @@ function formatEntryChildren(
 
   if (!shouldCompactToolCalls || normalizedToolCalls.length <= toolCallLimit) {
     for (const toolCall of normalizedToolCalls) {
-      children.push({ text: toolCall, maxLines: 1 });
+      children.push({ text: toolCall, maxLines: 1, kind: "default" });
     }
   } else {
     const safeLimit = Math.max(2, toolCallLimit);
@@ -269,22 +280,29 @@ function formatEntryChildren(
     const hiddenCount = Math.max(0, normalizedToolCalls.length - head.length - tail.length);
 
     for (const toolCall of head) {
-      children.push({ text: toolCall, maxLines: 1 });
+      children.push({ text: toolCall, maxLines: 1, kind: "default" });
     }
 
     if (hiddenCount > 0) {
       children.push({
-        text: `... (${hiddenCount} more tool call${pluralSuffix(hiddenCount)}, ctrl+o to expand)`,
+        text: styleKeybindHint(
+          `(${hiddenCount} more tool call${pluralSuffix(hiddenCount)}, ctrl+o to expand)`,
+        ),
         maxLines: 1,
+        kind: "compact-overflow",
       });
     }
 
     for (const toolCall of tail) {
-      children.push({ text: toolCall, maxLines: 1 });
+      children.push({ text: toolCall, maxLines: 1, kind: "default" });
     }
   }
 
-  children.push({ text: entry.result.trim(), maxLines: resolveResultLineLimit(options) });
+  children.push({
+    text: entry.result.trim(),
+    maxLines: resolveResultLineLimit(options),
+    kind: "default",
+  });
   return children;
 }
 
@@ -306,8 +324,10 @@ export function renderSubagentTaskTreeLines(input: {
     const children = formatEntryChildren(entry, options);
     for (const [childIndex, child] of children.entries()) {
       const isLast = childIndex === children.length - 1;
-      const firstPrefix = isLast ? "    ╰── " : "    ├── ";
-      const continuationPrefix = isLast ? "        " : "    │   ";
+      const firstPrefix =
+        child.kind === "compact-overflow" ? "    ┆     " : isLast ? "    ╰── " : "    ├── ";
+      const continuationPrefix =
+        child.kind === "compact-overflow" ? "    ┆     " : isLast ? "        " : "    │   ";
 
       pushTreeChildLines({
         into: lines,
