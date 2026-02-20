@@ -189,7 +189,7 @@ Task lifecycle smoke checklist:
 
 Notes:
 
-- oracle defaults to a larger backend timeout budget than generic subagents (reasoning-heavy runs)
+- oracle defaults to a 1h backend timeout budget (`3600000ms`) for reasoning-heavy runs
 - librarian also defaults to a larger backend timeout budget than generic subagents
 - timeout errors now include remediation hints and the effective model when available
 - if sdk backend downgrades to interactive-shell fallback, compact output now includes an explicit route-fallback note

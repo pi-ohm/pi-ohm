@@ -140,7 +140,7 @@ function sanitizeNestedOutput(output: string): NestedOutputNormalization {
 
 const DEFAULT_BACKEND_TIMEOUT_MS = 180_000;
 const DEFAULT_LIBRARIAN_TIMEOUT_MS = 300_000;
-const DEFAULT_ORACLE_TIMEOUT_MS = 420_000;
+const DEFAULT_ORACLE_TIMEOUT_MS = 3_600_000;
 
 function parsePositiveInteger(raw: string | undefined): number | undefined {
   if (!raw) return undefined;

@@ -772,7 +772,7 @@ defineTest("PiSdkTaskExecutionBackend uses extended timeout budget for oracle", 
   });
 
   assert.equal(Result.isOk(result), true);
-  assert.equal(capturedTimeoutMs, 420_000);
+  assert.equal(capturedTimeoutMs, 3_600_000);
 });
 
 defineTest("PiSdkTaskExecutionBackend uses extended timeout budget for librarian", async () => {
