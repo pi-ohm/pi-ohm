@@ -15,6 +15,7 @@ import {
   createPiSdkStreamCaptureState,
   finalizePiSdkStreamCapture,
 } from "./sdk-stream-capture";
+import { loadPiScopedModelCatalog } from "./model-scope";
 import { parseSubagentModelSelection } from "./model-selection";
 import { buildSubagentSdkSystemPrompt } from "./system-prompts";
 import type {
@@ -186,10 +187,12 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   let session: Awaited<ReturnType<typeof createAgentSession>>["session"] | undefined;
   let resolvedModelProvider = "unavailable";
   let resolvedModelId = "unavailable";
+  const scopedModelCatalog = await loadPiScopedModelCatalog(input.cwd);
 
   try {
     const bootstrapSystemPrompt = buildSubagentSdkSystemPrompt({
       modelPattern: input.modelPattern,
+      scopedModels: scopedModelCatalog.models,
     });
     const created = await createAgentSession({
       cwd: input.cwd,
@@ -274,6 +277,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
         provider: resolvedModelProvider,
         modelId: resolvedModelId,
         modelPattern: input.modelPattern,
+        scopedModels: scopedModelCatalog.models,
       }),
     );
   } catch (error) {

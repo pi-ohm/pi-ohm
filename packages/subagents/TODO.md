@@ -15,11 +15,11 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 
 ### Sprint H1 — Model scope ingestion (source of truth)
 
-- [ ] **H1-001:** Add typed loader for user model scope from Pi settings (`enabledModels`) using Pi config dir resolution chain.
-- [ ] **H1-002:** Normalize loaded model entries into typed `provider/modelId` records (strip thinking suffixes, reject invalid shapes).
-- [ ] **H1-003:** Add deterministic precedence for scope sources (project/local/global/env-based paths) with explicit diagnostics.
-- [ ] **H1-004:** Add cache + refresh contract (mtime-aware invalidation) so repeated prompt builds avoid full re-parse.
-- [ ] **H1-005 (tests):** Add coverage for valid settings, malformed settings, missing files, and precedence conflicts.
+- [x] **H1-001:** Add typed loader for user model scope from Pi settings (`enabledModels`) using Pi config dir resolution chain.
+- [x] **H1-002:** Normalize loaded model entries into typed `provider/modelId` records (strip thinking suffixes, reject invalid shapes).
+- [x] **H1-003:** Add deterministic precedence for scope sources (project/local/global/env-based paths) with explicit diagnostics.
+- [x] **H1-004:** Add cache + refresh contract (mtime-aware invalidation) so repeated prompt builds avoid full re-parse.
+- [x] **H1-005 (tests):** Add coverage for valid settings, malformed settings, missing files, and precedence conflicts.
 - [ ] **H1-006 (demo):** CLI/runtime smoke proving scoped models are discovered without hardcoded provider lists.
 
 ### Sprint H2 — Runtime model-truth prompt profile selection

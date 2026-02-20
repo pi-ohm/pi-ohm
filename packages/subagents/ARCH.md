@@ -26,6 +26,8 @@
 - Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
 - Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
 - Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
+- Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
+- Prompt profile resolution now supports scoped-model consensus fallback when direct provider/model tokens are generic.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 
@@ -57,6 +59,7 @@
 - `src/runtime/backend/index.ts`
 - `src/runtime/backend/types.ts`
 - `src/runtime/backend/model-selection.ts`
+- `src/runtime/backend/model-scope.ts`
 - `src/runtime/backend/sdk-stream-capture.ts`
 - `src/runtime/backend/prompts.ts`
 - `src/runtime/backend/runners.ts`

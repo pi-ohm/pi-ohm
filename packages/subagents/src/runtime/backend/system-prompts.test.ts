@@ -41,21 +41,47 @@ defineTest("buildSubagentSdkSystemPrompt includes provider profile header", () =
   assert.match(prompt, /Use available tools only when required/);
 });
 
-defineTest("resolveSubagentPromptProfile supports env matcher overrides", () => {
-  const prior = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON;
-
-  process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON = JSON.stringify({
-    anthropic: ["sonnetx"],
+defineTest("resolveSubagentPromptProfile infers profile from scoped model consensus", () => {
+  const profile = resolveSubagentPromptProfile({
+    provider: "acme-router",
+    modelId: "custom-model-x",
+    scopedModels: [
+      {
+        provider: "acme-router",
+        modelId: "claude-opus-4.6",
+        pattern: "acme-router/claude-opus-4.6",
+      },
+      {
+        provider: "acme-router",
+        modelId: "claude-haiku-4.5",
+        pattern: "acme-router/claude-haiku-4.5",
+      },
+    ],
   });
 
-  try {
-    assert.equal(resolveSubagentPromptProfile({ modelId: "sonnetx-2026" }), "anthropic");
-    assert.equal(resolveSubagentPromptProfile({ modelId: "claude-3-7-sonnet" }), "generic");
-  } finally {
-    if (prior === undefined) {
-      delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON;
-    } else {
-      process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON = prior;
-    }
-  }
+  assert.equal(profile, "anthropic");
 });
+
+defineTest(
+  "resolveSubagentPromptProfile keeps generic when scoped provider profiles conflict",
+  () => {
+    const profile = resolveSubagentPromptProfile({
+      provider: "mixed-router",
+      modelId: "custom-model-x",
+      scopedModels: [
+        {
+          provider: "mixed-router",
+          modelId: "claude-opus-4.6",
+          pattern: "mixed-router/claude-opus-4.6",
+        },
+        {
+          provider: "mixed-router",
+          modelId: "gemini-3-pro-preview",
+          pattern: "mixed-router/gemini-3-pro-preview",
+        },
+      ],
+    });
+
+    assert.equal(profile, "generic");
+  },
+);
