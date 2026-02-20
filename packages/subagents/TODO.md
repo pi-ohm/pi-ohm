@@ -13,18 +13,20 @@ Subagents runtime is already end-to-end functional: lifecycle ops (`start|status
 
 ## Ticketed refactor plan (epics + sprints)
 
+See @./ARCH.md for more details.
+
 ### Epic A — Shared transcript parser (`src/runtime/task-transcript.ts`)
 
-- [ ] **A-001:** Create `src/runtime/task-transcript.ts` and move transcript normalization.
-- [ ] **A-002:** Move lifecycle line parsing (`tool_call:*`) into transcript module.
-- [ ] **A-003:** Move tool detail extraction/parsing into transcript module.
-- [ ] **A-004:** Move tool-row synthesis from lifecycle lines into transcript module.
-- [ ] **A-005:** Move tool-row synthesis from structured events into transcript module.
-- [ ] **A-006:** Wire `src/tools/task/*` rendering paths to transcript module APIs only.
-- [ ] **A-007:** Wire `src/runtime/ui.ts` to transcript module APIs only.
-- [ ] **A-008 (tests):** Add `src/runtime/task-transcript.test.ts`.
-- [ ] **A-009 (tests):** Migrate parser/tool-row test cases out of `src/tools/task.test.ts`.
-- [ ] **A-010 (tests):** Migrate parser/tool-row test cases out of `src/runtime/ui.test.ts`.
+- [x] **A-001:** Create `src/runtime/task-transcript.ts` and move transcript normalization.
+- [x] **A-002:** Move lifecycle line parsing (`tool_call:*`) into transcript module.
+- [x] **A-003:** Move tool detail extraction/parsing into transcript module.
+- [x] **A-004:** Move tool-row synthesis from lifecycle lines into transcript module.
+- [x] **A-005:** Move tool-row synthesis from structured events into transcript module.
+- [x] **A-006:** Wire `src/tools/task/*` rendering paths to transcript module APIs only.
+- [x] **A-007:** Wire `src/runtime/ui.ts` to transcript module APIs only.
+- [x] **A-008 (tests):** Add `src/runtime/task-transcript.test.ts`.
+- [x] **A-009 (tests):** Migrate parser/tool-row test cases out of `src/tools/task.test.ts`.
+- [x] **A-010 (tests):** Migrate parser/tool-row test cases out of `src/runtime/ui.test.ts`.
 
 ### Epic B — Task tool decomposition (`src/tools/task/*`)
 

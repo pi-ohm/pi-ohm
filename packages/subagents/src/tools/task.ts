@@ -31,6 +31,11 @@ import {
 import { createTaskRuntimePresentation } from "../runtime/ui";
 import type { TaskExecutionEvent } from "../runtime/events";
 import {
+  assistantTextFromEvents,
+  parseTaskTranscriptSections,
+  toToolRowsFromEvents,
+} from "../runtime/task-transcript";
+import {
   createSubagentTaskTreeComponent,
   renderSubagentTaskTreeLines,
   type SubagentTaskTreeEntry,
@@ -145,17 +150,6 @@ function inferRequestedOp(params: unknown): TaskToolParameters["op"] {
 
   if (op === "result") return "status";
   return "start";
-}
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function toTrimmedString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed;
 }
 
 function isHelpOperation(params: unknown): boolean {
@@ -487,289 +481,6 @@ function isOhmDebugEnabled(): boolean {
   return raw === "1" || raw === "true";
 }
 
-function classifyTranscriptLine(line: string): string {
-  const trimmed = line.trim();
-  if (trimmed.length === 0) return "";
-
-  const roleMatch = trimmed.match(/^(assistant|user|system)\s*[:>]\s*(.+)$/iu);
-  if (roleMatch) {
-    return `${roleMatch[1]?.toLowerCase()}> ${roleMatch[2]?.trim() ?? ""}`;
-  }
-
-  const toolMatch = trimmed.match(/^tool(?:\(([^)]+)\))?\s*[:>]\s*(.+)$/iu);
-  if (toolMatch) {
-    const tool = toolMatch[1]?.trim();
-    const payload = toolMatch[2]?.trim() ?? "";
-    return tool ? `tool(${tool})> ${payload}` : `tool> ${payload}`;
-  }
-
-  const shellMatch = trimmed.match(/^\$\s+(.+)$/u);
-  if (shellMatch) {
-    return `tool(shell)> ${shellMatch[1]?.trim() ?? ""}`;
-  }
-
-  return `assistant> ${trimmed}`;
-}
-
-function transcriptLines(output: string): readonly string[] {
-  return output
-    .split(/\r?\n/u)
-    .map((line) => classifyTranscriptLine(line))
-    .filter((line) => line.length > 0);
-}
-
-type ToolCallOutcome = "running" | "success" | "error";
-type ToolLifecyclePhase = "start" | "update" | "end success" | "end error";
-
-function formatToolName(toolName: string): string {
-  if (toolName.length === 0) return "tool";
-  return `${toolName[0]?.toUpperCase() ?? ""}${toolName.slice(1)}`;
-}
-
-function truncateToolDetail(value: string, maxChars: number = 88): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= maxChars) return trimmed;
-  return `${trimmed.slice(0, Math.max(maxChars - 1, 1))}…`;
-}
-
-function parseToolArgsRecord(argsText: string | undefined): Record<string, unknown> | undefined {
-  const text = toTrimmedString(argsText);
-  if (!text) return undefined;
-  if (!text.startsWith("{")) return undefined;
-
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (!isObjectRecord(parsed)) return undefined;
-    return parsed;
-  } catch {
-    return undefined;
-  }
-}
-
-function parsePositiveIntegerField(
-  record: Record<string, unknown>,
-  key: string,
-): number | undefined {
-  const value = Reflect.get(record, key);
-  if (typeof value !== "number") return undefined;
-  if (!Number.isInteger(value) || value <= 0) return undefined;
-  return value;
-}
-
-function parseToolDetailFromArgsText(
-  toolNameInput: string,
-  argsText: string | undefined,
-): string | undefined {
-  const args = parseToolArgsRecord(argsText);
-  const toolName = toolNameInput.trim().toLowerCase();
-
-  if (!args) {
-    if (toolName === "bash") {
-      const fallback = toTrimmedString(argsText);
-      if (!fallback) return undefined;
-      return truncateToolDetail(fallback);
-    }
-    return undefined;
-  }
-
-  if (toolName === "bash") {
-    const command = toTrimmedString(Reflect.get(args, "command"));
-    if (!command) return undefined;
-    return truncateToolDetail(command);
-  }
-
-  if (toolName === "read" || toolName === "write" || toolName === "edit") {
-    const path = toTrimmedString(Reflect.get(args, "path"));
-    if (!path) return undefined;
-
-    const offset = parsePositiveIntegerField(args, "offset");
-    const limit = parsePositiveIntegerField(args, "limit");
-    if (offset !== undefined && limit !== undefined) {
-      const end = offset + limit - 1;
-      return `${path} @${offset}-${end}`;
-    }
-
-    if (offset !== undefined) {
-      return `${path} @${offset}`;
-    }
-
-    return path;
-  }
-
-  if (toolName === "grep") {
-    const pattern =
-      toTrimmedString(Reflect.get(args, "pattern")) ?? toTrimmedString(Reflect.get(args, "query"));
-    if (!pattern) return undefined;
-    return truncateToolDetail(pattern);
-  }
-
-  if (toolName === "glob" || toolName === "find" || toolName === "ls") {
-    const pattern =
-      toTrimmedString(Reflect.get(args, "pattern")) ??
-      toTrimmedString(Reflect.get(args, "path")) ??
-      toTrimmedString(Reflect.get(args, "query"));
-    if (!pattern) return undefined;
-    return truncateToolDetail(pattern);
-  }
-
-  return undefined;
-}
-
-function parseToolDetailFromStart(
-  event: Extract<TaskExecutionEvent, { type: "tool_start" }>,
-): string | undefined {
-  return parseToolDetailFromArgsText(event.toolName, event.argsText);
-}
-
-function parseToolLifecycleLine(
-  line: string,
-):
-  | { readonly toolName: string; readonly phase: ToolLifecyclePhase; readonly payload?: string }
-  | undefined {
-  const matched = line.match(
-    /^tool_call:\s*(\S+)\s+(start|update|end success|end error)\s*(.*)$/iu,
-  );
-  if (!matched) return undefined;
-
-  const toolName = matched[1]?.trim();
-  const phaseValue = matched[2]?.trim().toLowerCase();
-  const payload = toTrimmedString(matched[3]);
-  if (!toolName || !phaseValue) return undefined;
-
-  if (
-    phaseValue !== "start" &&
-    phaseValue !== "update" &&
-    phaseValue !== "end success" &&
-    phaseValue !== "end error"
-  ) {
-    return undefined;
-  }
-
-  return {
-    toolName,
-    phase: phaseValue,
-    payload,
-  };
-}
-
-function toToolRowsFromLifecycleLines(lines: readonly string[]): readonly string[] {
-  const calls: Array<{ toolName: string; outcome: ToolCallOutcome; detail?: string }> = [];
-
-  for (const line of lines) {
-    const parsed = parseToolLifecycleLine(line);
-    if (!parsed) continue;
-
-    if (parsed.phase === "start") {
-      calls.push({
-        toolName: parsed.toolName,
-        outcome: "running",
-        detail: parseToolDetailFromArgsText(parsed.toolName, parsed.payload),
-      });
-      continue;
-    }
-
-    const activeIndex = (() => {
-      for (let index = calls.length - 1; index >= 0; index -= 1) {
-        const call = calls[index];
-        if (!call) continue;
-        if (call.toolName !== parsed.toolName) continue;
-        if (call.outcome === "running") return index;
-      }
-      return -1;
-    })();
-
-    if (activeIndex < 0) {
-      calls.push({
-        toolName: parsed.toolName,
-        outcome: parsed.phase === "end error" ? "error" : "running",
-      });
-      continue;
-    }
-
-    const call = calls[activeIndex];
-    if (!call) continue;
-
-    if (parsed.phase === "end success") {
-      call.outcome = "success";
-      continue;
-    }
-
-    if (parsed.phase === "end error") {
-      call.outcome = "error";
-      continue;
-    }
-
-    if (!call.detail) {
-      call.detail = parseToolDetailFromArgsText(parsed.toolName, parsed.payload);
-    }
-  }
-
-  return calls.map((call) => {
-    const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
-    const suffix = call.detail ? ` ${call.detail}` : "";
-    return `${marker} ${formatToolName(call.toolName)}${suffix}`;
-  });
-}
-
-function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
-  const order: string[] = [];
-  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome; detail?: string }>();
-
-  for (const event of events) {
-    if (event.type !== "tool_start" && event.type !== "tool_update" && event.type !== "tool_end") {
-      continue;
-    }
-
-    const existing = calls.get(event.toolCallId);
-    if (!existing) {
-      order.push(event.toolCallId);
-      calls.set(event.toolCallId, {
-        toolName: event.toolName,
-        outcome:
-          event.type === "tool_end" ? (event.status === "error" ? "error" : "success") : "running",
-        detail: event.type === "tool_start" ? parseToolDetailFromStart(event) : undefined,
-      });
-      continue;
-    }
-
-    if (event.type === "tool_start") {
-      calls.set(event.toolCallId, {
-        toolName: existing.toolName,
-        outcome: existing.outcome,
-        detail: existing.detail ?? parseToolDetailFromStart(event),
-      });
-      continue;
-    }
-
-    if (event.type === "tool_end") {
-      calls.set(event.toolCallId, {
-        toolName: existing.toolName,
-        outcome: event.status === "error" ? "error" : "success",
-        detail: existing.detail,
-      });
-    }
-  }
-
-  return order.map((toolCallId) => {
-    const call = calls.get(toolCallId);
-    if (!call) return "○ Tool";
-    const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
-    const suffix = call.detail ? ` ${call.detail}` : "";
-    return `${marker} ${formatToolName(call.toolName)}${suffix}`;
-  });
-}
-
-function assistantTextFromEvents(events: readonly TaskExecutionEvent[]): string | undefined {
-  const deltas = events
-    .filter((event) => event.type === "assistant_text_delta")
-    .map((event) => event.delta);
-
-  if (deltas.length === 0) return undefined;
-  const text = deltas.join("").trim();
-  if (text.length === 0) return undefined;
-  return text;
-}
-
 function toTreeStatus(status: TaskToolStatus): SubagentTaskTreeStatus {
   if (status === "queued") return "queued";
   if (status === "running") return "running";
@@ -783,79 +494,11 @@ function capitalize(value: string): string {
   return `${value[0]?.toUpperCase() ?? ""}${value.slice(1)}`;
 }
 
-function stripTranscriptPrefix(line: string): string {
-  const roleTrimmed = line.replace(/^(assistant|user|system)\s*>\s*/iu, "").trim();
-  const toolTrimmed = roleTrimmed.replace(/^tool(?:\([^)]+\))?\s*>\s*/iu, "").trim();
-  return toolTrimmed;
-}
-
-function isToolCallLikeLine(line: string): boolean {
-  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
-    return true;
-  }
-
-  if (/^(Read|Glob|Grep|Find|Search|Bash|Edit|Write|Ls)\b/u.test(line)) {
-    return true;
-  }
-
-  if (/^tool_call\s*[:>]/iu.test(line)) {
-    return true;
-  }
-
-  if (/^\$\s+.+/u.test(line)) {
-    return true;
-  }
-
-  return false;
-}
-
-function normalizeToolCallLine(line: string): string {
-  const trimmed = line.trim();
-  if (trimmed.length === 0) return "✓ (empty tool line)";
-  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(trimmed)) {
-    return trimmed;
-  }
-  return `✓ ${trimmed}`;
-}
-
 function parseTreeSectionsFromOutput(output: string): {
   readonly toolCalls: readonly string[];
   readonly narrativeLines: readonly string[];
 } {
-  const normalized = transcriptLines(output)
-    .map((line) => stripTranscriptPrefix(line))
-    .filter((line) => line.length > 0);
-
-  if (normalized.length === 0) {
-    return {
-      toolCalls: [],
-      narrativeLines: [],
-    };
-  }
-
-  const toolCalls: string[] = [];
-  const lifecycleToolLines: string[] = [];
-  const narrative: string[] = [];
-
-  for (const line of normalized) {
-    if (parseToolLifecycleLine(line)) {
-      lifecycleToolLines.push(line);
-      continue;
-    }
-
-    if (isToolCallLikeLine(line)) {
-      toolCalls.push(normalizeToolCallLine(line));
-      continue;
-    }
-
-    narrative.push(line);
-  }
-
-  const lifecycleRows = toToolRowsFromLifecycleLines(lifecycleToolLines);
-  return {
-    toolCalls: lifecycleRows.length > 0 ? [...lifecycleRows, ...toolCalls] : toolCalls,
-    narrativeLines: narrative,
-  };
+  return parseTaskTranscriptSections(output, { normalizeDetectedToolCalls: true });
 }
 
 function resolveTreeResultFromSections(input: {
@@ -1450,7 +1093,7 @@ function resolveSnapshotOutput(snapshot: TaskRuntimeSnapshot): {
 
 function snapshotToItem(snapshot: TaskRuntimeSnapshot): TaskToolItemDetails {
   const output = resolveSnapshotOutput(snapshot);
-  const toolRows = toToolRows(snapshot.events);
+  const toolRows = toToolRowsFromEvents(snapshot.events);
   const assistantText = assistantTextFromEvents(snapshot.events);
 
   return {
@@ -1491,7 +1134,7 @@ function snapshotToTaskResultDetails(
     typeof output === "string" && output.length > 0
       ? toTaskOutputPayload(output)
       : resolveSnapshotOutput(snapshot);
-  const toolRows = toToolRows(snapshot.events);
+  const toolRows = toToolRowsFromEvents(snapshot.events);
   const assistantText = assistantTextFromEvents(snapshot.events);
 
   return {

@@ -471,33 +471,6 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
   assert.match(plain, /╰── done/);
 });
 
-defineTest("formatTaskToolResult compacts fallback tool_call lifecycle lines", () => {
-  const compact = stripAnsi(
-    formatTaskToolResult(
-      {
-        op: "start",
-        status: "succeeded",
-        task_id: "task_1",
-        subagent_type: "librarian",
-        description: "Smoke test librarian",
-        summary: "Librarian: Smoke test librarian",
-        output: [
-          'tool_call: bash start {"command":"find packages/subagents/src/runtime -maxdepth 1"}',
-          'tool_call: bash update {"content":[{"type":"text","text":"large payload"}]}',
-          'tool_call: bash end success {"ok":true}',
-        ].join("\n"),
-        output_available: true,
-        backend: "interactive-sdk",
-      },
-      false,
-    ),
-  );
-
-  assert.match(compact, /✓ Bash find packages\/subagents\/src\/runtime -maxdepth 1/);
-  assert.doesNotMatch(compact, /tool_call: bash update/);
-  assert.match(compact, /╰── Librarian: Smoke test librarian/);
-});
-
 defineTest("formatTaskToolResult prefers structured tool_rows over output scraping", () => {
   const compact = formatTaskToolResult(
     {
