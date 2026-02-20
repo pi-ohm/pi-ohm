@@ -23,6 +23,7 @@
 - Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
 - Task runtime store layout decomposed under `src/runtime/tasks/*` with `index.ts` export surface.
 - Schema layout decomposed under `src/schema/*` with `index.ts` re-export surface.
+- Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 

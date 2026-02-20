@@ -92,10 +92,10 @@ See @./ARCH.md for more details.
 
 ### Epic F — Runtime UI slimdown (`src/runtime/ui.ts`)
 
-- [ ] **F-001:** Limit `src/runtime/ui.ts` to presentation assembly only.
-- [ ] **F-002:** Consume `src/runtime/task-transcript.ts` for parsing/tool-row extraction.
-- [ ] **F-003 (tests):** Keep `src/runtime/ui.test.ts` presentation-only assertions.
-- [ ] **F-004 (tests):** Ensure parser-specific assertions live only in transcript tests.
+- [x] **F-001:** Limit `src/runtime/ui.ts` to presentation assembly only.
+- [x] **F-002:** Consume `src/runtime/task-transcript.ts` for parsing/tool-row extraction.
+- [x] **F-003 (tests):** Keep `src/runtime/ui.test.ts` presentation-only assertions.
+- [x] **F-004 (tests):** Ensure parser-specific assertions live only in transcript tests.
 
 ## Regression gate (required per completed ticket)
 
