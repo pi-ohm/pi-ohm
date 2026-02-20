@@ -2,11 +2,41 @@ import type { PiScopedModelRecord } from "./model-scope";
 
 export type SubagentPromptProfile = "anthropic" | "openai" | "google" | "moonshot" | "generic";
 
+export type SubagentPromptProfileSource =
+  | "active_model"
+  | "explicit_model_pattern"
+  | "scoped_model_catalog"
+  | "generic_fallback";
+
+export type SubagentPromptProfileReason =
+  | "active_model_direct_match"
+  | "explicit_model_pattern_direct_match"
+  | "active_model_scoped_exact_match"
+  | "active_model_scoped_model_consensus"
+  | "active_model_scoped_provider_consensus"
+  | "explicit_model_pattern_scoped_exact_match"
+  | "explicit_model_pattern_scoped_model_consensus"
+  | "explicit_model_pattern_scoped_provider_consensus"
+  | "no_active_model_or_explicit_pattern"
+  | "no_scoped_models_available"
+  | "scoped_models_conflict"
+  | "no_profile_match";
+
 export interface SubagentSystemPromptInput {
+  /** Active runtime model provider when known. */
   readonly provider?: string;
+  /** Active runtime model id when known. */
   readonly modelId?: string;
+  /** Explicit subagent model pattern override. */
   readonly modelPattern?: string;
+  /** User scoped model catalog from settings.json enabledModels. */
   readonly scopedModels?: readonly PiScopedModelRecord[];
+}
+
+export interface SubagentPromptProfileSelection {
+  readonly profile: SubagentPromptProfile;
+  readonly source: SubagentPromptProfileSource;
+  readonly reason: SubagentPromptProfileReason;
 }
 
 interface ParsedModelPattern {
@@ -19,6 +49,18 @@ interface PromptProfileMatchers {
   readonly openai: readonly string[];
   readonly google: readonly string[];
   readonly moonshot: readonly string[];
+}
+
+type ScopedProfileReason =
+  | "scoped_exact_match"
+  | "scoped_model_consensus"
+  | "scoped_provider_consensus"
+  | "scoped_conflict"
+  | "scoped_no_match";
+
+interface ScopedProfileResolution {
+  readonly profile: SubagentPromptProfile;
+  readonly reason: ScopedProfileReason;
 }
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
@@ -67,6 +109,24 @@ function parseModelPattern(value: string | undefined): ParsedModelPattern | unde
   return { provider, modelId };
 }
 
+function parseActiveModel(input: {
+  readonly provider?: string;
+  readonly modelId?: string;
+}): ParsedModelPattern | undefined {
+  const provider = normalizeToken(input.provider);
+  const modelId = normalizeToken(stripThinkingSuffix(input.modelId ?? ""));
+  if (provider.length === 0 || modelId.length === 0) return undefined;
+  return { provider, modelId };
+}
+
+function modelsEqual(
+  left: ParsedModelPattern | undefined,
+  right: ParsedModelPattern | undefined,
+): boolean {
+  if (!left || !right) return false;
+  return left.provider === right.provider && left.modelId === right.modelId;
+}
+
 function includesAny(input: string, needles: readonly string[]): boolean {
   for (const needle of needles) {
     if (input.includes(needle)) return true;
@@ -100,78 +160,220 @@ function resolveProfileFromProviderAndModel(
   return "generic";
 }
 
+function hasProfileConflict(profiles: readonly SubagentPromptProfile[]): boolean {
+  const unique = new Set(profiles.filter((profile) => profile !== "generic"));
+  return unique.size > 1;
+}
+
 function resolveProfileConsensus(
   profiles: readonly SubagentPromptProfile[],
 ): SubagentPromptProfile {
   const filtered = profiles.filter((profile) => profile !== "generic");
   if (filtered.length === 0) return "generic";
 
-  const [first] = filtered;
-  if (!first) return "generic";
-
-  for (const profile of filtered) {
-    if (profile !== first) return "generic";
+  if (hasProfileConflict(filtered)) {
+    return "generic";
   }
 
+  const [first] = filtered;
+  if (!first) return "generic";
   return first;
 }
 
 function resolveScopedModelProfile(input: {
-  readonly provider: string;
-  readonly modelId: string;
+  readonly candidate: ParsedModelPattern;
   readonly scopedModels: readonly PiScopedModelRecord[];
-}): SubagentPromptProfile {
-  if (input.scopedModels.length === 0) return "generic";
+}): ScopedProfileResolution {
+  if (input.scopedModels.length === 0) {
+    return {
+      profile: "generic",
+      reason: "scoped_no_match",
+    };
+  }
 
-  if (input.provider.length > 0 && input.modelId.length > 0) {
-    const exact = input.scopedModels.find(
-      (entry) => entry.provider === input.provider && entry.modelId === input.modelId,
-    );
-    if (exact) {
-      const exactProfile = resolveProfileFromProviderAndModel(exact.provider, exact.modelId);
-      if (exactProfile !== "generic") return exactProfile;
+  const exact = input.scopedModels.find(
+    (entry) =>
+      entry.provider === input.candidate.provider && entry.modelId === input.candidate.modelId,
+  );
+  if (exact) {
+    const exactProfile = resolveProfileFromProviderAndModel(exact.provider, exact.modelId);
+    if (exactProfile !== "generic") {
+      return {
+        profile: exactProfile,
+        reason: "scoped_exact_match",
+      };
     }
   }
 
-  if (input.modelId.length > 0) {
-    const modelMatches = input.scopedModels
-      .filter((entry) => entry.modelId === input.modelId)
-      .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
+  const modelMatches = input.scopedModels
+    .filter((entry) => entry.modelId === input.candidate.modelId)
+    .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
 
-    const modelConsensus = resolveProfileConsensus(modelMatches);
-    if (modelConsensus !== "generic") return modelConsensus;
+  const modelConsensus = resolveProfileConsensus(modelMatches);
+  if (modelConsensus !== "generic") {
+    return {
+      profile: modelConsensus,
+      reason: "scoped_model_consensus",
+    };
   }
 
-  if (input.provider.length > 0) {
-    const providerMatches = input.scopedModels
-      .filter((entry) => entry.provider === input.provider)
-      .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
+  const providerMatches = input.scopedModels
+    .filter((entry) => entry.provider === input.candidate.provider)
+    .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
 
-    const providerConsensus = resolveProfileConsensus(providerMatches);
-    if (providerConsensus !== "generic") return providerConsensus;
+  const providerConsensus = resolveProfileConsensus(providerMatches);
+  if (providerConsensus !== "generic") {
+    return {
+      profile: providerConsensus,
+      reason: "scoped_provider_consensus",
+    };
   }
 
-  return "generic";
+  const conflict = hasProfileConflict(modelMatches) || hasProfileConflict(providerMatches);
+  return {
+    profile: "generic",
+    reason: conflict ? "scoped_conflict" : "scoped_no_match",
+  };
+}
+
+function toScopedProfileReason(
+  candidateSource: "active_model" | "explicit_model_pattern",
+  reason: ScopedProfileReason,
+): SubagentPromptProfileReason | undefined {
+  if (reason === "scoped_exact_match") {
+    return candidateSource === "active_model"
+      ? "active_model_scoped_exact_match"
+      : "explicit_model_pattern_scoped_exact_match";
+  }
+
+  if (reason === "scoped_model_consensus") {
+    return candidateSource === "active_model"
+      ? "active_model_scoped_model_consensus"
+      : "explicit_model_pattern_scoped_model_consensus";
+  }
+
+  if (reason === "scoped_provider_consensus") {
+    return candidateSource === "active_model"
+      ? "active_model_scoped_provider_consensus"
+      : "explicit_model_pattern_scoped_provider_consensus";
+  }
+
+  return undefined;
+}
+
+export function resolveSubagentPromptProfileSelection(
+  input: SubagentSystemPromptInput,
+): SubagentPromptProfileSelection {
+  const activeModel = parseActiveModel({
+    provider: input.provider,
+    modelId: input.modelId,
+  });
+  const explicitModelPattern = parseModelPattern(input.modelPattern);
+
+  if (activeModel) {
+    const directProfile = resolveProfileFromProviderAndModel(
+      activeModel.provider,
+      activeModel.modelId,
+    );
+    if (directProfile !== "generic") {
+      return {
+        profile: directProfile,
+        source: "active_model",
+        reason: "active_model_direct_match",
+      };
+    }
+  }
+
+  if (explicitModelPattern) {
+    const directProfile = resolveProfileFromProviderAndModel(
+      explicitModelPattern.provider,
+      explicitModelPattern.modelId,
+    );
+    if (directProfile !== "generic") {
+      return {
+        profile: directProfile,
+        source: "explicit_model_pattern",
+        reason: "explicit_model_pattern_direct_match",
+      };
+    }
+  }
+
+  const scopedModels = input.scopedModels ?? [];
+  let scopedConflict = false;
+
+  if (activeModel) {
+    const scoped = resolveScopedModelProfile({
+      candidate: activeModel,
+      scopedModels,
+    });
+    const mappedReason = toScopedProfileReason("active_model", scoped.reason);
+    if (scoped.profile !== "generic" && mappedReason) {
+      return {
+        profile: scoped.profile,
+        source: "scoped_model_catalog",
+        reason: mappedReason,
+      };
+    }
+
+    if (scoped.reason === "scoped_conflict") {
+      scopedConflict = true;
+    }
+  }
+
+  if (explicitModelPattern && !modelsEqual(activeModel, explicitModelPattern)) {
+    const scoped = resolveScopedModelProfile({
+      candidate: explicitModelPattern,
+      scopedModels,
+    });
+    const mappedReason = toScopedProfileReason("explicit_model_pattern", scoped.reason);
+    if (scoped.profile !== "generic" && mappedReason) {
+      return {
+        profile: scoped.profile,
+        source: "scoped_model_catalog",
+        reason: mappedReason,
+      };
+    }
+
+    if (scoped.reason === "scoped_conflict") {
+      scopedConflict = true;
+    }
+  }
+
+  if (!activeModel && !explicitModelPattern) {
+    return {
+      profile: "generic",
+      source: "generic_fallback",
+      reason: "no_active_model_or_explicit_pattern",
+    };
+  }
+
+  if (scopedModels.length === 0) {
+    return {
+      profile: "generic",
+      source: "generic_fallback",
+      reason: "no_scoped_models_available",
+    };
+  }
+
+  if (scopedConflict) {
+    return {
+      profile: "generic",
+      source: "generic_fallback",
+      reason: "scoped_models_conflict",
+    };
+  }
+
+  return {
+    profile: "generic",
+    source: "generic_fallback",
+    reason: "no_profile_match",
+  };
 }
 
 export function resolveSubagentPromptProfile(
   input: SubagentSystemPromptInput,
 ): SubagentPromptProfile {
-  const parsedPattern = parseModelPattern(input.modelPattern);
-  const provider = normalizeToken(input.provider) || parsedPattern?.provider || "";
-  const modelId =
-    normalizeToken(stripThinkingSuffix(input.modelId ?? "")) || parsedPattern?.modelId || "";
-
-  const directProfile = resolveProfileFromProviderAndModel(provider, modelId);
-  if (directProfile !== "generic") return directProfile;
-
-  const scopedProfile = resolveScopedModelProfile({
-    provider,
-    modelId,
-    scopedModels: input.scopedModels ?? [],
-  });
-
-  return scopedProfile;
+  return resolveSubagentPromptProfileSelection(input).profile;
 }
 
 function providerPromptLines(profile: SubagentPromptProfile): readonly string[] {
@@ -222,8 +424,8 @@ function profileLabel(profile: SubagentPromptProfile): string {
 }
 
 export function buildSubagentSdkSystemPrompt(input: SubagentSystemPromptInput): string {
-  const profile = resolveSubagentPromptProfile(input);
-  const providerLabel = profileLabel(profile);
+  const selection = resolveSubagentPromptProfileSelection(input);
+  const providerLabel = profileLabel(selection.profile);
 
   const lines = [
     "You are the Pi OHM subagent runtime.",
@@ -233,7 +435,7 @@ export function buildSubagentSdkSystemPrompt(input: SubagentSystemPromptInput): 
     `Provider profile: ${providerLabel}`,
     "",
     "Provider-specific guidance:",
-    ...providerPromptLines(profile).map((line) => `- ${line}`),
+    ...providerPromptLines(selection.profile).map((line) => `- ${line}`),
   ];
 
   return lines.join("\n");

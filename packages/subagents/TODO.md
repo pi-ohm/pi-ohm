@@ -24,14 +24,14 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 
 ### Sprint H2 — Runtime model-truth prompt profile selection
 
-- [ ] **H2-001:** Define profile resolution precedence contract:
+- [x] **H2-001:** Define profile resolution precedence contract:
   1. active runtime session model,
   2. explicit subagent model override/pattern,
   3. scoped model catalog inference,
   4. generic fallback.
-- [ ] **H2-002:** Ensure selection uses concrete runtime model provider/id when available (no pattern guessing first).
-- [ ] **H2-003:** Return structured profile-selection diagnostics for debug visibility (selected source + fallback reason).
-- [ ] **H2-004 (tests):** Add precedence matrix tests (all branches + tie/fallback scenarios).
+- [x] **H2-002:** Ensure selection uses concrete runtime model provider/id when available (no pattern guessing first).
+- [x] **H2-003:** Return structured profile-selection diagnostics for debug visibility (selected source + fallback reason).
+- [x] **H2-004 (tests):** Add precedence matrix tests (all branches + tie/fallback scenarios).
 - [ ] **H2-005 (demo):** Show profile switching by changing active model only (no code/config edits).
 
 ### Sprint H3 — Configurable provider/profile rule contract
