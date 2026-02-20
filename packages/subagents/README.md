@@ -103,6 +103,59 @@ Per-subagent model override is supported via `ohm.json`:
 - SDK backend validates against Pi model registry (built-ins + custom `models.json`)
 - interactive-shell backend forwards the same `--model` pattern to nested `pi`
 
+## Dynamic prompt profile routing
+
+SDK prompt profile selection is runtime-driven and deterministic:
+
+1. active runtime model (`provider/modelId`) when available
+2. explicit subagent model override (`ohm.json` `subagents.<id>.model`)
+3. scoped model catalog inferred from Pi `settings.json` `enabledModels`
+4. generic fallback
+
+Scoped model discovery (`enabledModels`) uses deterministic config precedence:
+
+1. `<cwd>/.pi/agent/settings.json`
+2. `${PI_CONFIG_DIR}/settings.json`
+3. `${PI_CODING_AGENT_DIR}/settings.json`
+4. `${PI_AGENT_DIR}/settings.json`
+5. resolved Pi agent dir (`@pi-ohm/config`)
+6. `~/.pi/agent/settings.json`
+
+Provider/profile routing rules are config-driven from `ohm.providers.json`:
+
+```jsonc
+{
+  "subagents": {
+    "promptProfiles": {
+      "rules": [
+        {
+          "profile": "google",
+          "priority": 900,
+          "match": {
+            "providers": ["acme-neon"],
+            "models": [],
+          },
+        },
+      ],
+    },
+  },
+}
+```
+
+Allowed `profile` values: `anthropic | openai | google | moonshot`.
+Invalid/missing rules fail-soft to built-in defaults.
+
+Prompt-profile observability fields are emitted on task details/items:
+
+- `prompt_profile`
+- `prompt_profile_source`
+- `prompt_profile_reason`
+
+Trace lines are hidden by default. Enable debug rendering with:
+
+- `OHM_DEBUG=true`
+- `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
+
 Optional safety fallback:
 
 - set `OHM_SUBAGENTS_SDK_FALLBACK_TO_CLI=true` to fallback from `interactive-sdk` to
@@ -161,6 +214,60 @@ Task lifecycle smoke checklist:
 3. batch partial acceptance (`tasks[]` mixed validity)
 4. timeout path (`wait timeout_ms`)
 5. follow-up `send` on running task
+
+### 3.1) Prompt-profile demos (H1/H6/H7 closure runbook)
+
+H1-006 scoped model discovery demo (non-default provider, no hardcoded list):
+
+```bash
+yarn test:subagents --test-name-pattern "scoped model loader discovers non-default providers"
+```
+
+H6-006 interactive runtime demo (active model drives profile in-session):
+
+```bash
+mkdir -p /tmp/pi-ohm-active-model-demo
+cat >/tmp/pi-ohm-active-model-demo/ohm.json <<'EOF'
+{
+  "subagentBackend": "interactive-sdk",
+  "subagents": {
+    "finder": { "model": "openai/gpt-5" }
+  }
+}
+EOF
+
+OHM_DEBUG=true \
+OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true \
+PI_CONFIG_DIR=/tmp/pi-ohm-active-model-demo \
+pi -e ./packages/subagents/extension.ts
+```
+
+In-session, run a finder task via `task op:start ...`. In verbose result text, verify:
+
+- `prompt_profile: openai`
+- `prompt_profile_source: active_model`
+
+Then change only active model (for example `finder` override to `google/gemini-3-pro-preview`),
+rerun, and verify profile/source update without code changes.
+
+H7-004 provider-add repro demo (config-only mapping + end-to-end validation):
+
+```bash
+yarn test:subagents --test-name-pattern "new provider mapping can be added via rules"
+```
+
+### 3.2) Provider onboarding playbook (no core router edits)
+
+1. Add a rule in `ohm.providers.json` under `subagents.promptProfiles.rules`:
+   - map provider/model tokens to one existing profile pack
+   - set explicit `priority` above overlapping rules
+2. Validate via tests:
+   - `yarn test:subagents --test-name-pattern "prompt profile mapping changes after config edit"`
+   - `yarn test:subagents --test-name-pattern "new provider mapping can be added via rules"`
+3. Validate runtime diagnostics:
+   - run with `OHM_DEBUG=true OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
+   - confirm `prompt_profile/source/reason` in task result details
+4. Only add code-level prompt pack modules when a genuinely new behavior family is needed.
 
 ### 4) Troubleshooting quick map
 
@@ -280,6 +387,14 @@ Existing slash commands remain unchanged:
 
 - `/ohm-subagents`
 - `/ohm-subagent <id>`
+
+### Prompt-routing migration (static/env matcher -> dynamic/config-driven)
+
+- provider/profile routing now comes from runtime model truth + config files
+  (`settings.json` + `ohm.providers.json`)
+- static hardcoded/env-driven matcher assumptions should be removed from local forks
+- keep provider additions in config first (`subagents.promptProfiles.rules`) before touching code
+- debug with `OHM_DEBUG=true` + `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`
 
 ## Invocation mode behavior
 

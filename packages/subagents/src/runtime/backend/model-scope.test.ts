@@ -244,3 +244,40 @@ defineTest(
     });
   },
 );
+
+defineTest(
+  "scoped model loader discovers non-default providers from settings without hardcoded lists (demo)",
+  async () => {
+    await withTempDir(async (cwd) => {
+      resetPiScopedModelCatalogCache();
+
+      const envDir = path.join(cwd, ".pi-global");
+      const envSettingsPath = path.join(envDir, "settings.json");
+      writeSettingsFile(envSettingsPath, {
+        enabledModels: ["router-labs/nebula-1", "router-labs/nebula-1:high"],
+      });
+
+      const priorConfigDir = process.env.PI_CONFIG_DIR;
+      process.env.PI_CONFIG_DIR = envDir;
+
+      try {
+        const loaded = await loadPiScopedModelCatalog(cwd);
+        assert.equal(loaded.source, "env_pi_config_dir");
+        assert.equal(loaded.sourcePath, envSettingsPath);
+        assert.deepEqual(loaded.models, [
+          {
+            provider: "router-labs",
+            modelId: "nebula-1",
+            pattern: "router-labs/nebula-1",
+          },
+        ]);
+      } finally {
+        if (priorConfigDir === undefined) {
+          delete process.env.PI_CONFIG_DIR;
+        } else {
+          process.env.PI_CONFIG_DIR = priorConfigDir;
+        }
+      }
+    });
+  },
+);

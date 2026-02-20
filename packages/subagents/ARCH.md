@@ -121,3 +121,28 @@
 
 - Removing CLI backend fallback now.
 - Changing external task tool contract during decomposition.
+
+## 10) Prompt-profile routing contract (rollout hardening)
+
+- Selection precedence is fixed and deterministic:
+  1. active runtime model
+  2. explicit subagent model override (`ohm.json`)
+  3. scoped model catalog (`settings.json` `enabledModels`)
+  4. generic fallback
+- Provider/profile matching is rule-driven from `ohm.providers.json`
+  (`subagents.promptProfiles.rules`) with fail-soft fallback to default rules.
+- Config-only provider additions are supported by mapping new provider/model tokens to existing
+  profile packs (`anthropic|openai|google|moonshot`) without router changes.
+- Runtime task payloads may include debug-safe profile observability fields:
+  `prompt_profile`, `prompt_profile_source`, `prompt_profile_reason`.
+- Prompt-profile trace rendering is opt-in (`OHM_DEBUG=true` +
+  `OHM_SUBAGENTS_PROMPT_PROFILE_DEBUG=true`) and never emits full system prompt text.
+
+### Migration direction
+
+- Prefer config-driven prompt profile rules over static/env matcher logic.
+- Keep model truth sourced from runtime session + Pi settings catalog.
+- Treat provider onboarding as:
+  1. add rule(s) in `ohm.providers.json`,
+  2. verify selection diagnostics,
+  3. only then consider new code-level profile packs.

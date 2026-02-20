@@ -20,7 +20,7 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 - [x] **H1-003:** Add deterministic precedence for scope sources (project/local/global/env-based paths) with explicit diagnostics.
 - [x] **H1-004:** Add cache + refresh contract (mtime-aware invalidation) so repeated prompt builds avoid full re-parse.
 - [x] **H1-005 (tests):** Add coverage for valid settings, malformed settings, missing files, and precedence conflicts.
-- [ ] **H1-006 (demo):** CLI/runtime smoke proving scoped models are discovered without hardcoded provider lists.
+- [x] **H1-006 (demo):** CLI/runtime smoke proving scoped models are discovered without hardcoded provider lists.
 
 ### Sprint H2 — Runtime model-truth prompt profile selection
 
@@ -71,14 +71,14 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 - [x] **H6-003:** Add safe debug toggle for prompt profile/source tracing.
 - [x] **H6-004:** Preserve existing task-tool external contract; no breaking payload schema changes.
 - [x] **H6-005 (tests):** End-to-end backend tests asserting selected profile path and fallback behavior.
-- [ ] **H6-006 (demo):** Interactive run proving runtime picks profile from active model in-session.
+- [x] **H6-006 (demo):** Interactive run proving runtime picks profile from active model in-session.
 
 ### Sprint H7 — Docs + rollout hardening
 
-- [ ] **H7-001:** Document prompt-profile architecture and config contract in `README.md` / `ARCH.md`.
-- [ ] **H7-002:** Add operator playbook: how to add new provider/profile without touching core routing logic.
-- [ ] **H7-003:** Add migration notes from static/env matchers to dynamic/config-driven routing.
-- [ ] **H7-004 (demo):** Repro steps for adding a new provider profile and validating selection end-to-end.
+- [x] **H7-001:** Document prompt-profile architecture and config contract in `README.md` / `ARCH.md`.
+- [x] **H7-002:** Add operator playbook: how to add new provider/profile without touching core routing logic.
+- [x] **H7-003:** Add migration notes from static/env matchers to dynamic/config-driven routing.
+- [x] **H7-004 (demo):** Repro steps for adding a new provider profile and validating selection end-to-end.
 
 ---
 

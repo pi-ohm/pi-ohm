@@ -264,3 +264,94 @@ defineTest(
     assert.match(moonshot, /Provider profile: moonshot/);
   },
 );
+
+defineTest(
+  "active model switch updates runtime prompt profile and rendered prompt header (demo)",
+  () => {
+    const shared = {
+      modelPattern: "openai/gpt-5:high",
+      scopedModels: [
+        {
+          provider: "openai",
+          modelId: "gpt-5",
+          pattern: "openai/gpt-5",
+        },
+        {
+          provider: "google",
+          modelId: "gemini-3-pro-preview",
+          pattern: "google/gemini-3-pro-preview",
+        },
+      ],
+    };
+
+    const openAiSelection = resolveSubagentPromptProfileSelection({
+      ...shared,
+      provider: "openai",
+      modelId: "gpt-5",
+    });
+    const googleSelection = resolveSubagentPromptProfileSelection({
+      ...shared,
+      provider: "google",
+      modelId: "gemini-3-pro-preview",
+    });
+
+    const openAiPrompt = buildSubagentSdkSystemPrompt({
+      ...shared,
+      provider: "openai",
+      modelId: "gpt-5",
+    });
+    const googlePrompt = buildSubagentSdkSystemPrompt({
+      ...shared,
+      provider: "google",
+      modelId: "gemini-3-pro-preview",
+    });
+
+    assert.deepEqual(openAiSelection, {
+      profile: "openai",
+      source: "active_model",
+      reason: "active_model_direct_match",
+    });
+    assert.deepEqual(googleSelection, {
+      profile: "google",
+      source: "active_model",
+      reason: "active_model_direct_match",
+    });
+
+    assert.match(openAiPrompt, /Provider profile: openai/);
+    assert.match(googlePrompt, /Provider profile: google/);
+  },
+);
+
+defineTest(
+  "new provider mapping can be added via rules and validated end-to-end without router changes (demo)",
+  () => {
+    const profileRules = [
+      {
+        profile: "google",
+        priority: 900,
+        match: {
+          providers: ["acme-neon"],
+          models: [],
+        },
+      },
+    ] as const;
+
+    const selection = resolveSubagentPromptProfileSelection({
+      provider: "acme-neon",
+      modelId: "spark-2",
+      profileRules,
+    });
+    const prompt = buildSubagentSdkSystemPrompt({
+      provider: "acme-neon",
+      modelId: "spark-2",
+      profileRules,
+    });
+
+    assert.deepEqual(selection, {
+      profile: "google",
+      source: "active_model",
+      reason: "active_model_direct_match",
+    });
+    assert.match(prompt, /Provider profile: google/);
+  },
+);
