@@ -15,6 +15,7 @@ import {
   createPiSdkStreamCaptureState,
   finalizePiSdkStreamCapture,
 } from "./sdk-stream-capture";
+import { loadSubagentPromptProfileRules } from "./prompt-profile-rules";
 import { loadPiScopedModelCatalog } from "./model-scope";
 import { parseSubagentModelSelection } from "./model-selection";
 import { buildSubagentSdkSystemPrompt } from "./system-prompts";
@@ -188,11 +189,13 @@ export const runPiSdkPrompt: PiSdkRunner = async (
   let resolvedModelProvider = "unavailable";
   let resolvedModelId = "unavailable";
   const scopedModelCatalog = await loadPiScopedModelCatalog(input.cwd);
+  const promptProfileRules = await loadSubagentPromptProfileRules(input.cwd);
 
   try {
     const bootstrapSystemPrompt = buildSubagentSdkSystemPrompt({
       modelPattern: input.modelPattern,
       scopedModels: scopedModelCatalog.models,
+      profileRules: promptProfileRules.rules,
     });
     const created = await createAgentSession({
       cwd: input.cwd,
@@ -278,6 +281,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
         modelId: resolvedModelId,
         modelPattern: input.modelPattern,
         scopedModels: scopedModelCatalog.models,
+        profileRules: promptProfileRules.rules,
       }),
     );
   } catch (error) {

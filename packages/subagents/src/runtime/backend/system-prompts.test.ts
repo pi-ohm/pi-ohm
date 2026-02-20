@@ -23,6 +23,25 @@ defineTest("resolveSubagentPromptProfile detects anthropic/openai/google/moonsho
   assert.equal(resolveSubagentPromptProfile({ modelPattern: "moonshotai/kimi-k2" }), "moonshot");
 });
 
+defineTest("resolveSubagentPromptProfile honors custom profile rules", () => {
+  const profile = resolveSubagentPromptProfile({
+    provider: "router-z",
+    modelId: "custom-model",
+    profileRules: [
+      {
+        profile: "google",
+        priority: 100,
+        match: {
+          providers: ["router-z"],
+          models: [],
+        },
+      },
+    ],
+  });
+
+  assert.equal(profile, "google");
+});
+
 defineTest("resolveSubagentPromptProfileSelection prioritizes active runtime model", () => {
   const selection = resolveSubagentPromptProfileSelection({
     provider: "google",
@@ -161,6 +180,43 @@ defineTest(
       source: "generic_fallback",
       reason: "no_scoped_models_available",
     });
+  },
+);
+
+defineTest(
+  "resolveSubagentPromptProfileSelection switches profile when only active model changes",
+  () => {
+    const sharedInput = {
+      modelPattern: "openai/gpt-5:high",
+      scopedModels: [
+        {
+          provider: "openai",
+          modelId: "gpt-5",
+          pattern: "openai/gpt-5",
+        },
+        {
+          provider: "google",
+          modelId: "gemini-3-pro-preview",
+          pattern: "google/gemini-3-pro-preview",
+        },
+      ],
+    };
+
+    const first = resolveSubagentPromptProfileSelection({
+      ...sharedInput,
+      provider: "openai",
+      modelId: "gpt-5",
+    });
+    const second = resolveSubagentPromptProfileSelection({
+      ...sharedInput,
+      provider: "google",
+      modelId: "gemini-3-pro-preview",
+    });
+
+    assert.equal(first.profile, "openai");
+    assert.equal(second.profile, "google");
+    assert.equal(first.source, "active_model");
+    assert.equal(second.source, "active_model");
   },
 );
 

@@ -22,6 +22,68 @@ export type SubagentPromptProfileReason =
   | "scoped_models_conflict"
   | "no_profile_match";
 
+export interface SubagentPromptProfileRuleMetadata {
+  readonly label?: string;
+  readonly notes?: string;
+}
+
+export interface SubagentPromptProfileRule {
+  readonly profile: SubagentPromptProfile;
+  readonly match: {
+    readonly providers: readonly string[];
+    readonly models: readonly string[];
+  };
+  readonly priority: number;
+  readonly metadata?: SubagentPromptProfileRuleMetadata;
+}
+
+export const DEFAULT_SUBAGENT_PROMPT_PROFILE_RULES: readonly SubagentPromptProfileRule[] = [
+  {
+    profile: "anthropic",
+    match: {
+      providers: ["anthropic"],
+      models: ["claude"],
+    },
+    priority: 400,
+    metadata: {
+      label: "anthropic-default",
+    },
+  },
+  {
+    profile: "openai",
+    match: {
+      providers: ["openai"],
+      models: ["gpt", "o1", "o3", "o4"],
+    },
+    priority: 300,
+    metadata: {
+      label: "openai-default",
+    },
+  },
+  {
+    profile: "google",
+    match: {
+      providers: ["google"],
+      models: ["gemini"],
+    },
+    priority: 200,
+    metadata: {
+      label: "google-default",
+    },
+  },
+  {
+    profile: "moonshot",
+    match: {
+      providers: ["moonshot", "moonshotai", "moonshot.ai"],
+      models: ["kimi"],
+    },
+    priority: 100,
+    metadata: {
+      label: "moonshot-default",
+    },
+  },
+];
+
 export interface SubagentSystemPromptInput {
   /** Active runtime model provider when known. */
   readonly provider?: string;
@@ -31,6 +93,8 @@ export interface SubagentSystemPromptInput {
   readonly modelPattern?: string;
   /** User scoped model catalog from settings.json enabledModels. */
   readonly scopedModels?: readonly PiScopedModelRecord[];
+  /** Optional profile rules loaded from ohm.providers.json. */
+  readonly profileRules?: readonly SubagentPromptProfileRule[];
 }
 
 export interface SubagentPromptProfileSelection {
@@ -42,13 +106,6 @@ export interface SubagentPromptProfileSelection {
 interface ParsedModelPattern {
   readonly provider: string;
   readonly modelId: string;
-}
-
-interface PromptProfileMatchers {
-  readonly anthropic: readonly string[];
-  readonly openai: readonly string[];
-  readonly google: readonly string[];
-  readonly moonshot: readonly string[];
 }
 
 type ScopedProfileReason =
@@ -64,13 +121,6 @@ interface ScopedProfileResolution {
 }
 
 const THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
-
-const PROMPT_PROFILE_MATCHERS: PromptProfileMatchers = {
-  anthropic: ["anthropic", "claude"],
-  openai: ["openai", "gpt", "o1", "o3", "o4"],
-  google: ["google", "gemini"],
-  moonshot: ["moonshot", "moonshotai", "moonshot.ai", "kimi"],
-};
 
 function normalizeToken(value: string | undefined): string {
   if (!value) return "";
@@ -135,26 +185,89 @@ function includesAny(input: string, needles: readonly string[]): boolean {
   return false;
 }
 
+export function isSubagentPromptProfile(value: unknown): value is SubagentPromptProfile {
+  return (
+    value === "anthropic" ||
+    value === "openai" ||
+    value === "google" ||
+    value === "moonshot" ||
+    value === "generic"
+  );
+}
+
+function normalizeRuleTokens(values: readonly string[]): readonly string[] {
+  const normalized: string[] = [];
+  for (const value of values) {
+    const token = normalizeToken(value);
+    if (token.length === 0) continue;
+    if (normalized.includes(token)) continue;
+    normalized.push(token);
+  }
+
+  return normalized;
+}
+
+function sanitizeProfileRule(
+  rule: SubagentPromptProfileRule,
+): SubagentPromptProfileRule | undefined {
+  if (!isSubagentPromptProfile(rule.profile)) return undefined;
+  if (rule.profile === "generic") return undefined;
+
+  const providers = normalizeRuleTokens(rule.match.providers);
+  const models = normalizeRuleTokens(rule.match.models);
+  if (providers.length === 0 && models.length === 0) return undefined;
+
+  const priority = Number.isFinite(rule.priority) ? Math.trunc(rule.priority) : 0;
+
+  return {
+    profile: rule.profile,
+    match: {
+      providers,
+      models,
+    },
+    priority,
+    metadata: rule.metadata,
+  };
+}
+
+export function resolveEffectivePromptProfileRules(
+  profileRules: readonly SubagentPromptProfileRule[] | undefined,
+): readonly SubagentPromptProfileRule[] {
+  const source =
+    profileRules && profileRules.length > 0 ? profileRules : DEFAULT_SUBAGENT_PROMPT_PROFILE_RULES;
+  const normalized = source
+    .map((rule) => sanitizeProfileRule(rule))
+    .filter((rule): rule is SubagentPromptProfileRule => rule !== undefined)
+    .sort((left, right) => right.priority - left.priority);
+
+  if (normalized.length > 0) return normalized;
+
+  return DEFAULT_SUBAGENT_PROMPT_PROFILE_RULES;
+}
+
+function matchesRule(input: {
+  readonly provider: string;
+  readonly modelId: string;
+  readonly providerOrModel: string;
+  readonly rule: SubagentPromptProfileRule;
+}): boolean {
+  if (includesAny(input.provider, input.rule.match.providers)) return true;
+  if (includesAny(input.modelId, input.rule.match.models)) return true;
+  if (includesAny(input.providerOrModel, input.rule.match.providers)) return true;
+  if (includesAny(input.providerOrModel, input.rule.match.models)) return true;
+  return false;
+}
+
 function resolveProfileFromProviderAndModel(
   provider: string,
   modelId: string,
+  profileRules: readonly SubagentPromptProfileRule[],
 ): SubagentPromptProfile {
   const providerOrModel = `${provider} ${modelId}`.trim();
 
-  if (includesAny(providerOrModel, PROMPT_PROFILE_MATCHERS.anthropic)) {
-    return "anthropic";
-  }
-
-  if (includesAny(providerOrModel, PROMPT_PROFILE_MATCHERS.openai)) {
-    return "openai";
-  }
-
-  if (includesAny(providerOrModel, PROMPT_PROFILE_MATCHERS.google)) {
-    return "google";
-  }
-
-  if (includesAny(providerOrModel, PROMPT_PROFILE_MATCHERS.moonshot)) {
-    return "moonshot";
+  for (const rule of profileRules) {
+    if (!matchesRule({ provider, modelId, providerOrModel, rule })) continue;
+    return rule.profile;
   }
 
   return "generic";
@@ -183,6 +296,7 @@ function resolveProfileConsensus(
 function resolveScopedModelProfile(input: {
   readonly candidate: ParsedModelPattern;
   readonly scopedModels: readonly PiScopedModelRecord[];
+  readonly profileRules: readonly SubagentPromptProfileRule[];
 }): ScopedProfileResolution {
   if (input.scopedModels.length === 0) {
     return {
@@ -196,7 +310,11 @@ function resolveScopedModelProfile(input: {
       entry.provider === input.candidate.provider && entry.modelId === input.candidate.modelId,
   );
   if (exact) {
-    const exactProfile = resolveProfileFromProviderAndModel(exact.provider, exact.modelId);
+    const exactProfile = resolveProfileFromProviderAndModel(
+      exact.provider,
+      exact.modelId,
+      input.profileRules,
+    );
     if (exactProfile !== "generic") {
       return {
         profile: exactProfile,
@@ -207,7 +325,9 @@ function resolveScopedModelProfile(input: {
 
   const modelMatches = input.scopedModels
     .filter((entry) => entry.modelId === input.candidate.modelId)
-    .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
+    .map((entry) =>
+      resolveProfileFromProviderAndModel(entry.provider, entry.modelId, input.profileRules),
+    );
 
   const modelConsensus = resolveProfileConsensus(modelMatches);
   if (modelConsensus !== "generic") {
@@ -219,7 +339,9 @@ function resolveScopedModelProfile(input: {
 
   const providerMatches = input.scopedModels
     .filter((entry) => entry.provider === input.candidate.provider)
-    .map((entry) => resolveProfileFromProviderAndModel(entry.provider, entry.modelId));
+    .map((entry) =>
+      resolveProfileFromProviderAndModel(entry.provider, entry.modelId, input.profileRules),
+    );
 
   const providerConsensus = resolveProfileConsensus(providerMatches);
   if (providerConsensus !== "generic") {
@@ -264,6 +386,7 @@ function toScopedProfileReason(
 export function resolveSubagentPromptProfileSelection(
   input: SubagentSystemPromptInput,
 ): SubagentPromptProfileSelection {
+  const profileRules = resolveEffectivePromptProfileRules(input.profileRules);
   const activeModel = parseActiveModel({
     provider: input.provider,
     modelId: input.modelId,
@@ -274,6 +397,7 @@ export function resolveSubagentPromptProfileSelection(
     const directProfile = resolveProfileFromProviderAndModel(
       activeModel.provider,
       activeModel.modelId,
+      profileRules,
     );
     if (directProfile !== "generic") {
       return {
@@ -288,6 +412,7 @@ export function resolveSubagentPromptProfileSelection(
     const directProfile = resolveProfileFromProviderAndModel(
       explicitModelPattern.provider,
       explicitModelPattern.modelId,
+      profileRules,
     );
     if (directProfile !== "generic") {
       return {
@@ -305,6 +430,7 @@ export function resolveSubagentPromptProfileSelection(
     const scoped = resolveScopedModelProfile({
       candidate: activeModel,
       scopedModels,
+      profileRules,
     });
     const mappedReason = toScopedProfileReason("active_model", scoped.reason);
     if (scoped.profile !== "generic" && mappedReason) {
@@ -324,6 +450,7 @@ export function resolveSubagentPromptProfileSelection(
     const scoped = resolveScopedModelProfile({
       candidate: explicitModelPattern,
       scopedModels,
+      profileRules,
     });
     const mappedReason = toScopedProfileReason("explicit_model_pattern", scoped.reason);
     if (scoped.profile !== "generic" && mappedReason) {

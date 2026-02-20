@@ -28,6 +28,7 @@
 - Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
 - Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
+- Provider/profile routing rules are now config-driven from `ohm.providers.json` (`subagents.promptProfiles.rules`) with typed parsing, validation diagnostics, and default-rule fallback.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 
@@ -60,6 +61,7 @@
 - `src/runtime/backend/types.ts`
 - `src/runtime/backend/model-selection.ts`
 - `src/runtime/backend/model-scope.ts`
+- `src/runtime/backend/prompt-profile-rules.ts`
 - `src/runtime/backend/sdk-stream-capture.ts`
 - `src/runtime/backend/prompts.ts`
 - `src/runtime/backend/runners.ts`

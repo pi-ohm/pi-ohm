@@ -32,16 +32,16 @@ Replace static provider prompt matching with dynamic, model-truth routing that:
 - [x] **H2-002:** Ensure selection uses concrete runtime model provider/id when available (no pattern guessing first).
 - [x] **H2-003:** Return structured profile-selection diagnostics for debug visibility (selected source + fallback reason).
 - [x] **H2-004 (tests):** Add precedence matrix tests (all branches + tie/fallback scenarios).
-- [ ] **H2-005 (demo):** Show profile switching by changing active model only (no code/config edits).
+- [x] **H2-005 (demo):** Show profile switching by changing active model only (no code/config edits).
 
 ### Sprint H3 — Configurable provider/profile rule contract
 
-- [ ] **H3-001:** Define typed config schema for provider prompt rules in `ohm.providers.json` (profile ids + model match selectors + metadata).
-- [ ] **H3-002:** Load + validate provider-rule config via existing config discovery chain.
-- [ ] **H3-003:** Fail-soft behavior for invalid rules: keep runtime up, emit actionable diagnostics, fallback to defaults.
-- [ ] **H3-004:** Remove env-only matcher override from primary path (keep backward-compat alias only if explicitly needed).
-- [ ] **H3-005 (tests):** Add parser/validation tests + invalid-config recovery tests.
-- [ ] **H3-006 (demo):** Change profile mapping via config file edit and verify behavior without code change.
+- [x] **H3-001:** Define typed config schema for provider prompt rules in `ohm.providers.json` (profile ids + model match selectors + metadata).
+- [x] **H3-002:** Load + validate provider-rule config via existing config discovery chain.
+- [x] **H3-003:** Fail-soft behavior for invalid rules: keep runtime up, emit actionable diagnostics, fallback to defaults.
+- [x] **H3-004:** Remove env-only matcher override from primary path (keep backward-compat alias only if explicitly needed).
+- [x] **H3-005 (tests):** Add parser/validation tests + invalid-config recovery tests.
+- [x] **H3-006 (demo):** Change profile mapping via config file edit and verify behavior without code change.
 
 ### Sprint H4 — Modular prompt authoring surface (TS/TSX-style)
 
