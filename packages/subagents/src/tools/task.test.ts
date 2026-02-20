@@ -36,6 +36,12 @@ function stripAnsi(value: string): string {
     .join("")
     .split("\u001b[24m")
     .join("")
+    .split("\u001b[31m")
+    .join("")
+    .split("\u001b[32m")
+    .join("")
+    .split("\u001b[39m")
+    .join("")
     .split("\u001b[0m")
     .join("");
 }
@@ -387,7 +393,7 @@ defineTest("formatTaskToolResult renders collection items", () => {
   const plain = stripAnsi(compact);
 
   assert.doesNotMatch(plain, /items:/);
-  assert.match(plain, /… Finder · Auth flow scan/);
+  assert.match(plain, /• Finder · Auth flow scan/);
   assert.match(plain, /✕ Task task_missing/);
   assert.match(plain, /Unknown task id/);
 });
@@ -529,7 +535,7 @@ defineTest("formatTaskToolResult renders running tasks as full tree", () => {
   );
   const plain = stripAnsi(compact);
 
-  assert.match(plain, /… Finder · Background indexing/);
+  assert.match(plain, /• Finder · Background indexing/);
   assert.match(plain, /├── Background indexing/);
   assert.match(plain, /╰── Working/);
 });

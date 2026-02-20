@@ -790,7 +790,7 @@ function stripTranscriptPrefix(line: string): string {
 }
 
 function isToolCallLikeLine(line: string): boolean {
-  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
+  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
     return true;
   }
 
@@ -812,7 +812,7 @@ function isToolCallLikeLine(line: string): boolean {
 function normalizeToolCallLine(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "✓ (empty tool line)";
-  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(trimmed)) {
+  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(trimmed)) {
     return trimmed;
   }
   return `✓ ${trimmed}`;

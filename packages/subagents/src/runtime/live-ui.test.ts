@@ -18,6 +18,12 @@ function stripAnsi(value: string): string {
     .join("")
     .split("\u001b[24m")
     .join("")
+    .split("\u001b[31m")
+    .join("")
+    .split("\u001b[32m")
+    .join("")
+    .split("\u001b[39m")
+    .join("")
     .split("\u001b[0m")
     .join("");
 }

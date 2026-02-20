@@ -20,6 +20,12 @@ function stripAnsi(value: string): string {
     .join("")
     .split("\u001b[24m")
     .join("")
+    .split("\u001b[31m")
+    .join("")
+    .split("\u001b[32m")
+    .join("")
+    .split("\u001b[39m")
+    .join("")
     .split("\u001b[0m")
     .join("");
 }
@@ -86,12 +92,33 @@ defineTest("renderSubagentTaskTreeLines underlines path-like tool call tokens", 
   });
 
   const rendered = lines.join("\n");
+  assert.equal(rendered.includes("\u001b[1mRead\u001b[22m"), true);
   assert.equal(
-    rendered.includes(
-      "✓ \u001b[1mRead\u001b[22m \u001b[4mpackages/subagents/src/extension.ts\u001b[24m @1-20",
-    ),
+    rendered.includes("\u001b[4mpackages/subagents/src/extension.ts\u001b[24m @1-20"),
     true,
   );
+});
+
+defineTest("renderSubagentTaskTreeLines colors success and failure markers", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        status: "succeeded",
+        toolCalls: ["✓ Read packages/subagents/src/extension.ts", "✕ Bash exit 1"],
+      }),
+      makeEntry({
+        id: "task_2",
+        status: "failed",
+        title: "Finder · Broken run",
+        toolCalls: [],
+      }),
+    ],
+    width: 120,
+  });
+
+  const rendered = lines.join("\n");
+  assert.equal(rendered.includes("\u001b[32m✓\u001b[39m"), true);
+  assert.equal(rendered.includes("\u001b[31m✕\u001b[39m"), true);
 });
 
 defineTest("SubagentTaskTreeComponent caches by width and invalidates", () => {

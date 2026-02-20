@@ -119,7 +119,7 @@ function normalizeTranscriptPrefix(line: string): string {
 }
 
 function looksLikeToolCallLine(line: string): boolean {
-  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
+  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+/u.test(line)) {
     return true;
   }
 

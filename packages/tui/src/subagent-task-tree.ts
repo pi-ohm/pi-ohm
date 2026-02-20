@@ -7,6 +7,9 @@ import {
 
 const ANSI_BOLD_ON = "\u001b[1m";
 const ANSI_BOLD_OFF = "\u001b[22m";
+const ANSI_GREEN_ON = "\u001b[32m";
+const ANSI_RED_ON = "\u001b[31m";
+const ANSI_FG_RESET = "\u001b[39m";
 
 export type SubagentTaskTreeStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
@@ -32,7 +35,7 @@ function markerForStatus(entry: SubagentTaskTreeEntry): string {
   if (entry.status === "succeeded") return "✓";
   if (entry.status === "failed") return "✕";
   if (entry.status === "cancelled") return "○";
-  return "…";
+  return "•";
 }
 
 function clampPositive(value: number | undefined, fallback: number): number {
@@ -43,6 +46,18 @@ function clampPositive(value: number | undefined, fallback: number): number {
 function bold(text: string): string {
   if (text.length === 0) return text;
   return `${ANSI_BOLD_ON}${text}${ANSI_BOLD_OFF}`;
+}
+
+function styleStatusMarker(marker: string): string {
+  if (marker === "✓") {
+    return `${ANSI_GREEN_ON}${marker}${ANSI_FG_RESET}`;
+  }
+
+  if (marker === "✕") {
+    return `${ANSI_RED_ON}${marker}${ANSI_FG_RESET}`;
+  }
+
+  return marker;
 }
 
 function styleEntryTitle(title: string): string {
@@ -56,11 +71,13 @@ function styleEntryTitle(title: string): string {
 }
 
 function styleToolPrefix(prefix: string): string {
-  const withMarker = /^([✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+)(\S+)$/u.exec(prefix);
+  const withMarker = /^([✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+)(\S+)$/u.exec(prefix);
   if (withMarker) {
-    const marker = withMarker[1] ?? "";
+    const markerWithSpace = withMarker[1] ?? "";
     const toolName = withMarker[2] ?? "";
-    return `${marker}${bold(toolName)}`;
+    const marker = markerWithSpace.trim();
+    const space = markerWithSpace.slice(marker.length);
+    return `${styleStatusMarker(marker)}${space}${bold(toolName)}`;
   }
 
   return bold(prefix);
@@ -71,16 +88,16 @@ function normalizeToolCall(line: string): string {
   if (trimmed.length === 0) return "✓ (empty tool line)";
 
   const markerPrefix =
-    /^([✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+\S+)([\s\S]*)$/u.exec(trimmed) ?? /^(\S+)([\s\S]*)$/u.exec(trimmed);
+    /^([✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+\S+)([\s\S]*)$/u.exec(trimmed) ?? /^(\S+)([\s\S]*)$/u.exec(trimmed);
   if (!markerPrefix) return `✓ ${trimmed}`;
 
   const prefix = markerPrefix[1] ?? "";
   const suffix = markerPrefix[2] ?? "";
   const normalized = `${styleToolPrefix(prefix)}${underlinePathTokens(suffix)}`;
-  if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u.test(trimmed)) {
+  if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u.test(trimmed)) {
     return normalized;
   }
-  return `✓ ${normalized}`;
+  return `${styleStatusMarker("✓")} ${normalized}`;
 }
 
 function underlinePathTokens(input: string): string {
@@ -282,7 +299,9 @@ export function renderSubagentTaskTreeLines(input: {
 
   for (const [entryIndex, entry] of input.entries.entries()) {
     const marker = markerForStatus(entry);
-    lines.push(truncateToWidth(`  ${marker} ${styleEntryTitle(entry.title)}`, safeWidth));
+    lines.push(
+      truncateToWidth(`  ${styleStatusMarker(marker)} ${styleEntryTitle(entry.title)}`, safeWidth),
+    );
 
     const children = formatEntryChildren(entry, options);
     for (const [childIndex, child] of children.entries()) {
