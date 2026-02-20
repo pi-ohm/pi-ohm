@@ -21,6 +21,7 @@
 - Shared transcript parser extracted (`src/runtime/task-transcript.ts`) and consumed by task/runtime UI paths.
 - Task tool file layout decomposed under `src/tools/task/*` with `index.ts` as public re-export surface.
 - Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
+- Task runtime store layout decomposed under `src/runtime/tasks/*` with `index.ts` export surface.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 

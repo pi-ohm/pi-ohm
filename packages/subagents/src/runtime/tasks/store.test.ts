@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
-import type { OhmSubagentDefinition } from "../catalog";
+import type { OhmSubagentDefinition } from "../../catalog";
 import {
   createInMemoryTaskRuntimeStore,
   createJsonTaskRuntimePersistence,
   type TaskRuntimePersistence,
-} from "./tasks";
+} from "./index";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

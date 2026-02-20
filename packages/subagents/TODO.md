@@ -67,16 +67,16 @@ See @./ARCH.md for more details.
 
 ### Epic D — Task runtime store decomposition (`src/runtime/tasks/*`)
 
-- [ ] **D-001:** Create `src/runtime/tasks/types.ts`.
-- [ ] **D-002:** Create `src/runtime/tasks/state-machine.ts`.
-- [ ] **D-003:** Create `src/runtime/tasks/persistence.ts`.
-- [ ] **D-004:** Create `src/runtime/tasks/store.ts`.
-- [ ] **D-005:** Keep `src/runtime/tasks/index.ts` as exports only.
-- [ ] **D-006 (tests):** Create `src/runtime/tasks/store.test.ts`.
-- [ ] **D-007 (tests):** Create `src/runtime/tasks/persistence.test.ts`.
-- [ ] **D-008 (tests):** Create `src/runtime/tasks/policies.test.ts`.
-- [ ] **D-009 (tests):** Create `src/runtime/tasks/events.test.ts`.
-- [ ] **D-010 (cleanup):** Remove legacy `src/runtime/tasks.test.ts` after parity.
+- [x] **D-001:** Create `src/runtime/tasks/types.ts`.
+- [x] **D-002:** Create `src/runtime/tasks/state-machine.ts`.
+- [x] **D-003:** Create `src/runtime/tasks/persistence.ts`.
+- [x] **D-004:** Create `src/runtime/tasks/store.ts`.
+- [x] **D-005:** Keep `src/runtime/tasks/index.ts` as exports only.
+- [x] **D-006 (tests):** Create `src/runtime/tasks/store.test.ts`.
+- [x] **D-007 (tests):** Create `src/runtime/tasks/persistence.test.ts`.
+- [x] **D-008 (tests):** Create `src/runtime/tasks/policies.test.ts`.
+- [x] **D-009 (tests):** Create `src/runtime/tasks/events.test.ts`.
+- [x] **D-010 (cleanup):** Remove legacy `src/runtime/tasks.test.ts` after parity.
 
 ### Epic E — Schema decomposition (`src/schema/*`)
 
