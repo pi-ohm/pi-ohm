@@ -3,14 +3,14 @@ import test from "node:test";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
-import type { OhmSubagentDefinition } from "../catalog";
-import { SubagentRuntimeError } from "../errors";
+import type { OhmSubagentDefinition } from "../../catalog";
+import { SubagentRuntimeError } from "../../errors";
 import type {
   TaskBackendSendInput,
   TaskBackendStartInput,
   TaskExecutionBackend,
-} from "../runtime/backend";
-import { createInMemoryTaskRuntimeStore } from "../runtime/tasks";
+} from "../../runtime/backend";
+import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks";
 import {
   createCollapsedTaskToolResultComponent,
   createTaskId,
@@ -20,7 +20,7 @@ import {
   runTaskToolMvp,
   type TaskToolDependencies,
   type TaskToolResultDetails,
-} from "./task";
+} from "./index";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

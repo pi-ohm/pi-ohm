@@ -19,6 +19,7 @@
 - adaptive backend timeout policy (global + per-subagent override, elevated defaults for oracle/librarian).
 - Structured event timeline persisted with bounded retention.
 - Shared transcript parser extracted (`src/runtime/task-transcript.ts`) and consumed by task/runtime UI paths.
+- Task tool file layout decomposed under `src/tools/task/*` with `index.ts` as public re-export surface.
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 

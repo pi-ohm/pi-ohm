@@ -30,21 +30,21 @@ See @./ARCH.md for more details.
 
 ### Epic B — Task tool decomposition (`src/tools/task/*`)
 
-- [ ] **B-001:** Create `src/tools/task/contracts.ts`.
-- [ ] **B-002:** Create `src/tools/task/defaults.ts`.
-- [ ] **B-003:** Create `src/tools/task/render.ts`.
-- [ ] **B-004:** Create `src/tools/task/updates.ts`.
-- [ ] **B-005:** Create `src/tools/task/execution.ts`.
-- [ ] **B-006:** Create `src/tools/task/operations.ts`.
-- [ ] **B-007:** Keep `src/tools/task/index.ts` as public entry + registration glue only.
-- [ ] **B-008 (tests):** Create `src/tools/task/formatting.test.ts`.
-- [ ] **B-009 (tests):** Create `src/tools/task/updates.test.ts`.
-- [ ] **B-010 (tests):** Create `src/tools/task/operations.start.test.ts`.
-- [ ] **B-011 (tests):** Create `src/tools/task/operations.lifecycle.test.ts`.
-- [ ] **B-012 (tests):** Create `src/tools/task/operations.batch.test.ts`.
-- [ ] **B-013 (tests):** Create `src/tools/task/registration.test.ts`.
-- [ ] **B-014 (tests):** Add `src/tools/task/test-fixtures.ts` shared fixtures.
-- [ ] **B-015 (cleanup):** Remove legacy `src/tools/task.test.ts` after parity.
+- [x] **B-001:** Create `src/tools/task/contracts.ts`.
+- [x] **B-002:** Create `src/tools/task/defaults.ts`.
+- [x] **B-003:** Create `src/tools/task/render.ts`.
+- [x] **B-004:** Create `src/tools/task/updates.ts`.
+- [x] **B-005:** Create `src/tools/task/execution.ts`.
+- [x] **B-006:** Create `src/tools/task/operations.ts`.
+- [x] **B-007:** Keep `src/tools/task/index.ts` as public entry + registration glue only.
+- [x] **B-008 (tests):** Create `src/tools/task/formatting.test.ts`.
+- [x] **B-009 (tests):** Create `src/tools/task/updates.test.ts`.
+- [x] **B-010 (tests):** Create `src/tools/task/operations.start.test.ts`.
+- [x] **B-011 (tests):** Create `src/tools/task/operations.lifecycle.test.ts`.
+- [x] **B-012 (tests):** Create `src/tools/task/operations.batch.test.ts`.
+- [x] **B-013 (tests):** Create `src/tools/task/registration.test.ts`.
+- [x] **B-014 (tests):** Add `src/tools/task/test-fixtures.ts` shared fixtures.
+- [x] **B-015 (cleanup):** Remove legacy `src/tools/task.test.ts` after parity.
 
 ### Epic C — Backend decomposition (`src/runtime/backend/*`)
 
