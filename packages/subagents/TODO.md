@@ -1,113 +1,88 @@
 # TODO — `@pi-ohm/subagents`
 
-## Completed overview (compressed)
+## Goal
 
-Subagents runtime is already end-to-end functional: lifecycle ops (`start|status|wait|send|cancel`) are shipped with strict payload normalization (`id|ids`, `result->status`) and typed `better-result` failures; sync blocking start is enforced while async start is intentionally rejected. SDK backend is default, CLI fallback path remains available, and backend identity/observability (`backend/provider/model/runtime/route`) is propagated through single + batch responses. Persistence/hydration is live with non-terminal recovery (`task_rehydrated_incomplete`), bounded event timelines, retention/capacity controls, and explicit diagnostics. Dual invocation is implemented (`task-routed` + `primary-tool`), including specialized primary schemas/prompt shaping for librarian/oracle/finder. UI behavior is inline-first with tree rendering, collapsed/expanded results, optional live widget modes, and streamed SDK tool rows feeding live updates. Current gap is architecture shape (oversized mixed-responsibility files), not missing core features.
+Replace static provider prompt matching with dynamic, model-truth routing that:
 
-## **old & outstanding**
+- reads actual model context from Pi runtime/session state,
+- ingests user-scoped models from Pi settings/config files,
+- supports provider-specific prompt authoring (TS/TSX-style modular prompts),
+- stays deterministic/testable and fails safe to generic profile.
 
-- [ ] **OO-001 / S11-T2:** SDK session boot profile for subagents.
-- [ ] **OO-002 / S13-T2:** Running-state minimal mode for async/background.
-- [ ] **OO-003 / S13-T3:** Terminal expansion mode.
-- [ ] **OO-004 / S13-T4:** Keep bottom widget fully optional (no hidden reactivation path).
+---
 
-## Ticketed refactor plan (epics + sprints)
+## Epic H — Dynamic provider-aware subagent prompt routing
 
-See @./ARCH.md for more details.
+### Sprint H1 — Model scope ingestion (source of truth)
 
-### Epic A — Shared transcript parser (`src/runtime/task-transcript.ts`)
+- [ ] **H1-001:** Add typed loader for user model scope from Pi settings (`enabledModels`) using Pi config dir resolution chain.
+- [ ] **H1-002:** Normalize loaded model entries into typed `provider/modelId` records (strip thinking suffixes, reject invalid shapes).
+- [ ] **H1-003:** Add deterministic precedence for scope sources (project/local/global/env-based paths) with explicit diagnostics.
+- [ ] **H1-004:** Add cache + refresh contract (mtime-aware invalidation) so repeated prompt builds avoid full re-parse.
+- [ ] **H1-005 (tests):** Add coverage for valid settings, malformed settings, missing files, and precedence conflicts.
+- [ ] **H1-006 (demo):** CLI/runtime smoke proving scoped models are discovered without hardcoded provider lists.
 
-- [x] **A-001:** Create `src/runtime/task-transcript.ts` and move transcript normalization.
-- [x] **A-002:** Move lifecycle line parsing (`tool_call:*`) into transcript module.
-- [x] **A-003:** Move tool detail extraction/parsing into transcript module.
-- [x] **A-004:** Move tool-row synthesis from lifecycle lines into transcript module.
-- [x] **A-005:** Move tool-row synthesis from structured events into transcript module.
-- [x] **A-006:** Wire `src/tools/task/*` rendering paths to transcript module APIs only.
-- [x] **A-007:** Wire `src/runtime/ui.ts` to transcript module APIs only.
-- [x] **A-008 (tests):** Add `src/runtime/task-transcript.test.ts`.
-- [x] **A-009 (tests):** Migrate parser/tool-row test cases out of `src/tools/task.test.ts`.
-- [x] **A-010 (tests):** Migrate parser/tool-row test cases out of `src/runtime/ui.test.ts`.
+### Sprint H2 — Runtime model-truth prompt profile selection
 
-### Epic B — Task tool decomposition (`src/tools/task/*`)
+- [ ] **H2-001:** Define profile resolution precedence contract:
+  1. active runtime session model,
+  2. explicit subagent model override/pattern,
+  3. scoped model catalog inference,
+  4. generic fallback.
+- [ ] **H2-002:** Ensure selection uses concrete runtime model provider/id when available (no pattern guessing first).
+- [ ] **H2-003:** Return structured profile-selection diagnostics for debug visibility (selected source + fallback reason).
+- [ ] **H2-004 (tests):** Add precedence matrix tests (all branches + tie/fallback scenarios).
+- [ ] **H2-005 (demo):** Show profile switching by changing active model only (no code/config edits).
 
-- [x] **B-001:** Create `src/tools/task/contracts.ts`.
-- [x] **B-002:** Create `src/tools/task/defaults.ts`.
-- [x] **B-003:** Create `src/tools/task/render.ts`.
-- [x] **B-004:** Create `src/tools/task/updates.ts`.
-- [x] **B-005:** Create `src/tools/task/execution.ts`.
-- [x] **B-006:** Create `src/tools/task/operations.ts`.
-- [x] **B-007:** Keep `src/tools/task/index.ts` as public entry + registration glue only.
-- [x] **B-008 (tests):** Create `src/tools/task/formatting.test.ts`.
-- [x] **B-009 (tests):** Create `src/tools/task/updates.test.ts`.
-- [x] **B-010 (tests):** Create `src/tools/task/operations.start.test.ts`.
-- [x] **B-011 (tests):** Create `src/tools/task/operations.lifecycle.test.ts`.
-- [x] **B-012 (tests):** Create `src/tools/task/operations.batch.test.ts`.
-- [x] **B-013 (tests):** Create `src/tools/task/registration.test.ts`.
-- [x] **B-014 (tests):** Add `src/tools/task/test-fixtures.ts` shared fixtures.
-- [x] **B-015 (cleanup):** Remove legacy `src/tools/task.test.ts` after parity.
+### Sprint H3 — Configurable provider/profile rule contract
 
-### Epic C — Backend decomposition (`src/runtime/backend/*`)
+- [ ] **H3-001:** Define typed config schema for provider prompt rules in `ohm.providers.json` (profile ids + model match selectors + metadata).
+- [ ] **H3-002:** Load + validate provider-rule config via existing config discovery chain.
+- [ ] **H3-003:** Fail-soft behavior for invalid rules: keep runtime up, emit actionable diagnostics, fallback to defaults.
+- [ ] **H3-004:** Remove env-only matcher override from primary path (keep backward-compat alias only if explicitly needed).
+- [ ] **H3-005 (tests):** Add parser/validation tests + invalid-config recovery tests.
+- [ ] **H3-006 (demo):** Change profile mapping via config file edit and verify behavior without code change.
 
-- [x] **C-001:** Create `src/runtime/backend/types.ts`.
-- [x] **C-002:** Create `src/runtime/backend/model-selection.ts`.
-- [x] **C-003:** Create `src/runtime/backend/sdk-stream-capture.ts`.
-- [x] **C-004:** Create `src/runtime/backend/prompts.ts`.
-- [x] **C-005:** Create `src/runtime/backend/runners.ts`.
-- [x] **C-006:** Create `src/runtime/backend/scaffold-backend.ts`.
-- [x] **C-007:** Create `src/runtime/backend/pi-sdk-backend.ts`.
-- [x] **C-008:** Create `src/runtime/backend/pi-cli-backend.ts`.
-- [x] **C-009:** Keep `src/runtime/backend/index.ts` as exports + default factory only.
-- [x] **C-010 (tests):** Create `src/runtime/backend/model-selection.test.ts`.
-- [x] **C-011 (tests):** Create `src/runtime/backend/sdk-stream-capture.test.ts`.
-- [x] **C-012 (tests):** Create `src/runtime/backend/scaffold-backend.test.ts`.
-- [x] **C-013 (tests):** Create `src/runtime/backend/pi-sdk-backend.test.ts`.
-- [x] **C-014 (tests):** Create `src/runtime/backend/pi-cli-backend.test.ts`.
-- [x] **C-015 (tests):** Create `src/runtime/backend/factory.test.ts`.
-- [x] **C-016 (cleanup):** Remove legacy `src/runtime/backend.test.ts` after parity.
+### Sprint H4 — Modular prompt authoring surface (TS/TSX-style)
 
-### Epic D — Task runtime store decomposition (`src/runtime/tasks/*`)
+- [ ] **H4-001:** Introduce typed prompt composition surface for provider prompts (base sections + provider sections + shared constraints).
+- [ ] **H4-002:** Support modular prompt definitions in code (TS-first; TSX-compatible composition style) with deterministic render output.
+- [ ] **H4-003:** Ensure prompt modules are side-effect free and composable per provider/profile.
+- [ ] **H4-004:** Add snapshot/golden tests for rendered prompts by provider/profile.
+- [ ] **H4-005 (demo):** Provider prompt update via module-only edit, verified by prompt snapshots and runtime smoke.
 
-- [x] **D-001:** Create `src/runtime/tasks/types.ts`.
-- [x] **D-002:** Create `src/runtime/tasks/state-machine.ts`.
-- [x] **D-003:** Create `src/runtime/tasks/persistence.ts`.
-- [x] **D-004:** Create `src/runtime/tasks/store.ts`.
-- [x] **D-005:** Keep `src/runtime/tasks/index.ts` as exports only.
-- [x] **D-006 (tests):** Create `src/runtime/tasks/store.test.ts`.
-- [x] **D-007 (tests):** Create `src/runtime/tasks/persistence.test.ts`.
-- [x] **D-008 (tests):** Create `src/runtime/tasks/policies.test.ts`.
-- [x] **D-009 (tests):** Create `src/runtime/tasks/events.test.ts`.
-- [x] **D-010 (cleanup):** Remove legacy `src/runtime/tasks.test.ts` after parity.
+### Sprint H5 — Provider packs (Anthropic/OpenAI/Google/Moonshot)
 
-### Epic E — Schema decomposition (`src/schema/*`)
+- [ ] **H5-001:** Deliver first-party provider prompt packs for:
+  - anthropic / claude
+  - openai / gpt
+  - google / gemini
+  - moonshot / kimi
+- [ ] **H5-002:** Keep shared invariant section across providers (tooling safety, concise output, non-leak constraints).
+- [ ] **H5-003:** Add provider-specific behavior tuning requirements per pack (format style, tool-call bias, verbosity budget).
+- [ ] **H5-004:** Ensure unknown providers always route to generic pack.
+- [ ] **H5-005 (tests):** Contract tests proving each known provider resolves to expected pack.
+- [ ] **H5-006 (demo):** 4-provider smoke pass showing distinct selected profile labels in runtime diagnostics.
 
-- [x] **E-001:** Create `src/schema/shared.ts`.
-- [x] **E-002:** Create `src/schema/task-tool.ts`.
-- [x] **E-003:** Create `src/schema/task-record.ts`.
-- [x] **E-004:** Create `src/schema/runtime-config.ts`.
-- [x] **E-005:** Keep `src/schema/index.ts` as re-export surface only.
-- [x] **E-006 (tests):** Create `src/schema/task-tool.test.ts`.
-- [x] **E-007 (tests):** Create `src/schema/task-record.test.ts`.
-- [x] **E-008 (tests):** Create `src/schema/runtime-config.test.ts`.
-- [x] **E-009 (cleanup):** Remove legacy `src/schema.test.ts` after parity.
+### Sprint H6 — Runtime integration + observability
 
-### Epic F — Runtime UI slimdown (`src/runtime/ui.ts`)
+- [ ] **H6-001:** Integrate dynamic prompt resolver into SDK backend prompt bootstrap + post-model-selection prompt application.
+- [ ] **H6-002:** Add prompt/profile observability fields to runtime diagnostics (without leaking full system prompt in normal mode).
+- [ ] **H6-003:** Add safe debug toggle for prompt profile/source tracing.
+- [ ] **H6-004:** Preserve existing task-tool external contract; no breaking payload schema changes.
+- [ ] **H6-005 (tests):** End-to-end backend tests asserting selected profile path and fallback behavior.
+- [ ] **H6-006 (demo):** Interactive run proving runtime picks profile from active model in-session.
 
-- [x] **F-001:** Limit `src/runtime/ui.ts` to presentation assembly only.
-- [x] **F-002:** Consume `src/runtime/task-transcript.ts` for parsing/tool-row extraction.
-- [x] **F-003 (tests):** Keep `src/runtime/ui.test.ts` presentation-only assertions.
-- [x] **F-004 (tests):** Ensure parser-specific assertions live only in transcript tests.
+### Sprint H7 — Docs + rollout hardening
 
-### Epic G — Task execution runtime split + hot-path perf (`src/tools/task/execution/*`)
+- [ ] **H7-001:** Document prompt-profile architecture and config contract in `README.md` / `ARCH.md`.
+- [ ] **H7-002:** Add operator playbook: how to add new provider/profile without touching core routing logic.
+- [ ] **H7-003:** Add migration notes from static/env matchers to dynamic/config-driven routing.
+- [ ] **H7-004 (demo):** Repro steps for adding a new provider profile and validating selection end-to-end.
 
-- [x] **G-001:** Split `src/tools/task/execution.ts` into op-focused modules (`start|status|wait|send|cancel|batch|lifecycle|projection|shared`).
-- [x] **G-002:** Keep `src/tools/task/execution.ts` as compatibility export surface.
-- [x] **G-003:** Add event-projection caching for `tool_rows` + `assistant_text` derivation from event arrays.
-- [x] **G-004:** Batch streamed backend events into chunked append/update flushes to reduce store/update churn.
-- [x] **G-005:** Optimize batch hydration to single `getTasks(ids)` pass.
-- [x] **G-006:** Replace multi-pass batch counters with single-pass aggregation.
-- [x] **G-007:** Update wait loop to hybrid execution-promise + bounded polling path.
+---
 
-## Regression gate (required per completed ticket)
+## Regression gate (required per sprint)
 
 - `yarn test:subagents`
 - `yarn typecheck`
