@@ -5,6 +5,7 @@ import type { TaskExecutionEvent } from "../events";
 
 export type TaskLifecycleState = TaskRecord["state"];
 export type TaskInvocationMode = "task-routed" | "primary-tool";
+export const TASK_PERSISTENCE_SCHEMA_VERSION = 1;
 
 export interface TaskRuntimeObservability {
   readonly provider: string;
