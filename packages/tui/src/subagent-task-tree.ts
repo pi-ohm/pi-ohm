@@ -9,7 +9,7 @@ const ANSI_BOLD_ON = "\u001b[1m";
 const ANSI_BOLD_OFF = "\u001b[22m";
 const ANSI_GREEN_ON = "\u001b[32m";
 const ANSI_RED_ON = "\u001b[31m";
-const ANSI_LIGHT_GREY_ON = "\u001b[90m";
+const ANSI_LIGHT_GREY_ON = "\u001b[37m";
 const ANSI_FG_RESET = "\u001b[39m";
 
 export type SubagentTaskTreeStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
