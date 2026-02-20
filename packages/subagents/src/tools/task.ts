@@ -200,7 +200,7 @@ function resolveTaskMaxExpiredEntries(): number | undefined {
 function resolveOnUpdateThrottleMs(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS");
   if (fromEnv !== undefined) return fromEnv;
-  return 60;
+  return 120;
 }
 
 function resolveDefaultTaskPersistencePath(): string {
@@ -1819,7 +1819,7 @@ const onUpdateLastEmissionByCallback = new WeakMap<
     readonly assistantText: string | undefined;
   }
 >();
-const LIVE_UI_HEARTBEAT_MS = 60;
+const LIVE_UI_HEARTBEAT_MS = 120;
 
 function isThrottleBypassUpdate(details: TaskToolResultDetails): boolean {
   if (
@@ -1849,28 +1849,12 @@ function shouldEmitOnUpdate(
   const nextToolRowsSignature = details.tool_rows ? details.tool_rows.join("\n") : "";
   const nextAssistantText = details.assistant_text;
 
-  const throttleMs = resolveOnUpdateThrottleMs();
-
   if (previous && previous.signature === nextSignature) {
-    if (
-      (details.status === "running" || details.status === "queued") &&
-      nowEpochMs - previous.atEpochMs >= throttleMs
-    ) {
-      onUpdateLastEmissionByCallback.set(callback, {
-        atEpochMs: nowEpochMs,
-        signature: nextSignature,
-        status: details.status,
-        eventCount: nextEventCount,
-        toolRowsSignature: nextToolRowsSignature,
-        assistantText: nextAssistantText,
-      });
-      return true;
-    }
-
     return false;
   }
 
   const bypassThrottle = isThrottleBypassUpdate(details);
+  const throttleMs = resolveOnUpdateThrottleMs();
   const hasRealtimeDelta =
     previous !== undefined &&
     (previous.status !== details.status ||
@@ -1946,7 +1930,7 @@ function startTaskProgressPulse(input: {
   readonly ui: RunTaskToolInput["ui"];
   readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
 }): () => void {
-  if (!input.onUpdate) {
+  if (!input.onUpdate || input.hasUI) {
     return () => {};
   }
 

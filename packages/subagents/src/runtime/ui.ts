@@ -455,7 +455,7 @@ function capitalize(input: string): string {
   return input[0].toUpperCase() + input.slice(1);
 }
 
-function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): SubagentTaskTreeEntry {
+function toTreeEntry(snapshot: TaskRuntimeSnapshot, _nowEpochMs: number): SubagentTaskTreeEntry {
   const parsed = snapshot.output ? parseOutputSections(snapshot.output) : undefined;
   const eventToolCalls = toToolRowsFromEvents(snapshot.events);
   const assistantText = assistantTextFromEvents(snapshot.events);
@@ -469,8 +469,6 @@ function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): Subagen
       snapshot.summary ??
       "(no output)");
 
-  const spinnerFrame = Math.floor(Math.max(0, nowEpochMs - snapshot.startedAtEpochMs) / 120);
-
   return {
     id: snapshot.id,
     status: toTreeStatus(snapshot.state),
@@ -478,7 +476,6 @@ function toTreeEntry(snapshot: TaskRuntimeSnapshot, nowEpochMs: number): Subagen
     prompt: snapshot.prompt,
     toolCalls: eventToolCalls.length > 0 ? eventToolCalls : (parsed?.toolCalls ?? []),
     result,
-    spinnerFrame,
   };
 }
 
