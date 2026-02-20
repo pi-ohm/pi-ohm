@@ -1077,6 +1077,13 @@ function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean)
     lines.push(`batch: accepted ${details.accepted_count}/${details.total_count}`);
   }
 
+  if (details.route && details.route !== details.backend) {
+    lines.push(`route fallback: ${details.backend} -> ${details.route}`);
+    if (details.route === "interactive-shell") {
+      lines.push("note: live sdk tool streaming unavailable on interactive-shell fallback");
+    }
+  }
+
   return lines.join("\n");
 }
 

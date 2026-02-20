@@ -604,6 +604,36 @@ defineTest("formatTaskToolResult shows verbose metadata when OHM_DEBUG=true", ()
   }
 });
 
+defineTest("formatTaskToolResult surfaces non-debug route fallback hints", () => {
+  const previous = process.env.OHM_DEBUG;
+  delete process.env.OHM_DEBUG;
+
+  try {
+    const compact = formatTaskToolResult(
+      {
+        op: "start",
+        status: "failed",
+        summary: "Task failed after fallback",
+        backend: "interactive-sdk",
+        route: "interactive-shell",
+        error_code: "task_backend_timeout",
+        error_message: "Timed out",
+      },
+      false,
+    );
+    const plain = stripAnsi(compact);
+
+    assert.match(plain, /route fallback: interactive-sdk -> interactive-shell/);
+    assert.match(plain, /live sdk tool streaming unavailable on interactive-shell fallback/);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.OHM_DEBUG;
+    } else {
+      process.env.OHM_DEBUG = previous;
+    }
+  }
+});
+
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
   const result = await runTask({
     params: { op: "start", prompt: "missing fields" },

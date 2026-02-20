@@ -775,6 +775,40 @@ defineTest("PiSdkTaskExecutionBackend uses extended timeout budget for oracle", 
   assert.equal(capturedTimeoutMs, 420_000);
 });
 
+defineTest("PiSdkTaskExecutionBackend uses extended timeout budget for librarian", async () => {
+  let capturedTimeoutMs: number | undefined;
+  const backend = new PiSdkTaskExecutionBackend(async (input) => {
+    capturedTimeoutMs = input.timeoutMs;
+    return {
+      output: "librarian output",
+      events: [],
+      timedOut: false,
+      aborted: false,
+      runtime: "pi-sdk",
+    };
+  }, 1_000);
+
+  const result = await backend.executeStart({
+    taskId: "task_sdk_librarian_timeout_budget",
+    subagent: {
+      id: "librarian",
+      name: "Librarian",
+      summary: "Codebase understanding specialist",
+      whenToUse: ["large codebases"],
+      scaffoldPrompt: "map architecture",
+      primary: true,
+    },
+    description: "Large repo synthesis",
+    prompt: "Do deep repository analysis",
+    cwd: "/tmp/project",
+    config: makeConfig("interactive-sdk"),
+    signal: undefined,
+  });
+
+  assert.equal(Result.isOk(result), true);
+  assert.equal(capturedTimeoutMs, 300_000);
+});
+
 defineTest("PiCliTaskExecutionBackend delegates to sdk backend when configured", async () => {
   let cliCalled = false;
 

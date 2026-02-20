@@ -139,6 +139,7 @@ function sanitizeNestedOutput(output: string): NestedOutputNormalization {
 }
 
 const DEFAULT_BACKEND_TIMEOUT_MS = 180_000;
+const DEFAULT_LIBRARIAN_TIMEOUT_MS = 300_000;
 const DEFAULT_ORACLE_TIMEOUT_MS = 420_000;
 
 function parsePositiveInteger(raw: string | undefined): number | undefined {
@@ -165,6 +166,10 @@ function resolveBackendTimeoutMs(input: {
 }): number {
   const fromSubagentEnv = getSubagentTimeoutMsFromEnv(input.subagent.id);
   if (fromSubagentEnv !== undefined) return fromSubagentEnv;
+
+  if (input.subagent.id === "librarian") {
+    return Math.max(input.fallbackTimeoutMs, DEFAULT_LIBRARIAN_TIMEOUT_MS);
+  }
 
   if (input.subagent.id === "oracle") {
     return Math.max(input.fallbackTimeoutMs, DEFAULT_ORACLE_TIMEOUT_MS);
