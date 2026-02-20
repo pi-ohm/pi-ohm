@@ -100,6 +100,8 @@ Generally, you want to treat them as if you were working in an agile team.
 
 <important>
 You want to break tasks in TODO.md down into verifiable, demoable "sprints". Some questions to consider: how would you do it (**timeline and legacy APIs DO NOT matter**) - every task/ticket should be an atomic, commitable piece of work that is testable. Every sprint should be a demoable piece of software that can be run, tested, and build on top of previous work/sprints. Be exhaustive. Be clear. Be technical - but technical in requirements - not implementation details per se. It should read like it's gone through a single back and forth with a technical product manager. Always focus on small atomic tasks that compose a clear goal for each sprint.
+
+**IMPORTANT:** we have no external consumers, so code should not be written in a legacy-first manner. Nor should we ever care about backwards compatibility, backporting legacy APIs, or generally anything that could potentially prohibit us from (a) shipping fast and (b) breaking things.
 </important>
 
 ## Error Handling
