@@ -1036,7 +1036,7 @@ function treeRenderOptions(expanded: boolean): {
 
   return {
     compact: true,
-    maxPromptLines: 2,
+    maxPromptLines: Number.MAX_SAFE_INTEGER,
     maxToolCalls: 2,
     maxResultLines: 4,
   };
