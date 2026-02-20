@@ -200,7 +200,7 @@ function resolveTaskMaxExpiredEntries(): number | undefined {
 function resolveOnUpdateThrottleMs(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS");
   if (fromEnv !== undefined) return fromEnv;
-  return 120;
+  return 60;
 }
 
 function resolveDefaultTaskPersistencePath(): string {
@@ -1033,28 +1033,8 @@ function treeRenderOptions(expanded: boolean): {
   };
 }
 
-function isBackgroundStatus(status: TaskToolStatus): boolean {
-  return status === "running" || status === "queued";
-}
-
-function renderBackgroundLine(entry: SubagentTaskTreeEntry): string {
-  const marker = entry.status === "running" ? "⠋" : "…";
-  return `${marker} ${entry.title} · background`;
-}
-
 function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
   const entries = toTaskTreeEntries(details, expanded);
-
-  if (!expanded && entries.every((entry) => isBackgroundStatus(entry.status))) {
-    const lines = entries.map((entry) => renderBackgroundLine(entry));
-    if (details.task_id) {
-      lines.push(`task_id: ${details.task_id}`);
-    }
-    if (details.wait_status && details.wait_status !== "completed") {
-      lines.push(`wait: ${details.wait_status}`);
-    }
-    return lines.join("\n");
-  }
 
   const lines = [
     ...renderSubagentTaskTreeLines({
@@ -1619,16 +1599,30 @@ async function runTaskExecutionLifecycle(input: {
     });
   };
 
-  const execution = await input.deps.backend.executeStart({
+  const stopProgressPulse = startTaskProgressPulse({
+    op: "start",
     taskId: input.taskId,
-    subagent: input.subagent,
-    description: input.description,
-    prompt: input.prompt,
-    cwd: input.cwd,
-    config: input.config,
-    signal: input.signal,
-    onEvent: onBackendEvent,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
   });
+
+  let execution: Awaited<ReturnType<TaskExecutionBackend["executeStart"]>>;
+  try {
+    execution = await input.deps.backend.executeStart({
+      taskId: input.taskId,
+      subagent: input.subagent,
+      description: input.description,
+      prompt: input.prompt,
+      cwd: input.cwd,
+      config: input.config,
+      signal: input.signal,
+      onEvent: onBackendEvent,
+    });
+  } finally {
+    stopProgressPulse();
+  }
 
   const latest = input.deps.taskStore.getTask(input.taskId);
   if (latest && isTerminalState(latest.state)) {
@@ -1855,12 +1849,28 @@ function shouldEmitOnUpdate(
   const nextToolRowsSignature = details.tool_rows ? details.tool_rows.join("\n") : "";
   const nextAssistantText = details.assistant_text;
 
+  const throttleMs = resolveOnUpdateThrottleMs();
+
   if (previous && previous.signature === nextSignature) {
+    if (
+      (details.status === "running" || details.status === "queued") &&
+      nowEpochMs - previous.atEpochMs >= throttleMs
+    ) {
+      onUpdateLastEmissionByCallback.set(callback, {
+        atEpochMs: nowEpochMs,
+        signature: nextSignature,
+        status: details.status,
+        eventCount: nextEventCount,
+        toolRowsSignature: nextToolRowsSignature,
+        assistantText: nextAssistantText,
+      });
+      return true;
+    }
+
     return false;
   }
 
   const bypassThrottle = isThrottleBypassUpdate(details);
-  const throttleMs = resolveOnUpdateThrottleMs();
   const hasRealtimeDelta =
     previous !== undefined &&
     (previous.status !== details.status ||
@@ -1926,6 +1936,44 @@ function ensureTaskLiveUiHeartbeat(ui: TaskToolUiHandle, deps: TaskToolDependenc
   }, LIVE_UI_HEARTBEAT_MS);
 
   liveUiHeartbeatBySurface.set(ui, interval);
+}
+
+function startTaskProgressPulse(input: {
+  readonly op: "start" | "send";
+  readonly taskId: string;
+  readonly deps: TaskToolDependencies;
+  readonly hasUI: boolean;
+  readonly ui: RunTaskToolInput["ui"];
+  readonly onUpdate: AgentToolUpdateCallback<TaskToolResultDetails> | undefined;
+}): () => void {
+  if (!input.onUpdate) {
+    return () => {};
+  }
+
+  const interval = setInterval(() => {
+    const snapshot = input.deps.taskStore.getTask(input.taskId);
+    if (!snapshot) {
+      clearInterval(interval);
+      return;
+    }
+
+    if (isTerminalState(snapshot.state)) {
+      clearInterval(interval);
+      return;
+    }
+
+    emitTaskRuntimeUpdate({
+      details: snapshotToTaskResultDetails(input.op, snapshot, snapshot.output),
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+  }, LIVE_UI_HEARTBEAT_MS);
+
+  return () => {
+    clearInterval(interval);
+  };
 }
 
 function emitTaskRuntimeUpdate(input: {
@@ -2816,18 +2864,32 @@ async function runTaskSend(
     });
   };
 
-  const sendResult = await input.deps.backend.executeSend({
+  const stopProgressPulse = startTaskProgressPulse({
+    op: "send",
     taskId: interaction.value.id,
-    subagent,
-    description: interaction.value.description,
-    initialPrompt: interaction.value.prompt,
-    followUpPrompts: interaction.value.followUpPrompts,
-    prompt: params.prompt,
-    cwd: input.cwd,
-    config: config.config,
-    signal: input.signal,
-    onEvent: onBackendEvent,
+    deps: input.deps,
+    hasUI: input.hasUI,
+    ui: input.ui,
+    onUpdate: input.onUpdate,
   });
+
+  let sendResult: Awaited<ReturnType<TaskExecutionBackend["executeSend"]>>;
+  try {
+    sendResult = await input.deps.backend.executeSend({
+      taskId: interaction.value.id,
+      subagent,
+      description: interaction.value.description,
+      initialPrompt: interaction.value.prompt,
+      followUpPrompts: interaction.value.followUpPrompts,
+      prompt: params.prompt,
+      cwd: input.cwd,
+      config: config.config,
+      signal: input.signal,
+      onEvent: onBackendEvent,
+    });
+  } finally {
+    stopProgressPulse();
+  }
 
   if (Result.isError(sendResult)) {
     const failed = input.deps.taskStore.markFailed(

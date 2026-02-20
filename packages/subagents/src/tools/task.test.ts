@@ -514,7 +514,7 @@ defineTest("formatTaskToolResult prefers structured tool_rows over output scrapi
   assert.match(plain, /✓ Read/);
 });
 
-defineTest("formatTaskToolResult uses minimal inline style for running background tasks", () => {
+defineTest("formatTaskToolResult renders running tasks as full tree", () => {
   const compact = formatTaskToolResult(
     {
       op: "start",
@@ -527,11 +527,11 @@ defineTest("formatTaskToolResult uses minimal inline style for running backgroun
     },
     false,
   );
+  const plain = stripAnsi(compact);
 
-  assert.match(compact, /^⠋ Finder · Background indexing · background/m);
-  assert.match(compact, /task_id: task_1/);
-  assert.doesNotMatch(compact, /├──/);
-  assert.doesNotMatch(compact, /╰──/);
+  assert.match(plain, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Background indexing/);
+  assert.match(plain, /├── Background indexing/);
+  assert.match(plain, /╰── Working/);
 });
 
 defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabled", () => {
