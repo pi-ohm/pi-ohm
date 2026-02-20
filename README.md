@@ -14,6 +14,12 @@
   </a>
 </p>
 
+> 🚧 WIP 🚧
+>
+> I expected this to be somewhat difficult. Getting the UX right is really important to me. Taking my time instead of 100% slopping something together and expecting it to feel as polished as Amp.
+>
+> Currently, only @pi-ohm/subagents@dev and @pi-ohm/subagents@dev are working.
+
 Monorepo for modular, [Amp Code](https://ampcode.com)-inspired Pi workflows. All extensions are packaged under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
 
 Current features include: modes, subagents (librarian, finder, oracle, painter), session search, handoff. More on these in their respective package (see highlights below).

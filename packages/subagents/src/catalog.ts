@@ -9,6 +9,11 @@ export interface OhmSubagentDefinition {
    * instead of requiring delegated Task-style invocation.
    */
   primary?: boolean;
+  /**
+   * Internal profiles are hidden from model-facing task roster exposure unless
+   * policy explicitly allows internal routing.
+   */
+  internal?: boolean;
   whenToUse: string[];
   scaffoldPrompt: string;
   requiresPackage?: string;

@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/subagents",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/subagents#readme",
   "repository": {
     "type": "git",
@@ -20,10 +20,23 @@
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*",
+    "@pi-ohm/tui": "workspace:*",
+    "better-result": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@mariozechner/pi-tui": {
+      "optional": true
+    },
+    "@sinclair/typebox": {
+      "optional": true
+    }
   },
   "pi": {
     "extensions": [

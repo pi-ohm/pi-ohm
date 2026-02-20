@@ -40,6 +40,7 @@ const ALLOWED_SCOPES = new Set([
   "root",
   "mono",
   "core",
+  "tui",
 ]);
 
 const HEADER_PATTERN =

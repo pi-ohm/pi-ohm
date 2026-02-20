@@ -11,7 +11,7 @@ import {
 export const OHM_EXTENSION_NAME = "pi-ohm";
 
 export type OhmMode = "rush" | "smart" | "deep";
-export type OhmSubagentBackend = "none" | "interactive-shell" | "custom-plugin";
+export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
 
 export interface OhmFeatureFlags {
   handoff: boolean;
@@ -38,11 +38,27 @@ export interface OhmPainterProviders {
   };
 }
 
+export interface OhmSubagentProfileRuntimeConfig {
+  model: string;
+}
+
+export interface OhmSubagentRuntimeConfig {
+  taskMaxConcurrency: number;
+  taskRetentionMs: number;
+  permissions: {
+    default: "allow" | "deny";
+    subagents: Record<string, "allow" | "deny">;
+    allowInternalRouting: boolean;
+  };
+  profiles: Record<string, OhmSubagentProfileRuntimeConfig>;
+}
+
 export interface OhmRuntimeConfig {
   defaultMode: OhmMode;
   subagentBackend: OhmSubagentBackend;
   features: OhmFeatureFlags;
   painter: OhmPainterProviders;
+  subagents?: OhmSubagentRuntimeConfig;
 }
 
 export interface OhmConfigPaths {
@@ -60,7 +76,7 @@ export interface LoadedOhmRuntimeConfig {
 
 const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
   defaultMode: "smart",
-  subagentBackend: "interactive-shell",
+  subagentBackend: "interactive-sdk",
   features: {
     handoff: true,
     subagents: true,
@@ -84,9 +100,23 @@ const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
       apiVersion: "2025-04-01-preview",
     },
   },
+  subagents: {
+    taskMaxConcurrency: 3,
+    taskRetentionMs: 1000 * 60 * 60 * 24,
+    permissions: {
+      default: "allow",
+      subagents: {},
+      allowInternalRouting: false,
+    },
+    profiles: {},
+  },
 };
 
 type JsonMap = Record<string, unknown>;
+
+function isJsonMap(value: unknown): value is JsonMap {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function expandHome(value: string): string {
   if (value === "~") return os.homedir();
@@ -118,11 +148,9 @@ export function resolveOhmConfigPaths(cwd: string): OhmConfigPaths {
 async function readJsonFile(filePath: string): Promise<JsonMap | null> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as JsonMap;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isJsonMap(parsed)) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -147,7 +175,14 @@ function normalizeSubagentBackend(
   value: unknown,
   fallback: OhmSubagentBackend,
 ): OhmSubagentBackend {
-  if (value === "none" || value === "interactive-shell" || value === "custom-plugin") return value;
+  if (
+    value === "none" ||
+    value === "interactive-shell" ||
+    value === "interactive-sdk" ||
+    value === "custom-plugin"
+  ) {
+    return value;
+  }
   return fallback;
 }
 
@@ -156,15 +191,115 @@ function normalizeString(value: unknown, fallback: string): string {
   return fallback;
 }
 
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  if (typeof value !== "number") return fallback;
+  if (!Number.isInteger(value) || value <= 0) return fallback;
+  return value;
+}
+
+function normalizePermissionDecision(value: unknown, fallback: "allow" | "deny"): "allow" | "deny" {
+  if (value === "allow" || value === "deny") return value;
+
+  // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
+  if (value === "ask") return "deny";
+
+  return fallback;
+}
+
+function normalizePermissionDecisionMap(
+  value: unknown,
+  fallback: Record<string, "allow" | "deny">,
+): Record<string, "allow" | "deny"> {
+  if (!isJsonMap(value)) {
+    return fallback;
+  }
+
+  const normalized: Record<string, "allow" | "deny"> = {};
+  for (const [key, decision] of Object.entries(value)) {
+    const trimmedKey = key.trim().toLowerCase();
+    if (trimmedKey.length === 0) continue;
+
+    const normalizedDecision = normalizePermissionDecision(decision, "allow");
+    normalized[trimmedKey] = normalizedDecision;
+  }
+
+  return normalized;
+}
+
+function normalizeSubagentModelOverride(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+
+  const slashIndex = trimmed.indexOf("/");
+  if (slashIndex <= 0 || slashIndex >= trimmed.length - 1) return undefined;
+
+  const provider = trimmed.slice(0, slashIndex).trim().toLowerCase();
+  const model = trimmed.slice(slashIndex + 1).trim();
+  if (provider.length === 0 || model.length === 0) return undefined;
+
+  return `${provider}/${model}`;
+}
+
+const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
+  "taskMaxConcurrency",
+  "taskRetentionMs",
+  "permissions",
+  "profiles",
+]);
+
+function normalizeSubagentProfileMap(
+  value: unknown,
+  fallback: Record<string, OhmSubagentProfileRuntimeConfig>,
+): Record<string, OhmSubagentProfileRuntimeConfig> {
+  const normalized = structuredClone(fallback);
+  if (!isJsonMap(value)) return normalized;
+
+  for (const [rawKey, rawValue] of Object.entries(value)) {
+    const key = rawKey.trim().toLowerCase();
+    if (key.length === 0) continue;
+    if (!isJsonMap(rawValue)) continue;
+
+    const model = normalizeSubagentModelOverride(rawValue.model);
+    if (!model) continue;
+
+    normalized[key] = { model };
+  }
+
+  return normalized;
+}
+
+function normalizeInlineSubagentProfiles(
+  value: JsonMap | undefined,
+  fallback: Record<string, OhmSubagentProfileRuntimeConfig>,
+): Record<string, OhmSubagentProfileRuntimeConfig> {
+  const normalized = structuredClone(fallback);
+  if (!value) return normalized;
+
+  for (const [rawKey, rawValue] of Object.entries(value)) {
+    if (SUBAGENT_RUNTIME_RESERVED_KEYS.has(rawKey)) continue;
+
+    const key = rawKey.trim().toLowerCase();
+    if (key.length === 0) continue;
+    if (!isJsonMap(rawValue)) continue;
+
+    const model = normalizeSubagentModelOverride(rawValue.model);
+    if (!model) continue;
+
+    normalized[key] = { model };
+  }
+
+  return normalized;
+}
+
 function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
   const next: OhmRuntimeConfig = structuredClone(base);
 
   next.defaultMode = normalizeMode(patch.defaultMode, next.defaultMode);
   next.subagentBackend = normalizeSubagentBackend(patch.subagentBackend, next.subagentBackend);
 
-  const featurePatch = (
-    patch.features && typeof patch.features === "object" ? (patch.features as JsonMap) : {}
-  ) as JsonMap;
+  const featurePatch = isJsonMap(patch.features) ? patch.features : {};
 
   next.features.handoff = normalizeBoolean(featurePatch.handoff, next.features.handoff);
   next.features.subagents = normalizeBoolean(featurePatch.subagents, next.features.subagents);
@@ -181,27 +316,13 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     next.features.painterImagegen,
   );
 
-  const painterPatch = (
-    patch.painter && typeof patch.painter === "object" ? (patch.painter as JsonMap) : {}
-  ) as JsonMap;
+  const painterPatch = isJsonMap(patch.painter) ? patch.painter : {};
 
-  const googlePatch = (
-    painterPatch.googleNanoBanana && typeof painterPatch.googleNanoBanana === "object"
-      ? (painterPatch.googleNanoBanana as JsonMap)
-      : {}
-  ) as JsonMap;
+  const googlePatch = isJsonMap(painterPatch.googleNanoBanana) ? painterPatch.googleNanoBanana : {};
 
-  const openaiPatch = (
-    painterPatch.openai && typeof painterPatch.openai === "object"
-      ? (painterPatch.openai as JsonMap)
-      : {}
-  ) as JsonMap;
+  const openaiPatch = isJsonMap(painterPatch.openai) ? painterPatch.openai : {};
 
-  const azurePatch = (
-    painterPatch.azureOpenai && typeof painterPatch.azureOpenai === "object"
-      ? (painterPatch.azureOpenai as JsonMap)
-      : {}
-  ) as JsonMap;
+  const azurePatch = isJsonMap(painterPatch.azureOpenai) ? painterPatch.azureOpenai : {};
 
   next.painter.googleNanoBanana.enabled = normalizeBoolean(
     googlePatch.enabled,
@@ -231,6 +352,68 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
     azurePatch.apiVersion,
     next.painter.azureOpenai.apiVersion,
   );
+
+  const subagentPatch = isJsonMap(patch.subagents) ? patch.subagents : undefined;
+
+  const subagentDefaults =
+    next.subagents ??
+    ({
+      taskMaxConcurrency: DEFAULT_OHM_CONFIG.subagents?.taskMaxConcurrency ?? 3,
+      taskRetentionMs: DEFAULT_OHM_CONFIG.subagents?.taskRetentionMs ?? 1000 * 60 * 60 * 24,
+      permissions: {
+        default: DEFAULT_OHM_CONFIG.subagents?.permissions.default ?? "allow",
+        subagents: DEFAULT_OHM_CONFIG.subagents?.permissions.subagents ?? {},
+        allowInternalRouting:
+          DEFAULT_OHM_CONFIG.subagents?.permissions.allowInternalRouting ?? false,
+      },
+      profiles: DEFAULT_OHM_CONFIG.subagents?.profiles ?? {},
+    } satisfies OhmSubagentRuntimeConfig);
+
+  const taskMaxConcurrency = normalizePositiveInteger(
+    subagentPatch?.taskMaxConcurrency,
+    subagentDefaults.taskMaxConcurrency,
+  );
+
+  const taskRetentionMs = normalizePositiveInteger(
+    subagentPatch?.taskRetentionMs,
+    subagentDefaults.taskRetentionMs,
+  );
+
+  const permissionsPatch = isJsonMap(subagentPatch?.permissions)
+    ? subagentPatch.permissions
+    : undefined;
+
+  const permissionsDefault = normalizePermissionDecision(
+    permissionsPatch?.default,
+    subagentDefaults.permissions.default,
+  );
+
+  const permissionsSubagents = normalizePermissionDecisionMap(
+    permissionsPatch?.subagents,
+    subagentDefaults.permissions.subagents,
+  );
+
+  const allowInternalRouting = normalizeBoolean(
+    permissionsPatch?.allowInternalRouting,
+    subagentDefaults.permissions.allowInternalRouting,
+  );
+
+  const explicitProfiles = normalizeSubagentProfileMap(
+    isJsonMap(subagentPatch?.profiles) ? subagentPatch.profiles : undefined,
+    subagentDefaults.profiles,
+  );
+  const profiles = normalizeInlineSubagentProfiles(subagentPatch, explicitProfiles);
+
+  next.subagents = {
+    taskMaxConcurrency,
+    taskRetentionMs,
+    permissions: {
+      default: permissionsDefault,
+      subagents: permissionsSubagents,
+      allowInternalRouting,
+    },
+    profiles,
+  };
 
   return next;
 }
@@ -376,6 +559,15 @@ export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntim
   };
 }
 
+export function getSubagentConfiguredModel(
+  config: OhmRuntimeConfig,
+  subagentId: string,
+): string | undefined {
+  const key = subagentId.trim().toLowerCase();
+  if (key.length === 0) return undefined;
+  return config.subagents?.profiles[key]?.model;
+}
+
 let didRegisterSettings = false;
 
 export function registerOhmSettings(pi: ExtensionAPI): void {
@@ -395,7 +587,7 @@ export function registerOhmSettings(pi: ExtensionAPI): void {
       label: "Subagent Backend",
       description: "How Pi Ohm should delegate subagents",
       defaultValue: DEFAULT_OHM_CONFIG.subagentBackend,
-      values: ["interactive-shell", "custom-plugin", "none"],
+      values: ["interactive-shell", "interactive-sdk", "custom-plugin", "none"],
     },
     {
       id: "feature-handoff",

@@ -10,6 +10,7 @@
 
 This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
 
+- `packages/config` → shared tui, mostly composites from @mariozechner/pi-tui / https://github.com/badlogic/pi-mono/tree/main/packages/tui
 - `packages/config` → shared config/settings helpers
 - `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
 - `packages/handoff` → handoff + handoff visualizer
@@ -40,6 +41,9 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 
 - Scope is required for all conventional commits.
 - Multiple scopes are allowed with commas, e.g. `fix(session,subagents): ...`.
+- Commit messages must be technical and descriptive: avoid planning labels/terminology (for example, avoid references to "sprint" in commit titles/bodies).
+- Commit messages must include a non-empty body that explains the concrete implementation details, major file/module changes, and verification performed.
+- Prefer longer, explicit commit bodies over terse one-line summaries.
 
 ### Scope usage guide
 
@@ -86,13 +90,19 @@ You should often write failing tests for implementations prior to actually imple
 
 If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
 
+Tests should live in test files alongside the files that you're testing.
+
 ## TODO.md & ARCH.md
 
 These two files serve as a strong human-agent plane for planning and implementing features.
 
 Generally, you want to treat them as if you were working in an agile team.
 
-You want to break task down into "sprints". Some questions to consider: how would you do it (timeline doesnt matter) - every task/ticket should be an atomic, commitable piece of work that is testable. Every sprint should be a demoable piece of software that can be run, tested, and build on top of previous work/sprints. Be exhaustive. Be clear. Be technical - but technical in requirements - not implementation details per se. It should read like it's gone through a single back and forth with a technical product manager. Always focus on small atomic tasks that compose a clear goal for each sprint.
+<important>
+You want to break tasks in TODO.md down into verifiable, demoable "sprints". Some questions to consider: how would you do it (**timeline and legacy APIs DO NOT matter**) - every task/ticket should be an atomic, commitable piece of work that is testable. Every sprint should be a demoable piece of software that can be run, tested, and build on top of previous work/sprints. Be exhaustive. Be clear. Be technical - but technical in requirements - not implementation details per se. It should read like it's gone through a single back and forth with a technical product manager. Always focus on small atomic tasks that compose a clear goal for each sprint.
+
+**IMPORTANT:** we have no external consumers, so code should not be written in a legacy-first manner. Nor should we ever care about backwards compatibility, backporting legacy APIs, or generally anything that could potentially prohibit us from (a) shipping fast and (b) breaking things.
+</important>
 
 ## Error Handling
 

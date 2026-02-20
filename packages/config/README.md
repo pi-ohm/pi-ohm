@@ -11,3 +11,22 @@ Responsibilities:
   - `${configDir}/ohm.json`
   - `${configDir}/ohm.providers.json`
 - expose typed runtime config helpers to feature packages
+
+Subagents runtime config highlights:
+
+- `subagents.taskMaxConcurrency`
+- `subagents.taskRetentionMs`
+- `subagents.permissions.default` (`allow|deny`)
+- `subagents.permissions.subagents` (per-subagent overrides)
+- `subagents.permissions.allowInternalRouting`
+- `subagents.<id>.model` (`<provider>/<model>` or `<provider>/<model>:<thinking>`), e.g.:
+
+```jsonc
+{
+  "subagents": {
+    "finder": { "model": "openai/gpt-4o" },
+    "oracle": { "model": "anthropic/claude-sonnet-4-5" },
+    "librarian": { "model": "openai/gpt-5:high" },
+  },
+}
+```
