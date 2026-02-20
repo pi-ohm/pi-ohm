@@ -148,7 +148,10 @@ export function createTaskLiveUiCoordinator(
   let pendingPresentation: TaskRuntimePresentation | undefined;
   let flushTimeout: ReturnType<typeof setTimeout> | undefined;
   let idleClearTimeout: ReturnType<typeof setTimeout> | undefined;
+  let toolsExpansionWatch: ReturnType<typeof setInterval> | undefined;
   let lastFlushAtEpochMs = 0;
+  let lastRenderedPresentation: TaskRuntimePresentation | undefined;
+  let lastRenderedToolsExpanded = resolveToolsExpanded();
 
   let lastStatusText: string | undefined;
   let lastWidgetSignature = "";
@@ -205,6 +208,7 @@ export function createTaskLiveUiCoordinator(
   const scheduleIdleClear = (): void => {
     if (idleGraceMs <= 0) {
       apply(undefined, undefined);
+      lastRenderedPresentation = undefined;
       return;
     }
 
@@ -213,6 +217,7 @@ export function createTaskLiveUiCoordinator(
     idleClearTimeout = setTimeout(() => {
       idleClearTimeout = undefined;
       apply(undefined, undefined);
+      lastRenderedPresentation = undefined;
     }, idleGraceMs);
   };
 
@@ -232,11 +237,16 @@ export function createTaskLiveUiCoordinator(
     if (mode === "off") {
       clearIdleTimeout();
       apply(undefined, undefined);
+      lastRenderedPresentation = undefined;
       return;
     }
 
-    const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems, resolveToolsExpanded());
+    const toolsExpanded = resolveToolsExpanded();
+    lastRenderedToolsExpanded = toolsExpanded;
+
+    const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems, toolsExpanded);
     apply(presentation.statusLine, widgetFrame);
+    lastRenderedPresentation = presentation;
 
     if (presentation.hasActiveTasks) {
       clearIdleTimeout();
@@ -258,6 +268,29 @@ export function createTaskLiveUiCoordinator(
     flushTimeout = setTimeout(flush, updateIntervalMs - elapsed);
   };
 
+  toolsExpansionWatch = setInterval(
+    () => {
+      const presentation = lastRenderedPresentation;
+      if (!presentation) return;
+
+      const toolsExpanded = resolveToolsExpanded();
+      if (toolsExpanded === lastRenderedToolsExpanded) return;
+      lastRenderedToolsExpanded = toolsExpanded;
+
+      const mode = resolveMode();
+      if (mode === "off") {
+        clearIdleTimeout();
+        apply(undefined, undefined);
+        lastRenderedPresentation = undefined;
+        return;
+      }
+
+      const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems, toolsExpanded);
+      apply(presentation.statusLine, widgetFrame);
+    },
+    Math.max(60, Math.floor(updateIntervalMs)),
+  );
+
   return {
     publish(presentation) {
       pendingPresentation = presentation;
@@ -265,6 +298,7 @@ export function createTaskLiveUiCoordinator(
     },
     clear() {
       pendingPresentation = undefined;
+      lastRenderedPresentation = undefined;
       clearIdleTimeout();
       if (flushTimeout) {
         clearTimeout(flushTimeout);
@@ -273,6 +307,10 @@ export function createTaskLiveUiCoordinator(
       apply(undefined, undefined);
     },
     dispose() {
+      if (toolsExpansionWatch) {
+        clearInterval(toolsExpansionWatch);
+        toolsExpansionWatch = undefined;
+      }
       this.clear();
     },
   };

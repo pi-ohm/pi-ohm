@@ -315,3 +315,56 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
     setTaskLiveUiMode(priorMode);
   }
 });
+
+defineTest("live UI coordinator reacts to tool expansion toggles without new publish", async () => {
+  const widgetCalls: unknown[] = [];
+  let toolsExpanded = false;
+
+  const coordinator = createTaskLiveUiCoordinator(
+    {
+      setStatus: () => {},
+      setWidget: (_key, content) => {
+        widgetCalls.push(content);
+      },
+      getToolsExpanded: () => toolsExpanded,
+    },
+    {
+      updateIntervalMs: 10,
+      idleGraceMs: 500,
+      mode: "compact",
+    },
+  );
+
+  coordinator.publish(
+    makePresentation({
+      statusLine: "subagents idle · done 1 · failed 0 · cancelled 0",
+      compactWidgetEntries: [
+        makeEntry({
+          status: "succeeded",
+          toolCalls: ["Read a", "Grep b", "Find c", "Ls d", "Edit e"],
+          result: "done",
+        }),
+      ],
+      hasActiveTasks: false,
+    }),
+  );
+
+  await sleep(30);
+
+  const compactFrame = renderWidgetPreview(widgetCalls.at(-1));
+  assert.notEqual(compactFrame, undefined);
+  const compactText = stripAnsi((compactFrame ?? []).join("\n"));
+  assert.equal(compactText.includes("Find c"), false);
+  assert.equal(compactText.includes("ctrl+o to expand"), true);
+
+  toolsExpanded = true;
+  await sleep(60);
+
+  const expandedFrame = renderWidgetPreview(widgetCalls.at(-1));
+  assert.notEqual(expandedFrame, undefined);
+  const expandedText = stripAnsi((expandedFrame ?? []).join("\n"));
+  assert.equal(expandedText.includes("Find c"), true);
+  assert.equal(expandedText.includes("ctrl+o to expand"), false);
+
+  coordinator.dispose();
+});
