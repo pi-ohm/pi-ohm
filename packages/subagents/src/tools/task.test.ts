@@ -25,6 +25,10 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
+function stripAnsi(value: string): string {
+  return value.split("\u001b[4m").join("").split("\u001b[24m").join("").split("\u001b[0m").join("");
+}
+
 function isRenderableWidget(value: unknown): value is { render(width: number): string[] } {
   if (!value || typeof value !== "object") {
     return false;
@@ -445,6 +449,33 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
   assert.match(compact, /✓ Finder · Chat transcript/);
   assert.match(compact, /✓ tool_call: read/);
   assert.match(compact, /╰── done/);
+});
+
+defineTest("formatTaskToolResult compacts fallback tool_call lifecycle lines", () => {
+  const compact = stripAnsi(
+    formatTaskToolResult(
+      {
+        op: "start",
+        status: "succeeded",
+        task_id: "task_1",
+        subagent_type: "librarian",
+        description: "Smoke test librarian",
+        summary: "Librarian: Smoke test librarian",
+        output: [
+          'tool_call: bash start {"command":"find packages/subagents/src/runtime -maxdepth 1"}',
+          'tool_call: bash update {"content":[{"type":"text","text":"large payload"}]}',
+          'tool_call: bash end success {"ok":true}',
+        ].join("\n"),
+        output_available: true,
+        backend: "interactive-sdk",
+      },
+      false,
+    ),
+  );
+
+  assert.match(compact, /✓ Bash find packages\/subagents\/src\/runtime -maxdepth 1/);
+  assert.doesNotMatch(compact, /tool_call: bash update/);
+  assert.match(compact, /╰── Librarian: Smoke test librarian/);
 });
 
 defineTest("formatTaskToolResult prefers structured tool_rows over output scraping", () => {

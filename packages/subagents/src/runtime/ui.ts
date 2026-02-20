@@ -140,7 +140,7 @@ function looksLikeToolCallLine(line: string): boolean {
 
 function parseOutputSections(output: string): {
   readonly toolCalls: readonly string[];
-  readonly result: string;
+  readonly result: string | undefined;
 } {
   const lines = output
     .split(/\r?\n/u)
@@ -150,13 +150,19 @@ function parseOutputSections(output: string): {
   if (lines.length === 0) {
     return {
       toolCalls: [],
-      result: "(no output)",
+      result: undefined,
     };
   }
 
   const toolCalls: string[] = [];
+  const lifecycleToolLines: string[] = [];
   const narrative: string[] = [];
   for (const line of lines) {
+    if (parseToolLifecycleLine(line)) {
+      lifecycleToolLines.push(line);
+      continue;
+    }
+
     if (looksLikeToolCallLine(line)) {
       toolCalls.push(line);
       continue;
@@ -165,20 +171,24 @@ function parseOutputSections(output: string): {
     narrative.push(line);
   }
 
+  const lifecycleRows = toToolRowsFromLifecycleLines(lifecycleToolLines);
+  const mergedToolCalls = lifecycleRows.length > 0 ? [...lifecycleRows, ...toolCalls] : toolCalls;
+
   if (narrative.length === 0) {
     return {
-      toolCalls,
-      result: toolCalls[toolCalls.length - 1] ?? "(no output)",
+      toolCalls: mergedToolCalls,
+      result: undefined,
     };
   }
 
   return {
-    toolCalls,
+    toolCalls: mergedToolCalls,
     result: narrative[narrative.length - 1] ?? "(no output)",
   };
 }
 
 type ToolCallOutcome = "running" | "success" | "error";
+type ToolLifecyclePhase = "start" | "update" | "end success" | "end error";
 
 function formatToolName(toolName: string): string {
   if (toolName.length === 0) return "tool";
@@ -226,15 +236,16 @@ function parsePositiveIntegerField(
   return value;
 }
 
-function parseToolDetailFromStart(
-  event: Extract<TaskExecutionEvent, { type: "tool_start" }>,
+function parseToolDetailFromArgsText(
+  toolNameInput: string,
+  argsText: string | undefined,
 ): string | undefined {
-  const args = parseToolArgsRecord(event.argsText);
-  const toolName = event.toolName.trim().toLowerCase();
+  const args = parseToolArgsRecord(argsText);
+  const toolName = toolNameInput.trim().toLowerCase();
 
   if (!args) {
     if (toolName === "bash") {
-      const fallback = toTrimmedString(event.argsText);
+      const fallback = toTrimmedString(argsText);
       if (!fallback) return undefined;
       return truncateToolDetail(fallback);
     }
@@ -282,6 +293,102 @@ function parseToolDetailFromStart(
   }
 
   return undefined;
+}
+
+function parseToolDetailFromStart(
+  event: Extract<TaskExecutionEvent, { type: "tool_start" }>,
+): string | undefined {
+  return parseToolDetailFromArgsText(event.toolName, event.argsText);
+}
+
+function parseToolLifecycleLine(
+  line: string,
+):
+  | { readonly toolName: string; readonly phase: ToolLifecyclePhase; readonly payload?: string }
+  | undefined {
+  const matched = line.match(
+    /^tool_call:\s*(\S+)\s+(start|update|end success|end error)\s*(.*)$/iu,
+  );
+  if (!matched) return undefined;
+
+  const toolName = matched[1]?.trim();
+  const phaseValue = matched[2]?.trim().toLowerCase();
+  const payload = toTrimmedString(matched[3]);
+  if (!toolName || !phaseValue) return undefined;
+
+  if (
+    phaseValue !== "start" &&
+    phaseValue !== "update" &&
+    phaseValue !== "end success" &&
+    phaseValue !== "end error"
+  ) {
+    return undefined;
+  }
+
+  return {
+    toolName,
+    phase: phaseValue,
+    payload,
+  };
+}
+
+function toToolRowsFromLifecycleLines(lines: readonly string[]): readonly string[] {
+  const calls: Array<{ toolName: string; outcome: ToolCallOutcome; detail?: string }> = [];
+
+  for (const line of lines) {
+    const parsed = parseToolLifecycleLine(line);
+    if (!parsed) continue;
+
+    if (parsed.phase === "start") {
+      calls.push({
+        toolName: parsed.toolName,
+        outcome: "running",
+        detail: parseToolDetailFromArgsText(parsed.toolName, parsed.payload),
+      });
+      continue;
+    }
+
+    const activeIndex = (() => {
+      for (let index = calls.length - 1; index >= 0; index -= 1) {
+        const call = calls[index];
+        if (!call) continue;
+        if (call.toolName !== parsed.toolName) continue;
+        if (call.outcome === "running") return index;
+      }
+      return -1;
+    })();
+
+    if (activeIndex < 0) {
+      calls.push({
+        toolName: parsed.toolName,
+        outcome: parsed.phase === "end error" ? "error" : "running",
+      });
+      continue;
+    }
+
+    const call = calls[activeIndex];
+    if (!call) continue;
+
+    if (parsed.phase === "end success") {
+      call.outcome = "success";
+      continue;
+    }
+
+    if (parsed.phase === "end error") {
+      call.outcome = "error";
+      continue;
+    }
+
+    if (!call.detail) {
+      call.detail = parseToolDetailFromArgsText(parsed.toolName, parsed.payload);
+    }
+  }
+
+  return calls.map((call) => {
+    const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
+    const suffix = call.detail ? ` ${call.detail}` : "";
+    return `${marker} ${formatToolName(call.toolName)}${suffix}`;
+  });
 }
 
 function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly string[] {

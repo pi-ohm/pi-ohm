@@ -300,3 +300,43 @@ defineTest("createTaskRuntimePresentation prefers structured event tool rows", (
   );
   assert.match(entry.result, /Scanning file/);
 });
+
+defineTest("createTaskRuntimePresentation compacts fallback tool_call lifecycle output", () => {
+  const completed = makeSnapshot({
+    id: "task_librarian",
+    state: "running",
+    subagentType: "librarian",
+    description: "Smoke test",
+    summary: "Librarian: Smoke test",
+    events: [],
+    output: [
+      'tool_call: bash start {"command":"find packages/subagents/src/runtime -maxdepth 1"}',
+      'tool_call: bash update {"content":[{"type":"text","text":"large payload"}]}',
+      'tool_call: bash end success {"ok":true}',
+    ].join("\n"),
+    updatedAtEpochMs: 3000,
+  });
+
+  const presentation = createTaskRuntimePresentation({
+    snapshots: [completed],
+    nowEpochMs: 4000,
+  });
+
+  const entry = presentation.widgetEntries[0];
+  assert.notEqual(entry, undefined);
+  if (!entry) {
+    assert.fail("Expected one widget entry");
+  }
+
+  assert.equal(
+    entry.toolCalls.some((line) =>
+      line.includes("✓ Bash find packages/subagents/src/runtime -maxdepth 1"),
+    ),
+    true,
+  );
+  assert.equal(
+    entry.toolCalls.some((line) => line.includes("tool_call: bash update")),
+    false,
+  );
+  assert.match(entry.result, /Working/);
+});
