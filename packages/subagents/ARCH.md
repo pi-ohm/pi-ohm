@@ -103,6 +103,7 @@ Output/truncation contract:
 - `output_total_chars`
 - `output_returned_chars`
 - cap env: `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` (default `8000`)
+- non-terminal persistence debounce env: `OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS` (default `90`, `0` disables)
 
 Error category semantics:
 

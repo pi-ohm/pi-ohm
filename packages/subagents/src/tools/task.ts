@@ -175,6 +175,15 @@ function parsePositiveIntegerEnv(name: string): number | undefined {
   return parsed;
 }
 
+function parseNonNegativeIntegerEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return undefined;
+  return parsed;
+}
+
 function resolveOutputMaxChars(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_OUTPUT_MAX_CHARS");
   if (fromEnv !== undefined) return fromEnv;
@@ -195,6 +204,12 @@ function resolveTaskMaxEntries(): number | undefined {
 
 function resolveTaskMaxExpiredEntries(): number | undefined {
   return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES");
+}
+
+function resolveTaskPersistenceDebounceMs(): number {
+  const fromEnv = parseNonNegativeIntegerEnv("OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS");
+  if (fromEnv !== undefined) return fromEnv;
+  return 90;
 }
 
 function resolveOnUpdateThrottleMs(): number {
@@ -219,6 +234,7 @@ const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore({
   maxEventsPerTask: resolveTaskMaxEventsPerTask(),
   maxTasks: resolveTaskMaxEntries(),
   maxExpiredTasks: resolveTaskMaxExpiredEntries(),
+  persistenceDebounceMs: resolveTaskPersistenceDebounceMs(),
 });
 
 let taskSequence = 0;
@@ -1821,7 +1837,7 @@ const onUpdateLastEmissionByCallback = new WeakMap<
   AgentToolUpdateCallback<TaskToolResultDetails>,
   {
     readonly atEpochMs: number;
-    readonly signature: string;
+    readonly signatureKey: string;
     readonly status: TaskToolStatus;
     readonly eventCount: number | undefined;
     readonly toolRowsSignature: string;
@@ -1829,6 +1845,77 @@ const onUpdateLastEmissionByCallback = new WeakMap<
   }
 >();
 const LIVE_UI_HEARTBEAT_MS = 120;
+
+function summarizeTextForSignature(value: string | undefined, maxChars: number): string {
+  if (!value) return "";
+  const normalized = value.trim();
+  if (normalized.length <= maxChars) return normalized;
+
+  const headLength = Math.max(1, Math.floor(maxChars / 2));
+  const tailLength = Math.max(1, maxChars - headLength);
+  const head = normalized.slice(0, headLength);
+  const tail = normalized.slice(Math.max(normalized.length - tailLength, 0));
+  return `${normalized.length}:${head}:${tail}`;
+}
+
+function summarizeToolRowsForSignature(toolRows: readonly string[] | undefined): string {
+  if (!toolRows || toolRows.length === 0) return "";
+  const first = toolRows[0];
+  const last = toolRows[toolRows.length - 1];
+  return [
+    String(toolRows.length),
+    summarizeTextForSignature(first, 48),
+    summarizeTextForSignature(last, 48),
+  ].join("|");
+}
+
+function summarizeItemsForSignature(items: readonly TaskToolItemDetails[] | undefined): string {
+  if (!items || items.length === 0) return "";
+
+  const summarizeItem = (item: TaskToolItemDetails): string =>
+    [
+      item.id,
+      item.found ? "1" : "0",
+      item.status ?? "-",
+      item.event_count === undefined ? "-" : String(item.event_count),
+      item.updated_at_epoch_ms === undefined ? "-" : String(item.updated_at_epoch_ms),
+      item.output_returned_chars === undefined ? "-" : String(item.output_returned_chars),
+      item.error_code ?? "-",
+      summarizeTextForSignature(item.summary, 48),
+    ].join("~");
+
+  const head = items
+    .slice(0, 2)
+    .map((item) => summarizeItem(item))
+    .join("^");
+  const tailItem = items.length > 2 ? items[items.length - 1] : undefined;
+  const tail = tailItem ? summarizeItem(tailItem) : "";
+  return `${items.length}|${head}|${tail}`;
+}
+
+function buildOnUpdateSignature(details: TaskToolResultDetails): string {
+  return [
+    details.op,
+    details.status,
+    details.task_id ?? "",
+    details.subagent_type ?? "",
+    details.backend,
+    summarizeTextForSignature(details.summary, 120),
+    details.error_code ?? "",
+    details.error_message ?? "",
+    details.wait_status ?? "",
+    details.done === true ? "1" : "0",
+    details.timed_out === true ? "1" : "0",
+    details.batch_status ?? "",
+    details.total_count === undefined ? "" : String(details.total_count),
+    details.accepted_count === undefined ? "" : String(details.accepted_count),
+    details.rejected_count === undefined ? "" : String(details.rejected_count),
+    details.event_count === undefined ? "" : String(details.event_count),
+    summarizeTextForSignature(details.assistant_text, 96),
+    summarizeToolRowsForSignature(details.tool_rows),
+    summarizeItemsForSignature(details.items),
+  ].join("¦");
+}
 
 function isThrottleBypassUpdate(details: TaskToolResultDetails): boolean {
   if (
@@ -1851,14 +1938,14 @@ function shouldEmitOnUpdate(
   callback: AgentToolUpdateCallback<TaskToolResultDetails>,
   details: TaskToolResultDetails,
 ): boolean {
-  const nextSignature = JSON.stringify(details);
+  const nextSignatureKey = buildOnUpdateSignature(details);
   const nowEpochMs = Date.now();
   const previous = onUpdateLastEmissionByCallback.get(callback);
   const nextEventCount = typeof details.event_count === "number" ? details.event_count : undefined;
-  const nextToolRowsSignature = details.tool_rows ? details.tool_rows.join("\n") : "";
+  const nextToolRowsSignature = summarizeToolRowsForSignature(details.tool_rows);
   const nextAssistantText = details.assistant_text;
 
-  if (previous && previous.signature === nextSignature) {
+  if (previous && previous.signatureKey === nextSignatureKey) {
     return false;
   }
 
@@ -1883,7 +1970,7 @@ function shouldEmitOnUpdate(
 
   onUpdateLastEmissionByCallback.set(callback, {
     atEpochMs: nowEpochMs,
-    signature: nextSignature,
+    signatureKey: nextSignatureKey,
     status: details.status,
     eventCount: nextEventCount,
     toolRowsSignature: nextToolRowsSignature,

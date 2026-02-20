@@ -172,6 +172,7 @@ Task lifecycle smoke checklist:
 | `task_wait_aborted`                     | caller signal cancelled wait                                   | retry wait with active signal                                                  |
 | `task_expired` on old IDs               | retention/capacity eviction                                    | increase retention/cap env knobs; treat task IDs as ephemeral                  |
 | too many inline progress updates        | high-frequency non-terminal emissions                          | increase `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS`                                  |
+| brief UI stall when many tasks finish   | sync persistence flush churn + heavy final update diffs        | raise `OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS`; reduce batch size per call     |
 
 ### 5) Guardrail env knobs
 
@@ -179,6 +180,7 @@ Task lifecycle smoke checklist:
 - `OHM_SUBAGENTS_TASK_MAX_EVENTS` — per-task structured event cap
 - `OHM_SUBAGENTS_TASK_MAX_ENTRIES` — in-memory task registry cap
 - `OHM_SUBAGENTS_TASK_MAX_EXPIRED_ENTRIES` — expired-task reason cache cap
+- `OHM_SUBAGENTS_TASK_PERSIST_DEBOUNCE_MS` — debounce non-terminal persistence flushes (default `90`, `0` disables)
 - `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS` — non-terminal onUpdate emission throttle
 - `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` — terminal output payload cap
 

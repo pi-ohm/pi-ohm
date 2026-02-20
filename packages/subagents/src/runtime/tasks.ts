@@ -752,6 +752,7 @@ export interface InMemoryTaskRuntimeStoreOptions {
   readonly maxEventsPerTask?: number;
   readonly maxTasks?: number;
   readonly maxExpiredTasks?: number;
+  readonly persistenceDebounceMs?: number;
 }
 
 class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
@@ -764,6 +765,8 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
   private readonly maxEventsPerTask: number;
   private readonly maxTasks: number;
   private readonly maxExpiredTasks: number;
+  private readonly persistenceDebounceMs: number;
+  private pendingPersistenceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(options: InMemoryTaskRuntimeStoreOptions = {}) {
     this.now = options.now ?? (() => Date.now());
@@ -782,6 +785,10 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
       options.maxExpiredTasks !== undefined && options.maxExpiredTasks > 0
         ? options.maxExpiredTasks
         : DEFAULT_MAX_EXPIRED_TASKS;
+    this.persistenceDebounceMs =
+      options.persistenceDebounceMs !== undefined && options.persistenceDebounceMs >= 0
+        ? Math.floor(options.persistenceDebounceMs)
+        : 0;
 
     this.hydrateFromPersistence();
     this.pruneExpiredTerminalTasks();
@@ -831,7 +838,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
 
     this.tasks.set(input.taskId, entry);
     this.pruneTaskCapacity();
-    this.persistCurrentState();
+    this.requestPersist({ immediate: true });
     return Result.ok(toTaskRuntimeSnapshot(entry));
   }
 
@@ -892,7 +899,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     };
 
     this.tasks.set(taskId, nextEntry);
-    this.persistCurrentState();
+    this.requestPersist({ immediate: false });
     return Result.ok(toTaskRuntimeSnapshot(nextEntry));
   }
 
@@ -942,7 +949,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     };
 
     this.tasks.set(taskId, nextEntry);
-    this.persistCurrentState();
+    this.requestPersist({ immediate: false });
     return Result.ok(toTaskRuntimeSnapshot(nextEntry));
   }
 
@@ -1116,7 +1123,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     };
 
     this.tasks.set(taskId, nextEntry);
-    this.persistCurrentState();
+    this.requestPersist({ immediate: false });
     return Result.ok(toTaskRuntimeSnapshot(nextEntry));
   }
 
@@ -1208,7 +1215,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     };
 
     this.tasks.set(taskId, nextEntry);
-    this.persistCurrentState();
+    this.requestPersist({ immediate: isTerminalState(nextState) });
     return Result.ok(toTaskRuntimeSnapshot(nextEntry));
   }
 
@@ -1281,7 +1288,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     }
 
     if (changed) {
-      this.persistCurrentState();
+      this.requestPersist({ immediate: true });
     }
   }
 
@@ -1305,7 +1312,7 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
     }
 
     if (changed) {
-      this.persistCurrentState();
+      this.requestPersist({ immediate: false });
     }
   }
 
@@ -1340,6 +1347,33 @@ class InMemoryTaskRuntimeStore implements TaskRuntimeStore {
         `Task id '${taskId}' evicted by capacity policy after reaching max ${this.maxTasks} tasks`,
       );
     }
+  }
+
+  private requestPersist(input: { readonly immediate: boolean }): void {
+    if (!this.persistence) return;
+
+    if (input.immediate || this.persistenceDebounceMs === 0) {
+      this.flushPendingPersistenceTimer();
+      this.persistCurrentState();
+      return;
+    }
+
+    if (this.pendingPersistenceTimer) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.pendingPersistenceTimer = undefined;
+      this.persistCurrentState();
+    }, this.persistenceDebounceMs);
+    timer.unref?.();
+    this.pendingPersistenceTimer = timer;
+  }
+
+  private flushPendingPersistenceTimer(): void {
+    if (!this.pendingPersistenceTimer) return;
+    clearTimeout(this.pendingPersistenceTimer);
+    this.pendingPersistenceTimer = undefined;
   }
 
   private persistCurrentState(): void {

@@ -5,7 +5,11 @@ import { join } from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
-import { createInMemoryTaskRuntimeStore, createJsonTaskRuntimePersistence } from "./tasks";
+import {
+  createInMemoryTaskRuntimeStore,
+  createJsonTaskRuntimePersistence,
+  type TaskRuntimePersistence,
+} from "./tasks";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
@@ -43,6 +47,12 @@ function withTempDir(run: (dir: string) => void): void {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 defineTest("createTask creates queued task snapshot", () => {
@@ -581,6 +591,65 @@ defineTest("persistence restores bounded task events", () => {
       assert.equal(restored.events[1].delta, "c");
     }
   });
+});
+
+defineTest("debounced persistence coalesces event flushes", async () => {
+  const snapshotsSaved: number[] = [];
+  const persistence: TaskRuntimePersistence = {
+    filePath: "/tmp/mock-tasks.json",
+    load() {
+      return Result.ok({ entries: [] });
+    },
+    save(snapshot) {
+      snapshotsSaved.push(snapshot.entries.length);
+      return Result.ok(true);
+    },
+  };
+
+  const debouncedStore = createInMemoryTaskRuntimeStore({
+    now: () => Date.now(),
+    persistence,
+    persistenceDebounceMs: 25,
+  });
+
+  const created = debouncedStore.createTask({
+    taskId: "task_debounce_1",
+    subagent: finderSubagent,
+    description: "Debounce persistence",
+    prompt: "Debounce persistence",
+    backend: "scaffold",
+    invocation: "task-routed",
+  });
+  assert.equal(Result.isOk(created), true);
+  assert.equal(snapshotsSaved.length, 1);
+
+  const firstAppend = debouncedStore.appendEvents("task_debounce_1", [
+    {
+      type: "assistant_text_delta",
+      delta: "first",
+      atEpochMs: 1001,
+    },
+  ]);
+  assert.equal(Result.isOk(firstAppend), true);
+
+  const secondAppend = debouncedStore.appendEvents("task_debounce_1", [
+    {
+      type: "assistant_text_delta",
+      delta: "second",
+      atEpochMs: 1002,
+    },
+  ]);
+  assert.equal(Result.isOk(secondAppend), true);
+
+  assert.equal(snapshotsSaved.length, 1);
+  await sleep(40);
+  assert.equal(snapshotsSaved.length, 2);
+
+  const markRunning = debouncedStore.markRunning("task_debounce_1", "running");
+  assert.equal(Result.isOk(markRunning), true);
+  const markSucceeded = debouncedStore.markSucceeded("task_debounce_1", "done", "output");
+  assert.equal(Result.isOk(markSucceeded), true);
+  assert.equal(snapshotsSaved.length, 3);
 });
 
 defineTest("retention policy expires terminal tasks with explicit error reason", () => {
