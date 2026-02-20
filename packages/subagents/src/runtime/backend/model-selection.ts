@@ -1,2 +1,2 @@
-export type { ParseSubagentModelSelectionResult, ParsedSubagentModelSelection } from "./legacy";
-export { parseSubagentModelSelection } from "./legacy";
+export type { ParseSubagentModelSelectionResult, ParsedSubagentModelSelection } from "./index";
+export { parseSubagentModelSelection } from "./index";

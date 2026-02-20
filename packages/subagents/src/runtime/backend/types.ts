@@ -12,4 +12,4 @@ export type {
   TaskBackendStartInput,
   TaskBackendStartOutput,
   TaskExecutionBackend,
-} from "./legacy";
+} from "./index";

@@ -2,4 +2,4 @@ export {
   createCollapsedTaskToolResultComponent,
   formatTaskToolCall,
   formatTaskToolResult,
-} from "./legacy";
+} from "./operations";

@@ -1,6 +1,6 @@
-export type { PiSdkStreamCaptureResult, PiSdkStreamCaptureState } from "./legacy";
+export type { PiSdkStreamCaptureResult, PiSdkStreamCaptureState } from "./index";
 export {
   applyPiSdkSessionEvent,
   createPiSdkStreamCaptureState,
   finalizePiSdkStreamCapture,
-} from "./legacy";
+} from "./index";

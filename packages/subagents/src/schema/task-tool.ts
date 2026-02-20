@@ -9,5 +9,5 @@ export {
   TaskToolRegistrationParametersSchema,
   TaskWaitOperationSchema,
   parseTaskToolParameters,
-} from "./legacy";
-export type { TaskStartItem, TaskToolParameters } from "./legacy";
+} from "./index";
+export type { TaskStartItem, TaskToolParameters } from "./index";

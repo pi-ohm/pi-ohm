@@ -1,1 +1,1 @@
-export { createDefaultTaskToolDependencies, createTaskId } from "./legacy";
+export { createDefaultTaskToolDependencies, createTaskId } from "./operations";

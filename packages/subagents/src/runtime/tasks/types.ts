@@ -11,4 +11,4 @@ export type {
   TaskRuntimePersistenceSnapshot,
   TaskRuntimeSnapshot,
   TaskRuntimeStore,
-} from "./legacy";
+} from "./store";

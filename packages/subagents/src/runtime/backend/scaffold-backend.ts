@@ -1,1 +1,1 @@
-export { ScaffoldTaskExecutionBackend } from "./legacy";
+export { ScaffoldTaskExecutionBackend } from "./index";

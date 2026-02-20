@@ -4,4 +4,4 @@ export type {
   TaskRuntimePersistenceLoadResult,
   TaskRuntimePersistenceSnapshot,
 } from "./types";
-export { createJsonTaskRuntimePersistence } from "./legacy";
+export { createJsonTaskRuntimePersistence } from "./store";

@@ -1,1 +1,1 @@
-export { runPiCliPrompt, runPiSdkPrompt } from "./legacy";
+export { runPiCliPrompt, runPiSdkPrompt } from "./index";

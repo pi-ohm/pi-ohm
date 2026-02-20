@@ -6,4 +6,4 @@ export type {
   TaskToolResultDetails,
   TaskToolStatus,
   TaskWaitStatus,
-} from "./legacy";
+} from "./operations";

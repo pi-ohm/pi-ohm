@@ -1,1 +1,1 @@
-export { PiCliTaskExecutionBackend } from "./legacy";
+export { PiCliTaskExecutionBackend } from "./index";

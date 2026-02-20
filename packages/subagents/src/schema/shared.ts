@@ -1,1 +1,1 @@
-export { ensureZodV4 } from "./legacy";
+export { ensureZodV4 } from "./index";

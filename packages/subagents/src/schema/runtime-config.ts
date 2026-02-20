@@ -3,5 +3,5 @@ export {
   TaskRuntimeConfigFragmentSchema,
   parseSubagentProfileOverride,
   parseTaskRuntimeConfigFragment,
-} from "./legacy";
-export type { SubagentProfileOverride, TaskRuntimeConfigFragment } from "./legacy";
+} from "./index";
+export type { SubagentProfileOverride, TaskRuntimeConfigFragment } from "./index";

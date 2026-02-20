@@ -1,1 +1,1 @@
-export { PiSdkTaskExecutionBackend } from "./legacy";
+export { PiSdkTaskExecutionBackend } from "./index";
