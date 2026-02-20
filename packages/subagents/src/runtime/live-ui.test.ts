@@ -248,7 +248,7 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
     const compactFrame = renderWidgetPreview(widgetCalls.at(-1));
     assert.notEqual(compactFrame, undefined);
     assert.match((compactFrame ?? [""])[0] ?? "", /Finder/);
-    assert.equal((compactFrame ?? []).join("\n").includes("Find target"), false);
+    assert.equal((compactFrame ?? []).join("\n").includes("Find target"), true);
 
     setTaskLiveUiMode("off");
     coordinator.publish(activePresentation);

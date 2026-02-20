@@ -44,11 +44,75 @@ function normalizeToolCall(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "✓ (empty tool line)";
 
+  const markerPrefix =
+    /^([✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+\S+)([\s\S]*)$/u.exec(trimmed) ?? /^(\S+)([\s\S]*)$/u.exec(trimmed);
+  if (!markerPrefix) return `✓ ${trimmed}`;
+
+  const prefix = markerPrefix[1] ?? "";
+  const suffix = markerPrefix[2] ?? "";
+  const normalized = `${prefix}${underlinePathTokens(suffix)}`;
   if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u.test(trimmed)) {
-    return trimmed;
+    return normalized;
+  }
+  return `✓ ${normalized}`;
+}
+
+function underlinePathTokens(input: string): string {
+  if (input.trim().length === 0) return input;
+
+  return input
+    .split(/(\s+)/u)
+    .map((segment) => {
+      if (segment.trim().length === 0) return segment;
+
+      const extracted = extractTokenAffixes(segment);
+      if (!extracted) return segment;
+      if (!isLikelyFilePath(extracted.core)) return segment;
+      return `${extracted.prefix}\x1b[4m${extracted.core}\x1b[24m${extracted.suffix}`;
+    })
+    .join("");
+}
+
+function extractTokenAffixes(
+  token: string,
+): { readonly prefix: string; readonly core: string; readonly suffix: string } | undefined {
+  if (token.length === 0) return undefined;
+
+  const prefixChars = `"'([{`;
+  const suffixChars = `"'.,:;)]}`;
+
+  let start = 0;
+  let end = token.length;
+
+  while (start < end && prefixChars.includes(token[start] ?? "")) {
+    start += 1;
   }
 
-  return `✓ ${trimmed}`;
+  while (end > start && suffixChars.includes(token[end - 1] ?? "")) {
+    end -= 1;
+  }
+
+  const core = token.slice(start, end);
+  if (core.length === 0) return undefined;
+
+  return {
+    prefix: token.slice(0, start),
+    core,
+    suffix: token.slice(end),
+  };
+}
+
+function isLikelyFilePath(token: string): boolean {
+  if (token.length === 0) return false;
+  if (token.startsWith("-")) return false;
+  if (token.includes("://")) return false;
+
+  const hasSlash = token.includes("/") || token.includes("\\");
+  const hasExtension = /^[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+$/u.test(token);
+  if (!hasSlash && !hasExtension) return false;
+
+  if (/[*?]/u.test(token)) return false;
+  return /[A-Za-z0-9]/u.test(token);
 }
 
 function wrapWithLimit(input: {

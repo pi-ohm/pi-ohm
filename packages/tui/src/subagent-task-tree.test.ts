@@ -10,6 +10,10 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
+function stripAnsi(value: string): string {
+  return value.split("\u001b[4m").join("").split("\u001b[24m").join("").split("\u001b[0m").join("");
+}
+
 function makeEntry(overrides: Partial<SubagentTaskTreeEntry> = {}): SubagentTaskTreeEntry {
   return {
     id: "task_1",
@@ -27,11 +31,12 @@ defineTest("renderSubagentTaskTreeLines renders amp-style tree sections", () => 
     entries: [makeEntry()],
     width: 120,
   });
+  const rendered = stripAnsi(lines.join("\n"));
 
-  assert.match(lines[0] ?? "", /^\s{2}✓ Search/);
-  assert.match(lines.join("\n"), /├── Find delegation and selection code/);
-  assert.match(lines.join("\n"), /├── ✓ Read packages\/subagents/);
-  assert.match(lines.join("\n"), /╰── Subagents package uses task orchestration/);
+  assert.match(stripAnsi(lines[0] ?? ""), /^\s{2}✓ Search/);
+  assert.match(rendered, /├── Find delegation and selection code/);
+  assert.match(rendered, /├── ✓ Read packages\/subagents/);
+  assert.match(rendered, /╰── Subagents package uses task orchestration/);
 });
 
 defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
@@ -53,11 +58,29 @@ defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
     },
   });
 
-  const rendered = lines.join("\n");
+  const rendered = stripAnsi(lines.join("\n"));
   assert.match(rendered, /├── Prompt line one/);
   assert.match(rendered, /├── ✓ Read x/);
   assert.match(rendered, /├── ✓ Glob y/);
-  assert.match(rendered, /├── … 2 more tool call\(s\)/);
+  assert.match(rendered, /├── ✓ Grep z/);
+  assert.match(rendered, /├── ✓ Find q/);
+});
+
+defineTest("renderSubagentTaskTreeLines underlines path-like tool call tokens", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        toolCalls: ["✓ Read packages/subagents/src/extension.ts @1-20"],
+      }),
+    ],
+    width: 120,
+  });
+
+  const rendered = lines.join("\n");
+  assert.equal(
+    rendered.includes("✓ Read \u001b[4mpackages/subagents/src/extension.ts\u001b[24m @1-20"),
+    true,
+  );
 });
 
 defineTest("SubagentTaskTreeComponent caches by width and invalidates", () => {

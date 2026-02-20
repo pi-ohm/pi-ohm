@@ -1864,8 +1864,65 @@ defineTest("runTaskToolMvp exposes tool_rows from structured backend events", as
   });
 
   assert.equal(started.details.status, "succeeded");
-  assert.deepEqual(Reflect.get(started.details, "tool_rows"), ["✓ Read"]);
+  assert.deepEqual(Reflect.get(started.details, "tool_rows"), ["✓ Read src/index.ts"]);
   assert.equal(Reflect.get(started.details, "event_count"), 2);
+});
+
+defineTest("runTaskToolMvp tool_rows include bash command detail", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "interactive-sdk",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: bash command",
+          output: "done",
+          provider: "unavailable",
+          model: "unavailable",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+          events: [
+            {
+              type: "tool_start",
+              toolCallId: "tool_1",
+              toolName: "bash",
+              argsText: '{"command":"rg -n \\"registerCommand\\" packages/subagents/src"}',
+              atEpochMs: 1001,
+            },
+            {
+              type: "tool_end",
+              toolCallId: "tool_1",
+              toolName: "bash",
+              resultText: '{"ok":true}',
+              status: "success",
+              atEpochMs: 1002,
+            },
+          ],
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+        });
+      },
+    },
+  });
+
+  const started = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "Bash row detail",
+      prompt: "Use bash once",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const rows = Reflect.get(started.details, "tool_rows");
+  assert.deepEqual(rows, ['✓ Bash rg -n "registerCommand" packages/subagents/src']);
 });
 
 defineTest("runTaskToolMvp uses assistant_text from events for terminal result row", async () => {

@@ -185,9 +185,108 @@ function formatToolName(toolName: string): string {
   return `${toolName[0]?.toUpperCase() ?? ""}${toolName.slice(1)}`;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function truncateToolDetail(value: string, maxChars: number = 88): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, Math.max(maxChars - 1, 1))}…`;
+}
+
+function parseToolArgsRecord(argsText: string | undefined): Record<string, unknown> | undefined {
+  const text = toTrimmedString(argsText);
+  if (!text) return undefined;
+  if (!text.startsWith("{")) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isObjectRecord(parsed)) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePositiveIntegerField(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = Reflect.get(record, key);
+  if (typeof value !== "number") return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  return value;
+}
+
+function parseToolDetailFromStart(
+  event: Extract<TaskExecutionEvent, { type: "tool_start" }>,
+): string | undefined {
+  const args = parseToolArgsRecord(event.argsText);
+  const toolName = event.toolName.trim().toLowerCase();
+
+  if (!args) {
+    if (toolName === "bash") {
+      const fallback = toTrimmedString(event.argsText);
+      if (!fallback) return undefined;
+      return truncateToolDetail(fallback);
+    }
+    return undefined;
+  }
+
+  if (toolName === "bash") {
+    const command = toTrimmedString(Reflect.get(args, "command"));
+    if (!command) return undefined;
+    return truncateToolDetail(command);
+  }
+
+  if (toolName === "read" || toolName === "write" || toolName === "edit") {
+    const path = toTrimmedString(Reflect.get(args, "path"));
+    if (!path) return undefined;
+
+    const offset = parsePositiveIntegerField(args, "offset");
+    const limit = parsePositiveIntegerField(args, "limit");
+    if (offset !== undefined && limit !== undefined) {
+      const end = offset + limit - 1;
+      return `${path} @${offset}-${end}`;
+    }
+
+    if (offset !== undefined) {
+      return `${path} @${offset}`;
+    }
+
+    return path;
+  }
+
+  if (toolName === "grep") {
+    const pattern =
+      toTrimmedString(Reflect.get(args, "pattern")) ?? toTrimmedString(Reflect.get(args, "query"));
+    if (!pattern) return undefined;
+    return truncateToolDetail(pattern);
+  }
+
+  if (toolName === "glob" || toolName === "find" || toolName === "ls") {
+    const pattern =
+      toTrimmedString(Reflect.get(args, "pattern")) ??
+      toTrimmedString(Reflect.get(args, "path")) ??
+      toTrimmedString(Reflect.get(args, "query"));
+    if (!pattern) return undefined;
+    return truncateToolDetail(pattern);
+  }
+
+  return undefined;
+}
+
 function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly string[] {
   const order: string[] = [];
-  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome }>();
+  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome; detail?: string }>();
 
   for (const event of events) {
     if (event.type !== "tool_start" && event.type !== "tool_update" && event.type !== "tool_end") {
@@ -201,6 +300,16 @@ function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly s
         toolName: event.toolName,
         outcome:
           event.type === "tool_end" ? (event.status === "error" ? "error" : "success") : "running",
+        detail: event.type === "tool_start" ? parseToolDetailFromStart(event) : undefined,
+      });
+      continue;
+    }
+
+    if (event.type === "tool_start") {
+      calls.set(event.toolCallId, {
+        toolName: existing.toolName,
+        outcome: existing.outcome,
+        detail: existing.detail ?? parseToolDetailFromStart(event),
       });
       continue;
     }
@@ -209,6 +318,7 @@ function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly s
       calls.set(event.toolCallId, {
         toolName: existing.toolName,
         outcome: event.status === "error" ? "error" : "success",
+        detail: existing.detail,
       });
     }
   }
@@ -217,7 +327,8 @@ function toToolRowsFromEvents(events: readonly TaskExecutionEvent[]): readonly s
     const call = calls.get(toolCallId);
     if (!call) return "○ Tool";
     const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
-    return `${marker} ${formatToolName(call.toolName)}`;
+    const suffix = call.detail ? ` ${call.detail}` : "";
+    return `${marker} ${formatToolName(call.toolName)}${suffix}`;
   });
 }
 

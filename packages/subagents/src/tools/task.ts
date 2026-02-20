@@ -147,6 +147,17 @@ function inferRequestedOp(params: unknown): TaskToolParameters["op"] {
   return "start";
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function toTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
 function isHelpOperation(params: unknown): boolean {
   if (!params || typeof params !== "object" || Array.isArray(params)) {
     return false;
@@ -168,12 +179,6 @@ function resolveOutputMaxChars(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_OUTPUT_MAX_CHARS");
   if (fromEnv !== undefined) return fromEnv;
   return 8_000;
-}
-
-function resolveCollapsedResultPreviewVisualLines(): number {
-  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_RESULT_PREVIEW_LINES");
-  if (fromEnv !== undefined) return fromEnv;
-  return 12;
 }
 
 function resolveTaskRetentionMs(): number | undefined {
@@ -466,12 +471,6 @@ function isOhmDebugEnabled(): boolean {
   return raw === "1" || raw === "true";
 }
 
-function resolveCollapsedTranscriptTailLines(): number {
-  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_TRANSCRIPT_TAIL_LINES");
-  if (fromEnv !== undefined) return fromEnv;
-  return 4;
-}
-
 function classifyTranscriptLine(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "";
@@ -510,9 +509,97 @@ function formatToolName(toolName: string): string {
   return `${toolName[0]?.toUpperCase() ?? ""}${toolName.slice(1)}`;
 }
 
+function truncateToolDetail(value: string, maxChars: number = 88): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, Math.max(maxChars - 1, 1))}…`;
+}
+
+function parseToolArgsRecord(argsText: string | undefined): Record<string, unknown> | undefined {
+  const text = toTrimmedString(argsText);
+  if (!text) return undefined;
+  if (!text.startsWith("{")) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!isObjectRecord(parsed)) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePositiveIntegerField(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = Reflect.get(record, key);
+  if (typeof value !== "number") return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  return value;
+}
+
+function parseToolDetailFromStart(
+  event: Extract<TaskExecutionEvent, { type: "tool_start" }>,
+): string | undefined {
+  const args = parseToolArgsRecord(event.argsText);
+  const toolName = event.toolName.trim().toLowerCase();
+
+  if (!args) {
+    if (toolName === "bash") {
+      const fallback = toTrimmedString(event.argsText);
+      if (!fallback) return undefined;
+      return truncateToolDetail(fallback);
+    }
+    return undefined;
+  }
+
+  if (toolName === "bash") {
+    const command = toTrimmedString(Reflect.get(args, "command"));
+    if (!command) return undefined;
+    return truncateToolDetail(command);
+  }
+
+  if (toolName === "read" || toolName === "write" || toolName === "edit") {
+    const path = toTrimmedString(Reflect.get(args, "path"));
+    if (!path) return undefined;
+
+    const offset = parsePositiveIntegerField(args, "offset");
+    const limit = parsePositiveIntegerField(args, "limit");
+    if (offset !== undefined && limit !== undefined) {
+      const end = offset + limit - 1;
+      return `${path} @${offset}-${end}`;
+    }
+
+    if (offset !== undefined) {
+      return `${path} @${offset}`;
+    }
+
+    return path;
+  }
+
+  if (toolName === "grep") {
+    const pattern =
+      toTrimmedString(Reflect.get(args, "pattern")) ?? toTrimmedString(Reflect.get(args, "query"));
+    if (!pattern) return undefined;
+    return truncateToolDetail(pattern);
+  }
+
+  if (toolName === "glob" || toolName === "find" || toolName === "ls") {
+    const pattern =
+      toTrimmedString(Reflect.get(args, "pattern")) ??
+      toTrimmedString(Reflect.get(args, "path")) ??
+      toTrimmedString(Reflect.get(args, "query"));
+    if (!pattern) return undefined;
+    return truncateToolDetail(pattern);
+  }
+
+  return undefined;
+}
+
 function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
   const order: string[] = [];
-  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome }>();
+  const calls = new Map<string, { toolName: string; outcome: ToolCallOutcome; detail?: string }>();
 
   for (const event of events) {
     if (event.type !== "tool_start" && event.type !== "tool_update" && event.type !== "tool_end") {
@@ -526,6 +613,16 @@ function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
         toolName: event.toolName,
         outcome:
           event.type === "tool_end" ? (event.status === "error" ? "error" : "success") : "running",
+        detail: event.type === "tool_start" ? parseToolDetailFromStart(event) : undefined,
+      });
+      continue;
+    }
+
+    if (event.type === "tool_start") {
+      calls.set(event.toolCallId, {
+        toolName: existing.toolName,
+        outcome: existing.outcome,
+        detail: existing.detail ?? parseToolDetailFromStart(event),
       });
       continue;
     }
@@ -534,6 +631,7 @@ function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
       calls.set(event.toolCallId, {
         toolName: existing.toolName,
         outcome: event.status === "error" ? "error" : "success",
+        detail: existing.detail,
       });
     }
   }
@@ -542,7 +640,8 @@ function toToolRows(events: readonly TaskExecutionEvent[]): readonly string[] {
     const call = calls.get(toolCallId);
     if (!call) return "○ Tool";
     const marker = call.outcome === "success" ? "✓" : call.outcome === "error" ? "✕" : "○";
-    return `${marker} ${formatToolName(call.toolName)}`;
+    const suffix = call.detail ? ` ${call.detail}` : "";
+    return `${marker} ${formatToolName(call.toolName)}${suffix}`;
   });
 }
 
@@ -813,22 +912,11 @@ function treeRenderOptions(expanded: boolean): {
   readonly maxToolCalls: number;
   readonly maxResultLines: number;
 } {
-  const collapsedMax = resolveCollapsedTranscriptTailLines();
-
-  if (expanded) {
-    return {
-      compact: false,
-      maxPromptLines: 8,
-      maxToolCalls: 20,
-      maxResultLines: 6,
-    };
-  }
-
   return {
-    compact: true,
-    maxPromptLines: 2,
-    maxToolCalls: collapsedMax,
-    maxResultLines: 2,
+    compact: false,
+    maxPromptLines: expanded ? 16 : 12,
+    maxToolCalls: Number.MAX_SAFE_INTEGER,
+    maxResultLines: expanded ? 12 : 8,
   };
 }
 
@@ -2946,15 +3034,7 @@ export function registerTaskTool(
             .map((part) => part.text)
             .join("\n\n");
       const resolvedText = text.length > 0 ? text : "task tool result unavailable";
-
-      if (_options.expanded) {
-        return new Text(resolvedText, 0, 0);
-      }
-
-      return createCollapsedTaskToolResultComponent(
-        resolvedText,
-        resolveCollapsedResultPreviewVisualLines(),
-      );
+      return new Text(resolvedText, 0, 0);
     },
   });
 }
