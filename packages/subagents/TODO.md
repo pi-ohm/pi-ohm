@@ -48,22 +48,22 @@ See @./ARCH.md for more details.
 
 ### Epic C — Backend decomposition (`src/runtime/backend/*`)
 
-- [ ] **C-001:** Create `src/runtime/backend/types.ts`.
-- [ ] **C-002:** Create `src/runtime/backend/model-selection.ts`.
-- [ ] **C-003:** Create `src/runtime/backend/sdk-stream-capture.ts`.
-- [ ] **C-004:** Create `src/runtime/backend/prompts.ts`.
-- [ ] **C-005:** Create `src/runtime/backend/runners.ts`.
-- [ ] **C-006:** Create `src/runtime/backend/scaffold-backend.ts`.
-- [ ] **C-007:** Create `src/runtime/backend/pi-sdk-backend.ts`.
-- [ ] **C-008:** Create `src/runtime/backend/pi-cli-backend.ts`.
-- [ ] **C-009:** Keep `src/runtime/backend/index.ts` as exports + default factory only.
-- [ ] **C-010 (tests):** Create `src/runtime/backend/model-selection.test.ts`.
-- [ ] **C-011 (tests):** Create `src/runtime/backend/sdk-stream-capture.test.ts`.
-- [ ] **C-012 (tests):** Create `src/runtime/backend/scaffold-backend.test.ts`.
-- [ ] **C-013 (tests):** Create `src/runtime/backend/pi-sdk-backend.test.ts`.
-- [ ] **C-014 (tests):** Create `src/runtime/backend/pi-cli-backend.test.ts`.
-- [ ] **C-015 (tests):** Create `src/runtime/backend/factory.test.ts`.
-- [ ] **C-016 (cleanup):** Remove legacy `src/runtime/backend.test.ts` after parity.
+- [x] **C-001:** Create `src/runtime/backend/types.ts`.
+- [x] **C-002:** Create `src/runtime/backend/model-selection.ts`.
+- [x] **C-003:** Create `src/runtime/backend/sdk-stream-capture.ts`.
+- [x] **C-004:** Create `src/runtime/backend/prompts.ts`.
+- [x] **C-005:** Create `src/runtime/backend/runners.ts`.
+- [x] **C-006:** Create `src/runtime/backend/scaffold-backend.ts`.
+- [x] **C-007:** Create `src/runtime/backend/pi-sdk-backend.ts`.
+- [x] **C-008:** Create `src/runtime/backend/pi-cli-backend.ts`.
+- [x] **C-009:** Keep `src/runtime/backend/index.ts` as exports + default factory only.
+- [x] **C-010 (tests):** Create `src/runtime/backend/model-selection.test.ts`.
+- [x] **C-011 (tests):** Create `src/runtime/backend/sdk-stream-capture.test.ts`.
+- [x] **C-012 (tests):** Create `src/runtime/backend/scaffold-backend.test.ts`.
+- [x] **C-013 (tests):** Create `src/runtime/backend/pi-sdk-backend.test.ts`.
+- [x] **C-014 (tests):** Create `src/runtime/backend/pi-cli-backend.test.ts`.
+- [x] **C-015 (tests):** Create `src/runtime/backend/factory.test.ts`.
+- [x] **C-016 (cleanup):** Remove legacy `src/runtime/backend.test.ts` after parity.
 
 ### Epic D — Task runtime store decomposition (`src/runtime/tasks/*`)
 

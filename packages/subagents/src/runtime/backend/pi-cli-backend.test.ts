@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { OhmRuntimeConfig, OhmSubagentBackend } from "@pi-ohm/config";
 import { Result } from "better-result";
-import type { OhmSubagentDefinition } from "../catalog";
-import { SubagentRuntimeError } from "../errors";
+import type { OhmSubagentDefinition } from "../../catalog";
+import { SubagentRuntimeError } from "../../errors";
 import {
   applyPiSdkSessionEvent,
   createDefaultTaskExecutionBackend,
@@ -16,7 +16,7 @@ import {
   type PiCliRunner,
   type PiSdkRunner,
   type TaskExecutionBackend,
-} from "./backend";
+} from "./index";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
