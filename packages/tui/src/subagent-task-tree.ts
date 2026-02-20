@@ -33,7 +33,8 @@ function markerForStatus(entry: SubagentTaskTreeEntry): string {
   if (entry.status === "succeeded") return "✓";
   if (entry.status === "failed") return "✕";
   if (entry.status === "cancelled") return "○";
-  const frameIndex = entry.spinnerFrame ?? Math.floor(Date.now() / 80);
+  if (entry.spinnerFrame === undefined) return "⠋";
+  const frameIndex = entry.spinnerFrame;
   return SPINNER_FRAMES[Math.abs(frameIndex) % SPINNER_FRAMES.length] ?? "⠋";
 }
 
@@ -219,6 +220,11 @@ function resolveResultLineLimit(options: SubagentTaskTreeRenderOptions): number 
   return clampPositive(options.maxResultLines, fallback);
 }
 
+function resolveToolCallLimit(options: SubagentTaskTreeRenderOptions): number {
+  const fallback = options.compact ? 2 : Number.MAX_SAFE_INTEGER;
+  return clampPositive(options.maxToolCalls, fallback);
+}
+
 function formatEntryChildren(
   entry: SubagentTaskTreeEntry,
   options: SubagentTaskTreeRenderOptions,
@@ -228,8 +234,33 @@ function formatEntryChildren(
   children.push({ text: entry.prompt.trim(), maxLines: resolvePromptLineLimit(options) });
 
   const normalizedToolCalls = entry.toolCalls.map((line) => normalizeToolCall(line));
-  for (const toolCall of normalizedToolCalls) {
-    children.push({ text: toolCall, maxLines: 1 });
+  const toolCallLimit = resolveToolCallLimit(options);
+  const shouldCompactToolCalls = options.compact === true && normalizedToolCalls.length >= 3;
+
+  if (!shouldCompactToolCalls || normalizedToolCalls.length <= toolCallLimit) {
+    for (const toolCall of normalizedToolCalls) {
+      children.push({ text: toolCall, maxLines: 1 });
+    }
+  } else {
+    const safeLimit = Math.max(2, toolCallLimit);
+    const headCount = Math.max(1, Math.floor(safeLimit / 2));
+    const tailCount = Math.max(1, safeLimit - headCount);
+    const head = normalizedToolCalls.slice(0, headCount);
+    const tailStart = Math.max(headCount, normalizedToolCalls.length - tailCount);
+    const tail = normalizedToolCalls.slice(tailStart);
+    const hiddenCount = Math.max(0, normalizedToolCalls.length - head.length - tail.length);
+
+    for (const toolCall of head) {
+      children.push({ text: toolCall, maxLines: 1 });
+    }
+
+    if (hiddenCount > 0) {
+      children.push({ text: `… ${hiddenCount} more tool call(s)`, maxLines: 1 });
+    }
+
+    for (const toolCall of tail) {
+      children.push({ text: toolCall, maxLines: 1 });
+    }
   }
 
   children.push({ text: entry.result.trim(), maxLines: resolveResultLineLimit(options) });
@@ -300,7 +331,9 @@ export class SubagentTaskTreeComponent implements Component {
 
   render(width: number): string[] {
     const hasAnimatedEntries = this.entries.some(
-      (entry) => entry.status === "running" || entry.status === "queued",
+      (entry) =>
+        (entry.status === "running" || entry.status === "queued") &&
+        entry.spinnerFrame !== undefined,
     );
 
     if (!hasAnimatedEntries && this.cachedLines && this.cachedWidth === width) {

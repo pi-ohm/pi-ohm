@@ -71,8 +71,7 @@ defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
   const rendered = stripAnsi(lines.join("\n"));
   assert.match(rendered, /├── Prompt line one/);
   assert.match(rendered, /├── ✓ Read x/);
-  assert.match(rendered, /├── ✓ Glob y/);
-  assert.match(rendered, /├── ✓ Grep z/);
+  assert.match(rendered, /├── … 2 more tool call\(s\)/);
   assert.match(rendered, /├── ✓ Find q/);
 });
 

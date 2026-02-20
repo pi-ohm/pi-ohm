@@ -1025,11 +1025,20 @@ function treeRenderOptions(expanded: boolean): {
   readonly maxToolCalls: number;
   readonly maxResultLines: number;
 } {
+  if (expanded) {
+    return {
+      compact: false,
+      maxPromptLines: 16,
+      maxToolCalls: Number.MAX_SAFE_INTEGER,
+      maxResultLines: 12,
+    };
+  }
+
   return {
-    compact: false,
-    maxPromptLines: expanded ? 16 : 12,
-    maxToolCalls: Number.MAX_SAFE_INTEGER,
-    maxResultLines: expanded ? 12 : 8,
+    compact: true,
+    maxPromptLines: 2,
+    maxToolCalls: 2,
+    maxResultLines: 4,
   };
 }
 
