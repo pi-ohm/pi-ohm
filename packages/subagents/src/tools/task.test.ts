@@ -387,7 +387,7 @@ defineTest("formatTaskToolResult renders collection items", () => {
   const plain = stripAnsi(compact);
 
   assert.doesNotMatch(plain, /items:/);
-  assert.match(plain, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Auth flow scan/);
+  assert.match(plain, /… Finder · Auth flow scan/);
   assert.match(plain, /✕ Task task_missing/);
   assert.match(plain, /Unknown task id/);
 });
@@ -529,7 +529,7 @@ defineTest("formatTaskToolResult renders running tasks as full tree", () => {
   );
   const plain = stripAnsi(compact);
 
-  assert.match(plain, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Background indexing/);
+  assert.match(plain, /… Finder · Background indexing/);
   assert.match(plain, /├── Background indexing/);
   assert.match(plain, /╰── Working/);
 });

@@ -5,7 +5,6 @@ import {
   type Component,
 } from "@mariozechner/pi-tui";
 
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const ANSI_BOLD_ON = "\u001b[1m";
 const ANSI_BOLD_OFF = "\u001b[22m";
 
@@ -33,9 +32,7 @@ function markerForStatus(entry: SubagentTaskTreeEntry): string {
   if (entry.status === "succeeded") return "✓";
   if (entry.status === "failed") return "✕";
   if (entry.status === "cancelled") return "○";
-  // Keep cadence aligned with pi-tui Loader (80ms, braille frames).
-  const frameIndex = entry.spinnerFrame ?? Math.floor(Date.now() / 80);
-  return SPINNER_FRAMES[Math.abs(frameIndex) % SPINNER_FRAMES.length] ?? "⠋";
+  return "…";
 }
 
 function clampPositive(value: number | undefined, fallback: number): number {
@@ -337,11 +334,7 @@ export class SubagentTaskTreeComponent implements Component {
   }
 
   render(width: number): string[] {
-    const hasAnimatedEntries = this.entries.some(
-      (entry) => entry.status === "running" || entry.status === "queued",
-    );
-
-    if (!hasAnimatedEntries && this.cachedLines && this.cachedWidth === width) {
+    if (this.cachedLines && this.cachedWidth === width) {
       return [...this.cachedLines];
     }
 
@@ -351,13 +344,8 @@ export class SubagentTaskTreeComponent implements Component {
       options: this.options,
     });
 
-    if (!hasAnimatedEntries) {
-      this.cachedWidth = width;
-      this.cachedLines = rendered;
-    } else {
-      this.cachedWidth = undefined;
-      this.cachedLines = undefined;
-    }
+    this.cachedWidth = width;
+    this.cachedLines = rendered;
     return [...rendered];
   }
 
