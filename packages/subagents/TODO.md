@@ -97,6 +97,16 @@ See @./ARCH.md for more details.
 - [x] **F-003 (tests):** Keep `src/runtime/ui.test.ts` presentation-only assertions.
 - [x] **F-004 (tests):** Ensure parser-specific assertions live only in transcript tests.
 
+### Epic G — Task execution runtime split + hot-path perf (`src/tools/task/execution/*`)
+
+- [x] **G-001:** Split `src/tools/task/execution.ts` into op-focused modules (`start|status|wait|send|cancel|batch|lifecycle|projection|shared`).
+- [x] **G-002:** Keep `src/tools/task/execution.ts` as compatibility export surface.
+- [x] **G-003:** Add event-projection caching for `tool_rows` + `assistant_text` derivation from event arrays.
+- [x] **G-004:** Batch streamed backend events into chunked append/update flushes to reduce store/update churn.
+- [x] **G-005:** Optimize batch hydration to single `getTasks(ids)` pass.
+- [x] **G-006:** Replace multi-pass batch counters with single-pass aggregation.
+- [x] **G-007:** Update wait loop to hybrid execution-promise + bounded polling path.
+
 ## Regression gate (required per completed ticket)
 
 - `yarn test:subagents`

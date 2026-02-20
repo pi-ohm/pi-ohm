@@ -24,12 +24,13 @@
 - Task runtime store layout decomposed under `src/runtime/tasks/*` with `index.ts` export surface.
 - Schema layout decomposed under `src/schema/*` with `index.ts` re-export surface.
 - Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
+- Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
+- Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
 - Inline tree rendering + optional live widget modes.
 - Dual invocation model (`task-routed` + `primary-tool`) active.
 
 ## 4) Known architecture debt
 
-- `src/tools/task.ts` mixes contracts, env defaults, orchestration, updates, rendering, and registration.
 - `src/runtime/backend.ts` mixes types, parsing, runners, prompt builders, and backend classes.
 - `src/runtime/tasks.ts` mixes persistence parsing/IO + state machine + store.
 - `src/runtime/ui.ts` duplicates transcript/tool-row parsing from task tool.
