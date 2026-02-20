@@ -11,6 +11,22 @@ interface ParsedModelPattern {
   readonly modelId: string;
 }
 
+interface PromptProfileMatchers {
+  readonly anthropic: readonly string[];
+  readonly openai: readonly string[];
+  readonly google: readonly string[];
+  readonly moonshot: readonly string[];
+}
+
+const DEFAULT_PROMPT_PROFILE_MATCHERS: PromptProfileMatchers = {
+  anthropic: ["anthropic", "claude"],
+  openai: ["openai", "gpt", "o1", "o3", "o4"],
+  google: ["google", "gemini"],
+  moonshot: ["moonshot", "moonshotai", "moonshot.ai", "kimi"],
+};
+
+const PROMPT_PROFILE_MATCHERS_ENV = "OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON";
+
 function normalizeToken(value: string | undefined): string {
   if (!value) return "";
   return value.trim().toLowerCase();
@@ -41,44 +57,90 @@ function includesAny(input: string, needles: readonly string[]): boolean {
   return false;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function sanitizeMatcherValues(value: readonly string[]): readonly string[] {
+  const next: string[] = [];
+  for (const entry of value) {
+    const normalized = normalizeToken(entry);
+    if (normalized.length === 0) continue;
+    if (next.includes(normalized)) continue;
+    next.push(normalized);
+  }
+
+  return next;
+}
+
+function parsePromptProfileMatchersOverrides(
+  raw: string | undefined,
+): Partial<PromptProfileMatchers> {
+  if (!raw) return {};
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    if (!isObjectRecord(parsed)) return {};
+
+    const anthropic = isStringArray(parsed.anthropic)
+      ? sanitizeMatcherValues(parsed.anthropic)
+      : undefined;
+    const openai = isStringArray(parsed.openai) ? sanitizeMatcherValues(parsed.openai) : undefined;
+    const google = isStringArray(parsed.google) ? sanitizeMatcherValues(parsed.google) : undefined;
+    const moonshot = isStringArray(parsed.moonshot)
+      ? sanitizeMatcherValues(parsed.moonshot)
+      : undefined;
+
+    return {
+      ...(anthropic ? { anthropic } : {}),
+      ...(openai ? { openai } : {}),
+      ...(google ? { google } : {}),
+      ...(moonshot ? { moonshot } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function resolvePromptProfileMatchers(): PromptProfileMatchers {
+  const overrides = parsePromptProfileMatchersOverrides(process.env[PROMPT_PROFILE_MATCHERS_ENV]);
+  return {
+    anthropic: overrides.anthropic ?? DEFAULT_PROMPT_PROFILE_MATCHERS.anthropic,
+    openai: overrides.openai ?? DEFAULT_PROMPT_PROFILE_MATCHERS.openai,
+    google: overrides.google ?? DEFAULT_PROMPT_PROFILE_MATCHERS.google,
+    moonshot: overrides.moonshot ?? DEFAULT_PROMPT_PROFILE_MATCHERS.moonshot,
+  };
+}
+
 export function resolveSubagentPromptProfile(
   input: SubagentSystemPromptInput,
 ): SubagentPromptProfile {
+  const matchers = resolvePromptProfileMatchers();
   const parsedPattern = parseModelPattern(input.modelPattern);
   const provider = normalizeToken(input.provider) || parsedPattern?.provider || "";
   const modelId = normalizeToken(input.modelId) || parsedPattern?.modelId || "";
 
   const providerOrModel = `${provider} ${modelId}`.trim();
 
-  if (
-    includesAny(provider, ["anthropic"]) ||
-    includesAny(modelId, ["claude"]) ||
-    includesAny(providerOrModel, ["claude"])
-  ) {
+  if (includesAny(providerOrModel, matchers.anthropic)) {
     return "anthropic";
   }
 
-  if (
-    includesAny(provider, ["openai"]) ||
-    includesAny(modelId, ["gpt", "o1", "o3", "o4"]) ||
-    includesAny(providerOrModel, ["gpt"])
-  ) {
+  if (includesAny(providerOrModel, matchers.openai)) {
     return "openai";
   }
 
-  if (
-    includesAny(provider, ["google", "gemini"]) ||
-    includesAny(modelId, ["gemini"]) ||
-    includesAny(providerOrModel, ["gemini"])
-  ) {
+  if (includesAny(providerOrModel, matchers.google)) {
     return "google";
   }
 
-  if (
-    includesAny(provider, ["moonshot", "moonshotai", "moonshot.ai"]) ||
-    includesAny(modelId, ["kimi"]) ||
-    includesAny(providerOrModel, ["kimi"])
-  ) {
+  if (includesAny(providerOrModel, matchers.moonshot)) {
     return "moonshot";
   }
 

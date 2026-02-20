@@ -40,3 +40,22 @@ defineTest("buildSubagentSdkSystemPrompt includes provider profile header", () =
   assert.match(prompt, /Pi OHM subagent runtime/);
   assert.match(prompt, /Use available tools only when required/);
 });
+
+defineTest("resolveSubagentPromptProfile supports env matcher overrides", () => {
+  const prior = process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON;
+
+  process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON = JSON.stringify({
+    anthropic: ["sonnetx"],
+  });
+
+  try {
+    assert.equal(resolveSubagentPromptProfile({ modelId: "sonnetx-2026" }), "anthropic");
+    assert.equal(resolveSubagentPromptProfile({ modelId: "claude-3-7-sonnet" }), "generic");
+  } finally {
+    if (prior === undefined) {
+      delete process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON;
+    } else {
+      process.env.OHM_SUBAGENTS_PROMPT_PROFILE_MATCHERS_JSON = prior;
+    }
+  }
+});
