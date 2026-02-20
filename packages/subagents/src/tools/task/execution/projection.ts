@@ -2,7 +2,6 @@ import { assistantTextFromEvents, toToolRowsFromEvents } from "../../../runtime/
 import type { TaskRuntimeLookup, TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import type { TaskToolParameters } from "../../../schema/task-tool";
 import type { TaskOutputPayload, TaskToolItemDetails, TaskToolResultDetails } from "../contracts";
-import { resolveOutputMaxChars } from "../defaults";
 import { isTerminalState } from "./shared";
 
 interface EventProjection {
@@ -30,27 +29,14 @@ export function toTaskOutputPayload(output: string | undefined): TaskOutputPaylo
     return { output_available: false };
   }
 
-  const maxChars = resolveOutputMaxChars();
   const totalChars = output.length;
 
-  if (totalChars <= maxChars) {
-    return {
-      output,
-      output_available: true,
-      output_truncated: false,
-      output_total_chars: totalChars,
-      output_returned_chars: totalChars,
-    };
-  }
-
-  const truncatedOutput = output.slice(0, maxChars);
-
   return {
-    output: truncatedOutput,
+    output,
     output_available: true,
-    output_truncated: true,
+    output_truncated: false,
     output_total_chars: totalChars,
-    output_returned_chars: truncatedOutput.length,
+    output_returned_chars: totalChars,
   };
 }
 

@@ -120,6 +120,7 @@ export interface RunTaskToolUiHandle {
       | undefined,
     options?: { readonly placement?: "aboveEditor" | "belowEditor" },
   ): void;
+  getToolsExpanded?(): boolean;
   setHeader?: (
     factory:
       | ((...args: readonly unknown[]) => {

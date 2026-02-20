@@ -1338,11 +1338,12 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
   const plainText = stripAnsi(textBlock.text);
   assert.match(plainText, /✓ Finder · Multiline/);
   assert.match(plainText, /├── Return multiple lines/);
-  assert.doesNotMatch(plainText, /alpha/);
+  assert.match(plainText, /alpha/);
+  assert.match(plainText, /beta/);
   assert.match(plainText, /gamma/);
 });
 
-defineTest("runTaskToolMvp exposes truncation metadata for long output", async () => {
+defineTest("runTaskToolMvp always returns full output for long payloads", async () => {
   const previous = process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;
   process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS = "24";
 
@@ -1378,9 +1379,10 @@ defineTest("runTaskToolMvp exposes truncation metadata for long output", async (
       deps,
     });
 
-    assert.equal(Reflect.get(result.details, "output_truncated"), true);
+    assert.equal(Reflect.get(result.details, "output"), "abcdefghijklmnopqrstuvwxyz0123456789");
+    assert.equal(Reflect.get(result.details, "output_truncated"), false);
     assert.equal(Reflect.get(result.details, "output_total_chars"), 36);
-    assert.equal(Reflect.get(result.details, "output_returned_chars"), 24);
+    assert.equal(Reflect.get(result.details, "output_returned_chars"), 36);
 
     const textBlock = result.content.find((part) => part.type === "text");
     assert.notEqual(textBlock, undefined);
@@ -1388,7 +1390,8 @@ defineTest("runTaskToolMvp exposes truncation metadata for long output", async (
       assert.fail("Expected text content block");
     }
 
-    assert.match(textBlock.text, /truncated 24\/36 chars/);
+    assert.doesNotMatch(textBlock.text, /truncated/);
+    assert.match(textBlock.text, /abcdefghijklmnopqrstuvwxyz0123456789/);
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;

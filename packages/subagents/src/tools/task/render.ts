@@ -306,7 +306,7 @@ function treeRenderOptions(expanded: boolean): {
       compact: false,
       maxPromptLines: 16,
       maxToolCalls: Number.MAX_SAFE_INTEGER,
-      maxResultLines: 12,
+      maxResultLines: Number.MAX_SAFE_INTEGER,
     };
   }
 
@@ -658,7 +658,7 @@ export function toAgentToolResult(
   );
 
   return {
-    content: [{ type: "text", text: detailsToText(normalizedDetails, false) }],
+    content: [{ type: "text", text: detailsToText(normalizedDetails, true) }],
     details: normalizedDetails,
   };
 }

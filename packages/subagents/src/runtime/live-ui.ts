@@ -18,6 +18,7 @@ export interface TaskLiveUiSurface {
     content: readonly string[] | TaskLiveUiWidgetFactory | undefined,
     options?: { readonly placement?: "aboveEditor" | "belowEditor" },
   ): void;
+  getToolsExpanded?(): boolean;
   setHeader?: (
     factory:
       | ((...args: readonly unknown[]) => {
@@ -42,6 +43,7 @@ interface CreateTaskLiveUiCoordinatorOptions {
   readonly maxWidgetItems?: number;
   readonly mode?: TaskLiveUiMode;
   readonly resolveMode?: () => TaskLiveUiMode;
+  readonly resolveToolsExpanded?: () => boolean;
 }
 
 interface TaskLiveUiWidgetFrame {
@@ -91,6 +93,7 @@ function toWidgetFrame(
   presentation: TaskRuntimePresentation,
   mode: TaskLiveUiMode,
   maxItems: number,
+  toolsExpanded: boolean,
 ): TaskLiveUiWidgetFrame | undefined {
   if (mode === "off") return undefined;
 
@@ -109,13 +112,14 @@ function toWidgetFrame(
       : {
           compact: true,
           maxPromptLines: Number.MAX_SAFE_INTEGER,
-          maxToolCalls: 2,
+          maxToolCalls: toolsExpanded ? Number.MAX_SAFE_INTEGER : 2,
           maxResultLines: 1,
         };
 
   return {
     signature: JSON.stringify({
       mode,
+      toolsExpanded,
       entries: limited,
     }),
     entries: limited,
@@ -138,6 +142,8 @@ export function createTaskLiveUiCoordinator(
     DEFAULT_IDLE_GRACE_MS;
   const maxWidgetItems = options.maxWidgetItems ?? DEFAULT_MAX_WIDGET_ITEMS;
   const resolveMode = options.resolveMode ?? (() => options.mode ?? getTaskLiveUiMode());
+  const resolveToolsExpanded =
+    options.resolveToolsExpanded ?? (() => surface.getToolsExpanded?.() ?? false);
 
   let pendingPresentation: TaskRuntimePresentation | undefined;
   let flushTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -229,7 +235,7 @@ export function createTaskLiveUiCoordinator(
       return;
     }
 
-    const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems);
+    const widgetFrame = toWidgetFrame(presentation, mode, maxWidgetItems, resolveToolsExpanded());
     apply(presentation.statusLine, widgetFrame);
 
     if (presentation.hasActiveTasks) {

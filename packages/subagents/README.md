@@ -53,7 +53,6 @@ Current behavior:
   - `batch_status` (`accepted|partial|completed|rejected`)
 - includes structured output metadata in details/items:
   - `output_available`
-  - `output_truncated`
   - `output_total_chars`
   - `output_returned_chars`
 - includes structured SDK-derived tool transcript rows in details/items when available:
@@ -296,7 +295,6 @@ yarn test:subagents --test-name-pattern "new provider mapping can be added via r
 - `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS` — global backend timeout budget in ms (default `180000`)
 - `OHM_SUBAGENTS_BACKEND_TIMEOUT_MS_<SUBAGENT_ID>` — per-subagent timeout override in ms (e.g. `..._ORACLE`)
 - `OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS` — non-terminal onUpdate emission throttle
-- `OHM_SUBAGENTS_OUTPUT_MAX_CHARS` — terminal output payload cap
 
 Notes:
 
@@ -305,16 +303,13 @@ Notes:
 - timeout errors now include remediation hints and the effective model when available
 - if sdk backend downgrades to interactive-shell fallback, compact output now includes an explicit route-fallback note
 
-### Output truncation policy
+### Output policy
 
-Task output returned in tool payloads is capped to prevent oversized context injection.
+Task output returned in tool payloads is always full (no runtime output cap).
 
-- env override: `OHM_SUBAGENTS_OUTPUT_MAX_CHARS`
-- default cap: `8000` chars
-- when truncation occurs, payloads include:
-  - `output_truncated: true`
-  - `output_total_chars`
-  - `output_returned_chars`
+- `output_total_chars` reports total output size
+- `output_returned_chars` matches `output_total_chars`
+- `output_truncated` is always `false`
 
 Example payload:
 

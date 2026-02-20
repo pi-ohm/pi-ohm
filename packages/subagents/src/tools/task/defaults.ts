@@ -25,12 +25,6 @@ function parseNonNegativeIntegerEnv(name: string): number | undefined {
   return parsed;
 }
 
-export function resolveOutputMaxChars(): number {
-  const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_OUTPUT_MAX_CHARS");
-  if (fromEnv !== undefined) return fromEnv;
-  return 8_000;
-}
-
 function resolveTaskRetentionMs(): number | undefined {
   return parsePositiveIntegerEnv("OHM_SUBAGENTS_TASK_RETENTION_MS");
 }
