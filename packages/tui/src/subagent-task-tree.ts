@@ -33,8 +33,8 @@ function markerForStatus(entry: SubagentTaskTreeEntry): string {
   if (entry.status === "succeeded") return "✓";
   if (entry.status === "failed") return "✕";
   if (entry.status === "cancelled") return "○";
-  if (entry.spinnerFrame === undefined) return "⠋";
-  const frameIndex = entry.spinnerFrame;
+  // Keep cadence aligned with pi-tui Loader (80ms, braille frames).
+  const frameIndex = entry.spinnerFrame ?? Math.floor(Date.now() / 80);
   return SPINNER_FRAMES[Math.abs(frameIndex) % SPINNER_FRAMES.length] ?? "⠋";
 }
 
@@ -225,6 +225,10 @@ function resolveToolCallLimit(options: SubagentTaskTreeRenderOptions): number {
   return clampPositive(options.maxToolCalls, fallback);
 }
 
+function pluralSuffix(count: number): string {
+  return count === 1 ? "" : "s";
+}
+
 function formatEntryChildren(
   entry: SubagentTaskTreeEntry,
   options: SubagentTaskTreeRenderOptions,
@@ -255,7 +259,10 @@ function formatEntryChildren(
     }
 
     if (hiddenCount > 0) {
-      children.push({ text: `… ${hiddenCount} more tool call(s)`, maxLines: 1 });
+      children.push({
+        text: `... (${hiddenCount} more tool call${pluralSuffix(hiddenCount)}, ctrl+o to expand)`,
+        maxLines: 1,
+      });
     }
 
     for (const toolCall of tail) {
@@ -331,9 +338,7 @@ export class SubagentTaskTreeComponent implements Component {
 
   render(width: number): string[] {
     const hasAnimatedEntries = this.entries.some(
-      (entry) =>
-        (entry.status === "running" || entry.status === "queued") &&
-        entry.spinnerFrame !== undefined,
+      (entry) => entry.status === "running" || entry.status === "queued",
     );
 
     if (!hasAnimatedEntries && this.cachedLines && this.cachedWidth === width) {

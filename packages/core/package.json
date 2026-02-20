@@ -15,7 +15,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./errors": "./src/errors.ts"
+    "./errors": "./src/errors.ts",
+    "./grammar": "./src/grammar.ts"
   },
   "dependencies": {
     "better-result": "catalog:"
