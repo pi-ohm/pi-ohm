@@ -14,7 +14,8 @@ import {
   type TaskLiveUiMode,
 } from "./runtime/live-ui";
 import { registerPrimarySubagentTools } from "./tools/primary";
-import { createDefaultTaskToolDependencies, registerTaskTool } from "./tools/task";
+import { createDefaultTaskToolDependencies } from "./tools/task/defaults";
+import { registerTaskTool } from "./tools/task/operations";
 
 interface CommandArgsEnvelope {
   args?: unknown;

@@ -1,14 +1,14 @@
-import type { TaskExecutionBackend } from "../../runtime/backend";
+import type { TaskExecutionBackend } from "../../runtime/backend/types";
 import type {
   TaskLifecycleState,
   TaskRuntimeLookup,
   TaskRuntimeSnapshot,
   TaskRuntimeStore,
-} from "../../runtime/tasks";
+} from "../../runtime/tasks/types";
 import type { SubagentInvocationMode } from "../../extension";
 import type { OhmSubagentDefinition } from "../../catalog";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
-import type { TaskToolParameters } from "../../schema";
+import type { TaskToolParameters } from "../../schema/task-tool";
 
 export type TaskToolStatus = TaskLifecycleState;
 export type TaskErrorCategory = "validation" | "policy" | "runtime" | "persistence" | "not_found";

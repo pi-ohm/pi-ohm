@@ -2,9 +2,9 @@ import type { AgentToolUpdateCallback } from "@mariozechner/pi-coding-agent";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../../catalog";
-import type { TaskExecutionBackend } from "../../../runtime/backend";
+import type { TaskExecutionBackend } from "../../../runtime/backend/types";
 import type { TaskExecutionEvent } from "../../../runtime/events";
-import type { TaskRuntimeSnapshot } from "../../../runtime/tasks";
+import type { TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import { getSubagentInvocationMode } from "../../../extension";
 import { emitTaskRuntimeUpdate, startTaskProgressPulse } from "../updates";
 import type {

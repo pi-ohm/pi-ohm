@@ -2,11 +2,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadOhmRuntimeConfig } from "@pi-ohm/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "../../catalog";
-import { createDefaultTaskExecutionBackend } from "../../runtime/backend";
-import {
-  createInMemoryTaskRuntimeStore,
-  createJsonTaskRuntimePersistence,
-} from "../../runtime/tasks";
+import { createDefaultTaskExecutionBackend } from "../../runtime/backend/index";
+import { createJsonTaskRuntimePersistence } from "../../runtime/tasks/persistence";
+import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks/store";
 import type { TaskToolDependencies } from "./contracts";
 
 function parsePositiveIntegerEnv(name: string): number | undefined {

@@ -1,6 +1,6 @@
 import { assistantTextFromEvents, toToolRowsFromEvents } from "../../../runtime/task-transcript";
-import type { TaskRuntimeLookup, TaskRuntimeSnapshot } from "../../../runtime/tasks";
-import type { TaskToolParameters } from "../../../schema";
+import type { TaskRuntimeLookup, TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
+import type { TaskToolParameters } from "../../../schema/task-tool";
 import type { TaskOutputPayload, TaskToolItemDetails, TaskToolResultDetails } from "../contracts";
 import { resolveOutputMaxChars } from "../defaults";
 import { isTerminalState } from "./shared";

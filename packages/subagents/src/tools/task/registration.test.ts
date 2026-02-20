@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { createDefaultTaskToolDependencies, registerTaskTool } from "./index";
+import { createDefaultTaskToolDependencies } from "./defaults";
+import { registerTaskTool } from "./operations";
 import { defineTest } from "./test-fixtures";
 
 defineTest("registerTaskTool registers task contract", () => {

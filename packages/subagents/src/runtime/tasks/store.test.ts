@@ -5,11 +5,9 @@ import { join } from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../catalog";
-import {
-  createInMemoryTaskRuntimeStore,
-  createJsonTaskRuntimePersistence,
-  type TaskRuntimePersistence,
-} from "./index";
+import { createJsonTaskRuntimePersistence } from "./persistence";
+import { createInMemoryTaskRuntimeStore } from "./store";
+import type { TaskRuntimePersistence } from "./types";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

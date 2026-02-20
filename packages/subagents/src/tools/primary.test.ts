@@ -4,14 +4,14 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
-import { createInMemoryTaskRuntimeStore } from "../runtime/tasks";
+import { createInMemoryTaskRuntimeStore } from "../runtime/tasks/store";
 import {
   PrimaryToolParametersSchemasBySubagent,
   registerPrimarySubagentTools,
   runPrimarySubagentTool,
 } from "./primary";
-import type { TaskToolDependencies } from "./task";
-import { runTaskToolMvp } from "./task";
+import type { TaskToolDependencies } from "./task/contracts";
+import { runTaskToolMvp } from "./task/operations";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

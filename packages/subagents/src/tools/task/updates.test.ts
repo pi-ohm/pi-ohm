@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import { SubagentRuntimeError } from "../../errors";
-import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks";
-import type { TaskExecutionBackend } from "../../runtime/backend";
-import { runTaskToolMvp, type TaskToolDependencies } from "./index";
+import type { TaskExecutionBackend } from "../../runtime/backend/types";
+import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks/store";
+import type { TaskToolDependencies } from "./contracts";
+import { runTaskToolMvp } from "./operations";
 import { defineTest } from "./test-fixtures";
 
 const runtimeConfig: OhmRuntimeConfig = {

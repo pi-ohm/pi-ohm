@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { formatTaskToolCall, formatTaskToolResult } from "./index";
+import { formatTaskToolCall, formatTaskToolResult } from "./render";
 import { defineTest, stripAnsi } from "./test-fixtures";
 
 defineTest("formatTaskToolCall formats batch start", () => {

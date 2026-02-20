@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createTaskRuntimePresentation, formatElapsed, renderTaskSnapshotLines } from "./ui";
-import type { TaskRuntimeSnapshot } from "./tasks";
+import type { TaskRuntimeSnapshot } from "./tasks/types";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

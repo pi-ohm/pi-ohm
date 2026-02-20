@@ -7,7 +7,7 @@ import {
   parseTaskToolParameters,
   TaskToolRegistrationParametersSchema,
   type TaskToolParameters,
-} from "../../schema";
+} from "../../schema/task-tool";
 import type { RunTaskToolInput, TaskToolDependencies, TaskToolResultDetails } from "./contracts";
 import { createDefaultTaskToolDependencies } from "./defaults";
 import {
@@ -18,15 +18,12 @@ import {
   isTaskToolResultDetails,
   toAgentToolResult,
 } from "./render";
-import {
-  operationNotSupportedDetails,
-  resolveBackendId,
-  runTaskCancel,
-  runTaskSend,
-  runTaskStart,
-  runTaskStatus,
-  runTaskWait,
-} from "./execution";
+import { resolveBackendId, operationNotSupportedDetails } from "./execution/shared";
+import { runTaskCancel } from "./execution/cancel";
+import { runTaskSend } from "./execution/send";
+import { runTaskStart } from "./execution/start";
+import { runTaskStatus } from "./execution/status";
+import { runTaskWait } from "./execution/wait";
 
 function inferRequestedOp(params: unknown): TaskToolParameters["op"] {
   if (!params || typeof params !== "object" || Array.isArray(params)) {

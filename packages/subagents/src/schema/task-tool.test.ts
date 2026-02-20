@@ -2,17 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
+import { ensureZodV4 } from "./shared";
 import {
-  ensureZodV4,
-  parseTaskToolParameters,
   SubagentProfileOverrideSchema,
-  TaskRecordSchema,
+  parseSubagentProfileOverride,
+  parseTaskRuntimeConfigFragment,
+} from "./runtime-config";
+import { TaskRecordSchema, parseTaskRecord } from "./task-record";
+import {
+  parseTaskToolParameters,
   TaskToolParametersSchema,
   TaskToolRegistrationParametersSchema,
-  parseSubagentProfileOverride,
-  parseTaskRecord,
-  parseTaskRuntimeConfigFragment,
-} from "./index";
+} from "./task-tool";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

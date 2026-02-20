@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname } from "node:path";
 import { Result } from "better-result";
 import { SubagentPersistenceError, SubagentRuntimeError, type SubagentResult } from "../../errors";
-import { parseTaskRecord } from "../../schema";
+import { parseTaskRecord } from "../../schema/task-record";
 import type { TaskExecutionEvent } from "../events";
 import {
   TASK_PERSISTENCE_SCHEMA_VERSION,

@@ -1,6 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
+import type { TaskToolParameters } from "../../../schema/task-tool";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import { toAgentToolResult } from "../render";
 import { prepareTaskExecution } from "./lifecycle";
@@ -18,7 +19,6 @@ import {
   subagentLookupFailedDetails,
   type TaskStartSingleParameters,
 } from "./shared";
-import type { TaskToolParameters } from "../../../schema";
 
 async function runTaskStartSingle(
   params: TaskStartSingleParameters,

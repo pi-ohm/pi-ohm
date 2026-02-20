@@ -7,7 +7,7 @@ import {
   type SubagentTaskTreeStatus,
 } from "@pi-ohm/tui";
 import { Result } from "better-result";
-import { parseTaskToolParameters, type TaskToolParameters } from "../../schema";
+import { parseTaskToolParameters, type TaskToolParameters } from "../../schema/task-tool";
 import { parseTaskTranscriptSections } from "../../runtime/task-transcript";
 import type {
   TaskErrorCategory,

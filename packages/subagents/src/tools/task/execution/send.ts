@@ -1,8 +1,8 @@
 import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
-import type { TaskExecutionBackend } from "../../../runtime/backend";
-import type { TaskToolParameters } from "../../../schema";
+import type { TaskExecutionBackend } from "../../../runtime/backend/types";
+import type { TaskToolParameters } from "../../../schema/task-tool";
 import { emitTaskRuntimeUpdate, startTaskProgressPulse } from "../updates";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import { toAgentToolResult } from "../render";

@@ -5,14 +5,14 @@ import type { OhmSubagentDefinition, OhmSubagentId } from "../../../catalog";
 import { SubagentRuntimeError } from "../../../errors";
 import { getSubagentInvocationMode } from "../../../extension";
 import { evaluateTaskPermission } from "../../../policy";
-import type { TaskExecutionBackend } from "../../../runtime/backend";
+import type { TaskExecutionBackend } from "../../../runtime/backend/types";
 import type {
   TaskLifecycleState,
   TaskRuntimeLookup,
   TaskRuntimeObservability,
   TaskRuntimeSnapshot,
-} from "../../../runtime/tasks";
-import type { TaskToolParameters } from "../../../schema";
+} from "../../../runtime/tasks/types";
+import type { TaskToolParameters } from "../../../schema/task-tool";
 import type {
   RunTaskToolInput,
   TaskToolItemDetails,

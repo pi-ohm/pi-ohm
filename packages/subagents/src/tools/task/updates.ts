@@ -5,7 +5,7 @@ import {
   getTaskLiveUiMode,
   type TaskLiveUiCoordinator,
 } from "../../runtime/live-ui";
-import type { TaskRuntimeSnapshot } from "../../runtime/tasks";
+import type { TaskRuntimeSnapshot } from "../../runtime/tasks/types";
 import { resolveOnUpdateThrottleMs } from "./defaults";
 import { detailsToText } from "./render";
 import type {

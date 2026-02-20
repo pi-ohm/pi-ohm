@@ -9,18 +9,16 @@ import type {
   TaskBackendSendInput,
   TaskBackendStartInput,
   TaskExecutionBackend,
-} from "../../runtime/backend";
-import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks";
+} from "../../runtime/backend/types";
+import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks/store";
 import {
   createCollapsedTaskToolResultComponent,
-  createTaskId,
   formatTaskToolCall,
   formatTaskToolResult,
-  registerTaskTool,
-  runTaskToolMvp,
-  type TaskToolDependencies,
-  type TaskToolResultDetails,
-} from "./index";
+} from "./render";
+import { createTaskId } from "./defaults";
+import { registerTaskTool, runTaskToolMvp } from "./operations";
+import type { TaskToolDependencies, TaskToolResultDetails } from "./contracts";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

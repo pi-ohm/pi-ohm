@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isTaskTransitionAllowed, isTerminalTaskState } from "./index";
+import { isTaskTransitionAllowed, isTerminalTaskState } from "./state-machine";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

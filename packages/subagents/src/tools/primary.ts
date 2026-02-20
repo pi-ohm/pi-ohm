@@ -8,13 +8,10 @@ import { Type, type Static } from "@sinclair/typebox";
 import type { OhmSubagentDefinition } from "../catalog";
 import { OHM_SUBAGENT_CATALOG } from "../catalog";
 import { getSubagentInvocationMode } from "../extension";
-import {
-  createDefaultTaskToolDependencies,
-  formatTaskToolResult,
-  runTaskToolMvp,
-  type TaskToolDependencies,
-  type TaskToolResultDetails,
-} from "./task";
+import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
+import { createDefaultTaskToolDependencies } from "./task/defaults";
+import { runTaskToolMvp } from "./task/operations";
+import { formatTaskToolResult } from "./task/render";
 
 const PrimaryControlFieldsSchema = {
   description: Type.Optional(Type.String({ minLength: 1 })),

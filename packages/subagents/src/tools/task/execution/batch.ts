@@ -2,7 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import { getTaskLiveUiMode } from "../../../runtime/live-ui";
-import type { TaskRuntimeSnapshot } from "../../../runtime/tasks";
+import type { TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import { emitTaskRuntimeUpdate } from "../updates";
 import type {
   RunTaskToolInput,

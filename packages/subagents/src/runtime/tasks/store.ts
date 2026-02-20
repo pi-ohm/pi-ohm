@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { SubagentRuntimeError, type SubagentResult } from "../../errors";
 import type { TaskExecutionEvent } from "../events";
-import { parseTaskRecord, type TaskRecord } from "../../schema";
+import { parseTaskRecord, type TaskRecord } from "../../schema/task-record";
 import {
   TASK_PERSISTENCE_SCHEMA_VERSION,
   type CreateTaskInput,

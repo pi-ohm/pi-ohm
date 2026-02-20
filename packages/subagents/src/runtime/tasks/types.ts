@@ -1,6 +1,6 @@
 import type { OhmSubagentDefinition } from "../../catalog";
 import type { SubagentPersistenceError, SubagentResult, SubagentRuntimeError } from "../../errors";
-import type { TaskRecord } from "../../schema";
+import type { TaskRecord } from "../../schema/task-record";
 import type { TaskExecutionEvent } from "../events";
 
 export type TaskLifecycleState = TaskRecord["state"];

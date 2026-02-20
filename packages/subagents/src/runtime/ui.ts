@@ -3,7 +3,7 @@ import {
   type SubagentTaskTreeEntry,
   type SubagentTaskTreeStatus,
 } from "@pi-ohm/tui";
-import type { TaskRuntimeSnapshot } from "./tasks";
+import type { TaskRuntimeSnapshot } from "./tasks/types";
 import {
   assistantTextFromEvents,
   parseTaskTranscriptSections,
