@@ -130,7 +130,7 @@ function resolveTreeResultFromSections(input: {
       return input.sections.narrativeLines.join("\n");
     }
 
-    return input.sections.narrativeLines[input.sections.narrativeLines.length - 1] ?? "(no output)";
+    return input.sections.narrativeLines.slice(0, 2).join("\n");
   }
 
   return undefined;
@@ -314,7 +314,7 @@ function treeRenderOptions(expanded: boolean): {
     compact: true,
     maxPromptLines: Number.MAX_SAFE_INTEGER,
     maxToolCalls: 2,
-    maxResultLines: 4,
+    maxResultLines: 2,
   };
 }
 

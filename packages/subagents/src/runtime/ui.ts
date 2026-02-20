@@ -131,7 +131,7 @@ function parseOutputSections(output: string): {
 
   return {
     toolCalls: sections.toolCalls,
-    result: sections.narrativeLines[sections.narrativeLines.length - 1] ?? "(no output)",
+    result: sections.narrativeLines.slice(0, 2).join("\n"),
   };
 }
 
@@ -207,7 +207,7 @@ export function createTaskRuntimePresentation(input: {
       compact: true,
       maxPromptLines: Number.MAX_SAFE_INTEGER,
       maxToolCalls: 2,
-      maxResultLines: 1,
+      maxResultLines: 2,
     },
   });
 

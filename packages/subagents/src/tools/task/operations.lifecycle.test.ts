@@ -415,8 +415,9 @@ defineTest("formatTaskToolResult preserves multiline output in compact text", ()
 
   assert.match(plain, /✓ Finder · Auth flow scan/);
   assert.match(plain, /├── Auth flow scan/);
-  assert.doesNotMatch(plain, /line one/);
-  assert.match(plain, /╰── line three/);
+  assert.match(plain, /line one/);
+  assert.match(plain, /line two/);
+  assert.doesNotMatch(plain, /line three/);
 });
 
 defineTest("formatTaskToolResult expanded view keeps multiline body", () => {

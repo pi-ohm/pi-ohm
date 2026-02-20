@@ -113,7 +113,7 @@ function toWidgetFrame(
           compact: true,
           maxPromptLines: Number.MAX_SAFE_INTEGER,
           maxToolCalls: toolsExpanded ? Number.MAX_SAFE_INTEGER : 2,
-          maxResultLines: 1,
+          maxResultLines: 2,
         };
 
   return {
