@@ -692,6 +692,79 @@ defineTest("formatTaskToolResult surfaces non-debug route fallback hints", () =>
   }
 });
 
+defineTest(
+  "formatTaskToolResult expands mixed batch observability into per-item lines in debug",
+  () => {
+    const previous = process.env.OHM_DEBUG;
+    process.env.OHM_DEBUG = "true";
+
+    try {
+      const verbose = formatTaskToolResult(
+        {
+          op: "status",
+          status: "running",
+          summary: "status for 2 task(s)",
+          backend: "interactive-sdk",
+          provider: "mixed",
+          model: "mixed",
+          runtime: "mixed",
+          route: "mixed",
+          prompt_profile: "mixed",
+          prompt_profile_source: "mixed",
+          prompt_profile_reason: "mixed",
+          items: [
+            {
+              id: "task_1",
+              found: true,
+              status: "running",
+              summary: "task 1",
+              provider: "openai",
+              model: "gpt-5",
+              runtime: "pi-sdk",
+              route: "interactive-sdk",
+              prompt_profile: "openai",
+              prompt_profile_source: "active_model",
+              prompt_profile_reason: "active_model_direct_match",
+            },
+            {
+              id: "task_2",
+              found: true,
+              status: "running",
+              summary: "task 2",
+              provider: "google",
+              model: "gemini-3-pro-preview",
+              runtime: "pi-sdk",
+              route: "interactive-sdk",
+              prompt_profile: "google",
+              prompt_profile_source: "active_model",
+              prompt_profile_reason: "active_model_direct_match",
+            },
+          ],
+        },
+        false,
+      );
+
+      assert.match(verbose, /batch_observability:/);
+      assert.match(
+        verbose,
+        /task_1: provider=openai model=gpt-5 runtime=pi-sdk route=interactive-sdk/,
+      );
+      assert.match(
+        verbose,
+        /task_2: provider=google model=gemini-3-pro-preview runtime=pi-sdk route=interactive-sdk/,
+      );
+      assert.match(verbose, /prompt_profile=openai source=active_model/);
+      assert.match(verbose, /prompt_profile=google source=active_model/);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OHM_DEBUG;
+      } else {
+        process.env.OHM_DEBUG = previous;
+      }
+    }
+  },
+);
+
 defineTest("runTaskToolMvp returns validation failure for malformed payload", async () => {
   const result = await runTask({
     params: { op: "start", prompt: "missing fields" },

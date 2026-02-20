@@ -158,6 +158,8 @@ Trace lines are hidden by default. Enable debug rendering with:
 When `OHM_DEBUG=true`, running stream updates now include current routing metadata
 (`provider`, `model`, `runtime`, `route`, `prompt_profile*`) as soon as backend
 preflight resolves them.
+For batch payloads with mixed routing, debug text also prints per-item observability
+rows instead of only `mixed`.
 
 Optional safety fallback:
 

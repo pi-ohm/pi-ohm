@@ -409,6 +409,45 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (typeof details.event_count === "number") lines.push(`event_count: ${details.event_count}`);
   if (details.assistant_text) lines.push(`assistant_text: ${details.assistant_text}`);
   if (details.timed_out) lines.push("timed_out: true");
+
+  const shouldShowPerItemObservability =
+    details.items !== undefined &&
+    details.items.length > 0 &&
+    (details.provider === "mixed" ||
+      details.model === "mixed" ||
+      details.runtime === "mixed" ||
+      details.route === "mixed" ||
+      details.prompt_profile === "mixed" ||
+      details.prompt_profile_source === "mixed" ||
+      details.prompt_profile_reason === "mixed");
+
+  if (shouldShowPerItemObservability) {
+    lines.push("", "batch_observability:");
+    for (const item of details.items ?? []) {
+      if (!item.found) {
+        lines.push(`- ${item.id}: unknown`);
+        continue;
+      }
+
+      const provider = item.provider ?? "unavailable";
+      const model = item.model ?? "unavailable";
+      const runtime = item.runtime ?? item.backend ?? "unavailable";
+      const route = item.route ?? item.backend ?? "unavailable";
+      const promptProfile = item.prompt_profile ?? "unavailable";
+      const promptProfileSource = item.prompt_profile_source ?? "unavailable";
+      const promptProfileReason = item.prompt_profile_reason ?? "unavailable";
+
+      lines.push(
+        `- ${item.id}: provider=${provider} model=${model} runtime=${runtime} route=${route}`,
+      );
+      if (isPromptProfileDebugEnabled()) {
+        lines.push(
+          `  prompt_profile=${promptProfile} source=${promptProfileSource} reason=${promptProfileReason}`,
+        );
+      }
+    }
+  }
+
   if (details.tool_rows && details.tool_rows.length > 0) {
     lines.push("", "tool_rows:");
     for (const toolRow of details.tool_rows) {
