@@ -1819,9 +1819,13 @@ const onUpdateLastEmissionByCallback = new WeakMap<
   {
     readonly atEpochMs: number;
     readonly signature: string;
+    readonly status: TaskToolStatus;
+    readonly eventCount: number | undefined;
+    readonly toolRowsSignature: string;
+    readonly assistantText: string | undefined;
   }
 >();
-const LIVE_UI_HEARTBEAT_MS = 120;
+const LIVE_UI_HEARTBEAT_MS = 60;
 
 function isThrottleBypassUpdate(details: TaskToolResultDetails): boolean {
   if (
@@ -1847,6 +1851,9 @@ function shouldEmitOnUpdate(
   const nextSignature = JSON.stringify(details);
   const nowEpochMs = Date.now();
   const previous = onUpdateLastEmissionByCallback.get(callback);
+  const nextEventCount = typeof details.event_count === "number" ? details.event_count : undefined;
+  const nextToolRowsSignature = details.tool_rows ? details.tool_rows.join("\n") : "";
+  const nextAssistantText = details.assistant_text;
 
   if (previous && previous.signature === nextSignature) {
     return false;
@@ -1854,14 +1861,30 @@ function shouldEmitOnUpdate(
 
   const bypassThrottle = isThrottleBypassUpdate(details);
   const throttleMs = resolveOnUpdateThrottleMs();
+  const hasRealtimeDelta =
+    previous !== undefined &&
+    (previous.status !== details.status ||
+      (nextEventCount !== undefined &&
+        (previous.eventCount === undefined || nextEventCount > previous.eventCount)) ||
+      previous.toolRowsSignature !== nextToolRowsSignature ||
+      previous.assistantText !== nextAssistantText);
 
-  if (!bypassThrottle && previous && nowEpochMs - previous.atEpochMs < throttleMs) {
+  if (
+    !bypassThrottle &&
+    !hasRealtimeDelta &&
+    previous &&
+    nowEpochMs - previous.atEpochMs < throttleMs
+  ) {
     return false;
   }
 
   onUpdateLastEmissionByCallback.set(callback, {
     atEpochMs: nowEpochMs,
     signature: nextSignature,
+    status: details.status,
+    eventCount: nextEventCount,
+    toolRowsSignature: nextToolRowsSignature,
+    assistantText: nextAssistantText,
   });
   return true;
 }

@@ -19,6 +19,7 @@ import {
   registerTaskTool,
   runTaskToolMvp,
   type TaskToolDependencies,
+  type TaskToolResultDetails,
 } from "./task";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
@@ -824,6 +825,115 @@ defineTest("runTaskToolMvp streams sdk tool rows into onUpdate while running", a
     const flattened = runningToolRows.flat();
     assert.equal(
       flattened.some((row) => row.includes("Read")),
+      true,
+    );
+  } finally {
+    if (previousThrottle === undefined) {
+      delete process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+    } else {
+      process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = previousThrottle;
+    }
+  }
+});
+
+defineTest("runTaskToolMvp bypasses throttle for realtime sdk event updates", async () => {
+  const previousThrottle = process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
+  process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "5000";
+
+  try {
+    const deps = makeDeps({
+      backend: {
+        id: "interactive-sdk",
+        async executeStart(input: TaskBackendStartInput) {
+          input.onEvent?.({
+            type: "tool_start",
+            toolCallId: "tool_1",
+            toolName: "read",
+            argsText: '{"path":"src/index.ts"}',
+            atEpochMs: 1001,
+          });
+          input.onEvent?.({
+            type: "assistant_text_delta",
+            delta: "Scanning",
+            atEpochMs: 1002,
+          });
+          input.onEvent?.({
+            type: "tool_end",
+            toolCallId: "tool_1",
+            toolName: "read",
+            resultText: '{"ok":true}',
+            status: "success",
+            atEpochMs: 1003,
+          });
+
+          return Result.ok({
+            summary: "Finder: streamed",
+            output: "done",
+            provider: "unavailable",
+            model: "unavailable",
+            runtime: "pi-sdk",
+            route: "interactive-sdk",
+            events: [
+              {
+                type: "tool_start",
+                toolCallId: "tool_1",
+                toolName: "read",
+                argsText: '{"path":"src/index.ts"}',
+                atEpochMs: 1001,
+              },
+              {
+                type: "assistant_text_delta",
+                delta: "Scanning",
+                atEpochMs: 1002,
+              },
+              {
+                type: "tool_end",
+                toolCallId: "tool_1",
+                toolName: "read",
+                resultText: '{"ok":true}',
+                status: "success",
+                atEpochMs: 1003,
+              },
+            ],
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const runningUpdates: TaskToolResultDetails[] = [];
+    const result = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Throttle bypass stream",
+        prompt: "Stream now",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: (partial) => {
+        if (partial.details.status === "running") {
+          runningUpdates.push(partial.details);
+        }
+      },
+      deps,
+    });
+
+    assert.equal(result.details.status, "succeeded");
+    assert.equal(runningUpdates.length > 1, true);
+    assert.equal(
+      runningUpdates.some((details) => (details.event_count ?? 0) >= 1),
+      true,
+    );
+    assert.equal(
+      runningUpdates.some((details) =>
+        (details.tool_rows ?? []).some((line) => line.includes("Read")),
+      ),
       true,
     );
   } finally {

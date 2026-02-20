@@ -51,7 +51,7 @@ interface TaskLiveUiWidgetFrame {
 }
 
 const DEFAULT_STATUS_KEY = "ohm-subagents";
-const DEFAULT_UPDATE_INTERVAL_MS = 150;
+const DEFAULT_UPDATE_INTERVAL_MS = 60;
 const DEFAULT_IDLE_GRACE_MS = 2000;
 const DEFAULT_MAX_WIDGET_ITEMS = 3;
 
