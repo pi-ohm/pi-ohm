@@ -8,6 +8,20 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
+function stripAnsi(value: string): string {
+  return value
+    .split("\u001b[1m")
+    .join("")
+    .split("\u001b[22m")
+    .join("")
+    .split("\u001b[4m")
+    .join("")
+    .split("\u001b[24m")
+    .join("")
+    .split("\u001b[0m")
+    .join("");
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -247,8 +261,9 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
 
     const compactFrame = renderWidgetPreview(widgetCalls.at(-1));
     assert.notEqual(compactFrame, undefined);
-    assert.match((compactFrame ?? [""])[0] ?? "", /Finder/);
-    assert.equal((compactFrame ?? []).join("\n").includes("Find target"), true);
+    const compactText = stripAnsi((compactFrame ?? []).join("\n"));
+    assert.match(stripAnsi((compactFrame ?? [""])[0] ?? ""), /Finder/);
+    assert.equal(compactText.includes("Find target"), true);
 
     setTaskLiveUiMode("off");
     coordinator.publish(activePresentation);
@@ -263,7 +278,8 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
 
     const verboseFrame = renderWidgetPreview(widgetCalls.at(-1));
     assert.notEqual(verboseFrame, undefined);
-    assert.equal((verboseFrame ?? []).join("\n").includes("Find target"), true);
+    const verboseText = stripAnsi((verboseFrame ?? []).join("\n"));
+    assert.equal(verboseText.includes("Find target"), true);
 
     coordinator.dispose();
   } finally {

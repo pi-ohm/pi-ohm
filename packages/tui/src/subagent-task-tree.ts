@@ -6,6 +6,8 @@ import {
 } from "@mariozechner/pi-tui";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const ANSI_BOLD_ON = "\u001b[1m";
+const ANSI_BOLD_OFF = "\u001b[22m";
 
 export type SubagentTaskTreeStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
@@ -40,6 +42,32 @@ function clampPositive(value: number | undefined, fallback: number): number {
   return Math.floor(value);
 }
 
+function bold(text: string): string {
+  if (text.length === 0) return text;
+  return `${ANSI_BOLD_ON}${text}${ANSI_BOLD_OFF}`;
+}
+
+function styleEntryTitle(title: string): string {
+  const separator = " · ";
+  const separatorIndex = title.indexOf(separator);
+  if (separatorIndex <= 0) return bold(title);
+
+  const subagentName = title.slice(0, separatorIndex);
+  const rest = title.slice(separatorIndex + separator.length);
+  return `${bold(subagentName)}${separator}${rest}`;
+}
+
+function styleToolPrefix(prefix: string): string {
+  const withMarker = /^([✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+)(\S+)$/u.exec(prefix);
+  if (withMarker) {
+    const marker = withMarker[1] ?? "";
+    const toolName = withMarker[2] ?? "";
+    return `${marker}${bold(toolName)}`;
+  }
+
+  return bold(prefix);
+}
+
 function normalizeToolCall(line: string): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "✓ (empty tool line)";
@@ -50,7 +78,7 @@ function normalizeToolCall(line: string): string {
 
   const prefix = markerPrefix[1] ?? "";
   const suffix = markerPrefix[2] ?? "";
-  const normalized = `${prefix}${underlinePathTokens(suffix)}`;
+  const normalized = `${styleToolPrefix(prefix)}${underlinePathTokens(suffix)}`;
   if (/^[✓✕○…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u.test(trimmed)) {
     return normalized;
   }
@@ -219,7 +247,7 @@ export function renderSubagentTaskTreeLines(input: {
 
   for (const [entryIndex, entry] of input.entries.entries()) {
     const marker = markerForStatus(entry);
-    lines.push(truncateToWidth(`  ${marker} ${entry.title}`, safeWidth));
+    lines.push(truncateToWidth(`  ${marker} ${styleEntryTitle(entry.title)}`, safeWidth));
 
     const children = formatEntryChildren(entry, options);
     for (const [childIndex, child] of children.entries()) {

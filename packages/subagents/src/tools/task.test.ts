@@ -26,7 +26,17 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
 }
 
 function stripAnsi(value: string): string {
-  return value.split("\u001b[4m").join("").split("\u001b[24m").join("").split("\u001b[0m").join("");
+  return value
+    .split("\u001b[1m")
+    .join("")
+    .split("\u001b[22m")
+    .join("")
+    .split("\u001b[4m")
+    .join("")
+    .split("\u001b[24m")
+    .join("")
+    .split("\u001b[0m")
+    .join("");
 }
 
 function isRenderableWidget(value: unknown): value is { render(width: number): string[] } {
@@ -373,11 +383,12 @@ defineTest("formatTaskToolResult renders collection items", () => {
     },
     false,
   );
+  const plain = stripAnsi(compact);
 
-  assert.doesNotMatch(compact, /items:/);
-  assert.match(compact, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Auth flow scan/);
-  assert.match(compact, /✕ Task task_missing/);
-  assert.match(compact, /Unknown task id/);
+  assert.doesNotMatch(plain, /items:/);
+  assert.match(plain, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Finder · Auth flow scan/);
+  assert.match(plain, /✕ Task task_missing/);
+  assert.match(plain, /Unknown task id/);
 });
 
 defineTest("formatTaskToolResult preserves multiline output in compact text", () => {
@@ -395,11 +406,12 @@ defineTest("formatTaskToolResult preserves multiline output in compact text", ()
     },
     false,
   );
+  const plain = stripAnsi(compact);
 
-  assert.match(compact, /✓ Finder · Auth flow scan/);
-  assert.match(compact, /├── Auth flow scan/);
-  assert.doesNotMatch(compact, /line one/);
-  assert.match(compact, /╰── line three/);
+  assert.match(plain, /✓ Finder · Auth flow scan/);
+  assert.match(plain, /├── Auth flow scan/);
+  assert.doesNotMatch(plain, /line one/);
+  assert.match(plain, /╰── line three/);
 });
 
 defineTest("formatTaskToolResult expanded view keeps multiline body", () => {
@@ -445,10 +457,11 @@ defineTest("formatTaskToolResult preserves per-item output in compact collection
     },
     false,
   );
+  const plain = stripAnsi(compact);
 
-  assert.match(compact, /✓ Finder · Chat transcript/);
-  assert.match(compact, /✓ tool_call: read/);
-  assert.match(compact, /╰── done/);
+  assert.match(plain, /✓ Finder · Chat transcript/);
+  assert.match(plain, /✓ tool_call: read/);
+  assert.match(plain, /╰── done/);
 });
 
 defineTest("formatTaskToolResult compacts fallback tool_call lifecycle lines", () => {
@@ -494,9 +507,10 @@ defineTest("formatTaskToolResult prefers structured tool_rows over output scrapi
     },
     false,
   );
+  const plain = stripAnsi(compact);
 
-  assert.match(compact, /○ Read/);
-  assert.match(compact, /✓ Read/);
+  assert.match(plain, /○ Read/);
+  assert.match(plain, /✓ Read/);
 });
 
 defineTest("formatTaskToolResult uses minimal inline style for running background tasks", () => {
@@ -537,11 +551,12 @@ defineTest("formatTaskToolResult hides backend metadata when OHM_DEBUG is disabl
       },
       false,
     );
+    const plain = stripAnsi(compact);
 
-    assert.doesNotMatch(compact, /backend:/);
-    assert.doesNotMatch(compact, /provider:/);
-    assert.doesNotMatch(compact, /runtime:/);
-    assert.match(compact, /✓ wait for 1 task\(s\)/);
+    assert.doesNotMatch(plain, /backend:/);
+    assert.doesNotMatch(plain, /provider:/);
+    assert.doesNotMatch(plain, /runtime:/);
+    assert.match(plain, /✓ wait for 1 task\(s\)/);
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_DEBUG;
@@ -718,7 +733,7 @@ defineTest(
     for (const update of updates) {
       assert.equal(update.includes("[finder]"), false);
     }
-    assert.match(updates.at(-1) ?? "", /✓ Finder/);
+    assert.match(stripAnsi(updates.at(-1) ?? ""), /✓ Finder/);
   },
 );
 
@@ -926,10 +941,11 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
     assert.fail("Expected text content block");
   }
 
-  assert.match(textBlock.text, /✓ Finder · Multiline/);
-  assert.match(textBlock.text, /├── Return multiple lines/);
-  assert.doesNotMatch(textBlock.text, /alpha/);
-  assert.match(textBlock.text, /gamma/);
+  const plainText = stripAnsi(textBlock.text);
+  assert.match(plainText, /✓ Finder · Multiline/);
+  assert.match(plainText, /├── Return multiple lines/);
+  assert.doesNotMatch(plainText, /alpha/);
+  assert.match(plainText, /gamma/);
 });
 
 defineTest("runTaskToolMvp exposes truncation metadata for long output", async () => {
@@ -1133,7 +1149,7 @@ defineTest("runTaskToolMvp wait streams live inline updates in UI mode", async (
   assert.equal(updateStatuses.includes("running"), true);
   assert.equal(updateStatuses.at(-1), "succeeded");
   assert.equal(updates.length >= 2, true);
-  assert.match(updates.at(-1) ?? "", /✓ Finder · Wait stream/);
+  assert.match(stripAnsi(updates.at(-1) ?? ""), /✓ Finder · Wait stream/);
 });
 
 defineTest("runTaskToolMvp wait exposes aborted outcome contract", async () => {

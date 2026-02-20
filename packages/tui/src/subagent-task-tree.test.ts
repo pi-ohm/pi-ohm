@@ -11,7 +11,17 @@ function defineTest(name: string, run: () => void | Promise<void>): void {
 }
 
 function stripAnsi(value: string): string {
-  return value.split("\u001b[4m").join("").split("\u001b[24m").join("").split("\u001b[0m").join("");
+  return value
+    .split("\u001b[1m")
+    .join("")
+    .split("\u001b[22m")
+    .join("")
+    .split("\u001b[4m")
+    .join("")
+    .split("\u001b[24m")
+    .join("")
+    .split("\u001b[0m")
+    .join("");
 }
 
 function makeEntry(overrides: Partial<SubagentTaskTreeEntry> = {}): SubagentTaskTreeEntry {
@@ -78,7 +88,9 @@ defineTest("renderSubagentTaskTreeLines underlines path-like tool call tokens", 
 
   const rendered = lines.join("\n");
   assert.equal(
-    rendered.includes("✓ Read \u001b[4mpackages/subagents/src/extension.ts\u001b[24m @1-20"),
+    rendered.includes(
+      "✓ \u001b[1mRead\u001b[22m \u001b[4mpackages/subagents/src/extension.ts\u001b[24m @1-20",
+    ),
     true,
   );
 });
