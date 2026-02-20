@@ -1836,6 +1836,71 @@ defineTest("runTaskToolMvp supports batch start with deterministic item ordering
   assert.equal(items[2]?.status, "succeeded");
 });
 
+defineTest("runTaskToolMvp batch start streams aggregate updates", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "batch-streaming-backend",
+      async executeStart(input: TaskBackendStartInput) {
+        const delay = input.description.includes("slow-a") ? 140 : 220;
+        await sleep(delay);
+
+        return Result.ok({
+          summary: `Finder: ${input.description}`,
+          output: `output for ${input.description}`,
+        });
+      },
+      async executeSend(input: TaskBackendSendInput) {
+        return Result.ok({
+          summary: `Finder follow-up: ${input.prompt}`,
+          output: `follow-up output for ${input.prompt}`,
+        });
+      },
+    },
+  });
+
+  const updates: TaskToolResultDetails[] = [];
+  const result = await runTask({
+    params: {
+      op: "start",
+      parallel: true,
+      tasks: [
+        {
+          subagent_type: "finder",
+          description: "slow-a",
+          prompt: "trace slow-a",
+        },
+        {
+          subagent_type: "finder",
+          description: "slow-b",
+          prompt: "trace slow-b",
+        },
+      ],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: (partial) => {
+      updates.push(partial.details);
+    },
+    deps,
+  });
+
+  assert.equal(result.details.status, "succeeded");
+  const runningUpdates = updates.filter((details) => details.status === "running");
+  assert.equal(runningUpdates.length > 0, true);
+  assert.equal(
+    runningUpdates.every((details) => Array.isArray(details.items) && details.items.length === 2),
+    true,
+  );
+  assert.equal(
+    runningUpdates.every((details) => details.task_id === undefined),
+    true,
+  );
+  assert.equal(
+    runningUpdates.some((details) => details.summary.includes("Running batch tasks")),
+    true,
+  );
+});
+
 defineTest("runTaskToolMvp batch start isolates failures", async () => {
   const backend = new CountingBackend();
   const deps = makeDeps({ backend });

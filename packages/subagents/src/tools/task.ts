@@ -2388,18 +2388,33 @@ function resolveBatchStatus(items: readonly TaskToolItemDetails[]): {
   const acceptedCount = items.filter((item) => item.found).length;
   const rejectedCount = totalCount - acceptedCount;
 
+  const runningCount = items.filter(
+    (item) => item.status === "running" || item.status === "queued",
+  ).length;
   const succeededCount = items.filter((item) => item.status === "succeeded").length;
-  const failedCount = items.filter((item) => item.status === "failed" || !item.found).length;
+  const failedCount = items.filter(
+    (item) => item.status === "failed" || item.status === "cancelled" || !item.found,
+  ).length;
 
   const batchStatus: TaskBatchStatus =
     acceptedCount === 0
       ? "rejected"
-      : failedCount === 0 && rejectedCount === 0
-        ? "completed"
-        : "partial";
+      : runningCount > 0
+        ? failedCount === 0 && rejectedCount === 0
+          ? "accepted"
+          : "partial"
+        : failedCount === 0 && rejectedCount === 0
+          ? "completed"
+          : "partial";
 
   const status: TaskToolStatus =
-    succeededCount === acceptedCount && rejectedCount === 0 ? "succeeded" : "failed";
+    acceptedCount === 0
+      ? "failed"
+      : runningCount > 0
+        ? "running"
+        : succeededCount === acceptedCount && rejectedCount === 0
+          ? "succeeded"
+          : "failed";
 
   return {
     status,
@@ -2408,6 +2423,60 @@ function resolveBatchStatus(items: readonly TaskToolItemDetails[]): {
     rejectedCount,
     batchStatus,
   };
+}
+
+function summarizeBatchProgress(
+  items: readonly TaskToolItemDetails[],
+  batch: {
+    readonly status: TaskToolStatus;
+    readonly acceptedCount: number;
+    readonly rejectedCount: number;
+  },
+): string {
+  if (batch.status !== "running") {
+    return summarizeBatchStart(items);
+  }
+
+  const activeCount = items.filter(
+    (item) => item.status === "running" || item.status === "queued",
+  ).length;
+  const doneCount = items.filter(
+    (item) =>
+      item.status === "succeeded" || item.status === "failed" || item.status === "cancelled",
+  ).length;
+  const failedCount = items.filter(
+    (item) => item.status === "failed" || item.status === "cancelled",
+  ).length;
+
+  return [
+    `Running batch tasks: ${doneCount}/${batch.acceptedCount} done`,
+    `active ${activeCount}`,
+    `failed ${failedCount}`,
+    `rejected ${batch.rejectedCount}`,
+  ].join(" · ");
+}
+
+function hydrateBatchItems(input: {
+  readonly items: readonly (TaskToolItemDetails | undefined)[];
+  readonly prepared: readonly PreparedTaskExecution[];
+  readonly deps: TaskToolDependencies;
+}): readonly TaskToolItemDetails[] {
+  const next: Array<TaskToolItemDetails | undefined> = [...input.items];
+
+  for (const execution of input.prepared) {
+    const lookup = input.deps.taskStore.getTasks([execution.taskId])[0];
+    next[execution.index] = lookupToItem(lookup);
+  }
+
+  return next.map((item, index) => {
+    if (item) return item;
+    return toTaskItemFailure({
+      id: `task_batch_${index + 1}`,
+      summary: "Batch task result unavailable",
+      errorCode: "task_batch_result_unavailable",
+      errorMessage: "Batch task result unavailable",
+    });
+  });
 }
 
 async function runTaskStartBatch(
@@ -2483,7 +2552,7 @@ async function runTaskStartBatch(
       cwd: input.cwd,
       config: config.config,
       signal: input.signal,
-      onUpdate: input.onUpdate,
+      onUpdate: undefined,
       hasUI: input.hasUI,
       ui: input.ui,
       deps: input.deps,
@@ -2499,8 +2568,57 @@ async function runTaskStartBatch(
   }
 
   const concurrency = params.parallel ? resolveBatchMaxConcurrency(config.config) : 1;
+  const shouldStreamBatchProgress =
+    input.onUpdate !== undefined || (input.hasUI && input.ui && getTaskLiveUiMode() !== "off");
 
-  const completed = await runPreparedTaskExecutions(prepared, concurrency);
+  const emitBatchProgress = (): void => {
+    const hydratedItems = hydrateBatchItems({
+      items,
+      prepared,
+      deps: input.deps,
+    });
+    const batch = resolveBatchStatus(hydratedItems);
+    const observability = resolveCollectionObservability(hydratedItems, backendId);
+
+    emitTaskRuntimeUpdate({
+      details: {
+        op: "start",
+        status: batch.status,
+        summary: summarizeBatchProgress(hydratedItems, batch),
+        backend: backendId,
+        provider: observability.provider,
+        model: observability.model,
+        runtime: observability.runtime,
+        route: observability.route,
+        items: hydratedItems,
+        total_count: batch.totalCount,
+        accepted_count: batch.acceptedCount,
+        rejected_count: batch.rejectedCount,
+        batch_status: batch.batchStatus,
+      },
+      deps: input.deps,
+      hasUI: input.hasUI,
+      ui: input.ui,
+      onUpdate: input.onUpdate,
+    });
+  };
+
+  let progressInterval: ReturnType<typeof setInterval> | undefined;
+  if (shouldStreamBatchProgress) {
+    emitBatchProgress();
+    progressInterval = setInterval(() => {
+      emitBatchProgress();
+    }, LIVE_UI_HEARTBEAT_MS);
+  }
+
+  let completed: readonly TaskRuntimeSnapshot[];
+  try {
+    completed = await runPreparedTaskExecutions(prepared, concurrency);
+  } finally {
+    if (progressInterval) {
+      clearInterval(progressInterval);
+    }
+  }
   for (let index = 0; index < prepared.length; index += 1) {
     const execution = prepared[index];
     const snapshot = completed[index];
