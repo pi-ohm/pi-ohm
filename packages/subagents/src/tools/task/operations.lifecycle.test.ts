@@ -1337,11 +1337,13 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
   }
 
   const plainText = stripAnsi(textBlock.text);
-  assert.match(plainText, /✓ Finder · Multiline/);
-  assert.match(plainText, /├── Return multiple lines/);
+  assert.match(plainText, /^task_id:\s+task_/m);
+  assert.match(plainText, /^timestamp:\s+\d{4}-\d{2}-\d{2}T/m);
+  assert.match(plainText, /^result:$/m);
   assert.match(plainText, /alpha/);
   assert.match(plainText, /beta/);
   assert.match(plainText, /gamma/);
+  assert.doesNotMatch(plainText, /├──|╰──|✓|✕/);
 });
 
 defineTest("runTaskToolMvp always returns full output for long payloads", async () => {
@@ -1391,8 +1393,12 @@ defineTest("runTaskToolMvp always returns full output for long payloads", async 
       assert.fail("Expected text content block");
     }
 
-    assert.doesNotMatch(textBlock.text, /truncated/);
-    assert.match(textBlock.text, /abcdefghijklmnopqrstuvwxyz0123456789/);
+    const plainText = stripAnsi(textBlock.text);
+    assert.match(plainText, /^task_id:\s+task_/m);
+    assert.match(plainText, /^timestamp:\s+\d{4}-\d{2}-\d{2}T/m);
+    assert.match(plainText, /^result:$/m);
+    assert.doesNotMatch(plainText, /truncated/);
+    assert.match(plainText, /abcdefghijklmnopqrstuvwxyz0123456789/);
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;
@@ -2535,7 +2541,12 @@ defineTest("runTaskToolMvp uses assistant_text from events for terminal result r
     assert.fail("Expected text block");
   }
 
-  assert.match(textBlock.text, /structured final answer/);
+  const plainText = stripAnsi(textBlock.text);
+  assert.match(plainText, /^task_id:\s+task_/m);
+  assert.match(plainText, /^timestamp:\s+\d{4}-\d{2}-\d{2}T/m);
+  assert.match(plainText, /^result:$/m);
+  assert.match(plainText, /structured final answer/);
+  assert.doesNotMatch(plainText, /tool_call:|├──|╰──|✓/);
 });
 
 defineTest("runTaskToolMvp status aggregates runtime observability from task items", async () => {

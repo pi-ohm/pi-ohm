@@ -85,6 +85,80 @@ function withItemObservabilityDefaults(item: TaskToolItemDetails): TaskToolItemD
   };
 }
 
+function toIsoTimestamp(epochMs: number | undefined): string | undefined {
+  if (typeof epochMs !== "number" || !Number.isFinite(epochMs)) return undefined;
+  const date = new Date(epochMs);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
+
+function extractNarrativeResult(output: string | undefined): string | undefined {
+  if (!output) return undefined;
+  const sections = parseTaskTranscriptSections(output);
+  if (sections.narrativeLines.length === 0) return undefined;
+  return sections.narrativeLines.join("\n");
+}
+
+function resolveModelResultText(details: TaskToolResultDetails): string {
+  const assistantText = details.assistant_text?.trim();
+  if (assistantText && assistantText.length > 0) return assistantText;
+
+  const outputNarrative =
+    details.output_available && details.output ? extractNarrativeResult(details.output) : undefined;
+  if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
+
+  if (details.items && details.items.length === 1) {
+    const [item] = details.items;
+    if (item && item.found) {
+      const itemAssistantText = item.assistant_text?.trim();
+      if (itemAssistantText && itemAssistantText.length > 0) return itemAssistantText;
+
+      const itemNarrative =
+        item.output_available && item.output ? extractNarrativeResult(item.output) : undefined;
+      if (itemNarrative && itemNarrative.length > 0) return itemNarrative;
+
+      if (item.error_message && item.error_message.length > 0) return item.error_message;
+      return item.summary;
+    }
+  }
+
+  if (details.error_message && details.error_message.length > 0) return details.error_message;
+  return details.summary;
+}
+
+function resolveModelTaskId(details: TaskToolResultDetails): string {
+  if (details.task_id && details.task_id.length > 0) return details.task_id;
+  if (details.items && details.items.length === 1) {
+    const [item] = details.items;
+    if (item && item.id.length > 0) return item.id;
+  }
+  return "unavailable";
+}
+
+function resolveModelTimestamp(details: TaskToolResultDetails): string {
+  const directTimestamp =
+    toIsoTimestamp(details.ended_at_epoch_ms) ?? toIsoTimestamp(details.updated_at_epoch_ms);
+  if (directTimestamp) return directTimestamp;
+
+  if (details.items && details.items.length === 1) {
+    const [item] = details.items;
+    if (item) {
+      const itemTimestamp =
+        toIsoTimestamp(item.ended_at_epoch_ms) ?? toIsoTimestamp(item.updated_at_epoch_ms);
+      if (itemTimestamp) return itemTimestamp;
+    }
+  }
+
+  return "unavailable";
+}
+
+function toModelFacingContent(details: TaskToolResultDetails): string {
+  const taskId = resolveModelTaskId(details);
+  const timestamp = resolveModelTimestamp(details);
+  const result = resolveModelResultText(details);
+  return [`task_id: ${taskId}`, `timestamp: ${timestamp}`, "result:", result].join("\n");
+}
+
 export function isOhmDebugEnabled(): boolean {
   const raw = process.env.OHM_DEBUG?.trim().toLowerCase();
   if (!raw) return false;
@@ -658,7 +732,7 @@ export function toAgentToolResult(
   );
 
   return {
-    content: [{ type: "text", text: detailsToText(normalizedDetails, true) }],
+    content: [{ type: "text", text: toModelFacingContent(normalizedDetails) }],
     details: normalizedDetails,
   };
 }

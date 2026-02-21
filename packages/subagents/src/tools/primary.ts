@@ -296,16 +296,16 @@ function toPrimaryToolCallText(subagent: OhmSubagentDefinition, params: unknown)
 }
 
 function toResultText(result: AgentToolResult<unknown>): string {
+  if (isTaskToolResultDetails(result.details)) {
+    return formatTaskToolResult(result.details, false);
+  }
+
   const textBlocks = result.content.filter(
     (part): part is { readonly type: "text"; readonly text: string } => part.type === "text",
   );
 
   const joined = textBlocks.map((part) => part.text).join("\n\n");
   if (joined.length > 0) return joined;
-
-  if (isTaskToolResultDetails(result.details)) {
-    return formatTaskToolResult(result.details, false);
-  }
 
   return "primary subagent tool result unavailable";
 }

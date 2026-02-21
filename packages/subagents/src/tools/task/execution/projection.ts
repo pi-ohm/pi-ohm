@@ -127,6 +127,8 @@ export function snapshotToTaskResultDetails(
     output_truncated: resolvedOutput.output_truncated,
     output_total_chars: resolvedOutput.output_total_chars,
     output_returned_chars: resolvedOutput.output_returned_chars,
+    updated_at_epoch_ms: snapshot.updatedAtEpochMs,
+    ended_at_epoch_ms: snapshot.endedAtEpochMs,
     backend: snapshot.backend,
     provider: snapshot.provider,
     model: snapshot.model,
