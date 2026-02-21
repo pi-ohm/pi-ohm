@@ -360,7 +360,8 @@ Additional hardening behaviors:
 
 Persistence details:
 
-- default snapshot path: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.subagents.tasks.json`
+- default snapshot path: `${XDG_DATA_HOME:-~/.local/share}/pi/agent/ohm.subagents.tasks.json`
+- override snapshot path: `OHM_SUBAGENTS_TASK_PERSIST_PATH=/abs/path/ohm.subagents.tasks.json`
 - retention window is configurable via `OHM_SUBAGENTS_TASK_RETENTION_MS` (positive integer ms)
 - per-task structured event timeline cap is configurable via `OHM_SUBAGENTS_TASK_MAX_EVENTS`
   (default `120`)

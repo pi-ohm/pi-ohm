@@ -47,20 +47,33 @@ function resolveTaskPersistenceDebounceMs(): number {
   return 90;
 }
 
+function parseNonEmptyEnvString(name: string): string | undefined {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
 export function resolveOnUpdateThrottleMs(): number {
   const fromEnv = parsePositiveIntegerEnv("OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS");
   if (fromEnv !== undefined) return fromEnv;
   return 120;
 }
 
-function resolveDefaultTaskPersistencePath(): string {
-  const baseDir =
-    process.env.PI_CONFIG_DIR ??
-    process.env.PI_CODING_AGENT_DIR ??
-    process.env.PI_AGENT_DIR ??
-    join(homedir(), ".pi", "agent");
+function resolveTaskPersistenceDataDir(): string {
+  const xdgDataHome = parseNonEmptyEnvString("XDG_DATA_HOME");
+  if (xdgDataHome) {
+    return join(xdgDataHome, "pi", "agent");
+  }
 
-  return join(baseDir, "ohm.subagents.tasks.json");
+  return join(homedir(), ".local", "share", "pi", "agent");
+}
+
+export function resolveDefaultTaskPersistencePath(): string {
+  const explicitPath = parseNonEmptyEnvString("OHM_SUBAGENTS_TASK_PERSIST_PATH");
+  if (explicitPath) return explicitPath;
+  return join(resolveTaskPersistenceDataDir(), "ohm.subagents.tasks.json");
 }
 
 const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore({
