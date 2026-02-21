@@ -20,6 +20,11 @@ interface LoadedPackage {
   pkg: Record<string, unknown> & { name: string; version: string };
 }
 
+interface CatalogConfig {
+  defaultCatalog: ReadonlyMap<string, string>;
+  namedCatalogs: ReadonlyMap<string, ReadonlyMap<string, string>>;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
@@ -103,6 +108,10 @@ async function readJson(filePath: string): Promise<Record<string, unknown>> {
   return JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function run(command: string, args: string[], options: { cwd?: string } = {}): void {
   const result = spawnSync(command, args, {
     stdio: "inherit",
@@ -127,6 +136,76 @@ function buildDevSuffix(): string {
   const runAttempt = process.env.GITHUB_RUN_ATTEMPT ?? "1";
   const sha = (process.env.GITHUB_SHA ?? "local").slice(0, 7);
   return `dev.${runId}.${runAttempt}.${sha}`;
+}
+
+function runAndCapture(command: string, args: string[], cwd: string): string {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: process.env,
+    encoding: "utf8",
+  });
+
+  if (result.status !== 0) {
+    const stderr = result.stderr.trim();
+    const details = stderr.length > 0 ? `: ${stderr}` : "";
+    throw new Error(
+      `${command} ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}${details}`,
+    );
+  }
+
+  return result.stdout.trim();
+}
+
+function readYarnConfigJson(key: string): unknown {
+  const output = runAndCapture("yarn", ["config", "get", key, "--json"], repoRoot);
+  if (output.length === 0 || output === "undefined" || output === "null") {
+    return null;
+  }
+
+  try {
+    return JSON.parse(output) as unknown;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse Yarn config '${key}' JSON: ${reason}`);
+  }
+}
+
+function toStringMap(source: unknown, label: string): Map<string, string> {
+  if (!isRecord(source)) {
+    throw new Error(`Expected '${label}' to be an object in Yarn config.`);
+  }
+
+  const output = new Map<string, string>();
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value !== "string") {
+      throw new Error(`Expected '${label}.${key}' to be a string in Yarn config.`);
+    }
+    output.set(key, value);
+  }
+
+  return output;
+}
+
+function loadCatalogConfig(): CatalogConfig {
+  const catalogRaw = readYarnConfigJson("catalog");
+  const catalogsRaw = readYarnConfigJson("catalogs");
+
+  const defaultCatalog =
+    catalogRaw === null ? new Map<string, string>() : toStringMap(catalogRaw, "catalog");
+
+  const namedCatalogs = new Map<string, ReadonlyMap<string, string>>();
+  if (catalogsRaw !== null) {
+    if (!isRecord(catalogsRaw)) {
+      throw new Error("Expected 'catalogs' to be an object in Yarn config.");
+    }
+
+    for (const [catalogName, entries] of Object.entries(catalogsRaw)) {
+      namedCatalogs.set(catalogName, toStringMap(entries, `catalogs.${catalogName}`));
+    }
+  }
+
+  return { defaultCatalog, namedCatalogs };
 }
 
 function normalizeWorkspaceRange(
@@ -159,10 +238,48 @@ function normalizeWorkspaceRange(
   return resolvedVersion;
 }
 
+function resolveCatalogRange(
+  depName: string,
+  depRange: string,
+  catalogs: CatalogConfig,
+  pkgName: string,
+): string | null {
+  if (!depRange.startsWith("catalog:")) {
+    return null;
+  }
+
+  const catalogName = depRange.slice("catalog:".length).trim();
+  if (catalogName.length === 0) {
+    const version = catalogs.defaultCatalog.get(depName);
+    if (!version) {
+      throw new Error(
+        `Missing Yarn default catalog entry for '${depName}' in package '${pkgName}'.`,
+      );
+    }
+    return version;
+  }
+
+  const namedCatalog = catalogs.namedCatalogs.get(catalogName);
+  if (!namedCatalog) {
+    throw new Error(
+      `Missing Yarn named catalog '${catalogName}' for dependency '${depName}' in package '${pkgName}'.`,
+    );
+  }
+
+  const version = namedCatalog.get(depName);
+  if (!version) {
+    throw new Error(
+      `Missing Yarn catalog entry '${catalogName}.${depName}' in package '${pkgName}'.`,
+    );
+  }
+  return version;
+}
+
 function rewriteInternalDependencies(
   pkg: Record<string, unknown> & { name: string },
   versionByName: Map<string, string>,
   channel: PublishChannel,
+  catalogs: CatalogConfig,
 ): void {
   const dependencyFields = [
     "dependencies",
@@ -179,16 +296,23 @@ function rewriteInternalDependencies(
 
     for (const [depName, depRange] of Object.entries(dependencySection)) {
       if (typeof depRange !== "string") continue;
-      if (!depRange.startsWith("workspace:")) continue;
 
-      const resolvedVersion = versionByName.get(depName);
-      if (!resolvedVersion) {
-        throw new Error(
-          `Unable to resolve workspace dependency '${depName}' for package '${pkg.name}'.`,
-        );
+      if (depRange.startsWith("workspace:")) {
+        const resolvedVersion = versionByName.get(depName);
+        if (!resolvedVersion) {
+          throw new Error(
+            `Unable to resolve workspace dependency '${depName}' for package '${pkg.name}'.`,
+          );
+        }
+
+        dependencySection[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+        continue;
       }
 
-      dependencySection[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+      const catalogRange = resolveCatalogRange(depName, depRange, catalogs, pkg.name);
+      if (catalogRange !== null) {
+        dependencySection[depName] = catalogRange;
+      }
     }
   }
 }
@@ -233,6 +357,7 @@ async function versionExistsOnNpm(name: string, version: string): Promise<boolea
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const catalogs = loadCatalogConfig();
 
   const packages: LoadedPackage[] = [];
   for (const relDir of PACKAGE_DIRS) {
@@ -296,7 +421,7 @@ async function main(): Promise<void> {
 
       const tempPkg = rawTempPkg as Record<string, unknown> & { name: string; version?: string };
       tempPkg.version = targetVersion;
-      rewriteInternalDependencies(tempPkg, versionByName, args.channel);
+      rewriteInternalDependencies(tempPkg, versionByName, args.channel, catalogs);
 
       await writeFile(tempPkgPath, `${JSON.stringify(tempPkg, null, 2)}\n`, "utf8");
 
