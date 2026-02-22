@@ -1500,6 +1500,15 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@pi-ohm/db@workspace:packages/db":
+  version: 0.0.0-use.local
+  resolution: "@pi-ohm/db@workspace:packages/db"
+  dependencies:
+    "@tursodatabase/database": "npm:^0.4.4"
+    better-result: "catalog:"
+  languageName: unknown
+  linkType: soft
+
 "@pi-ohm/handoff@workspace:*, @pi-ohm/handoff@workspace:packages/handoff":
   version: 0.0.0-use.local
   resolution: "@pi-ohm/handoff@workspace:packages/handoff"
@@ -2237,6 +2246,63 @@ __metadata:
   version: 0.23.0
   resolution: "@tootallnate/quickjs-emscripten@npm:0.23.0"
   checksum: 10c0/2a939b781826fb5fd3edd0f2ec3b321d259d760464cf20611c9877205aaca3ccc0b7304dea68416baa0d568e82cd86b17d29548d1e5139fa3155a4a86a2b4b49
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database-common@npm:^0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database-common@npm:0.4.4"
+  checksum: 10c0/2f44faa619a92559155d4ebe28633cddcc860cb9e765047090cc8f16d6a034e1716c3d202ac58bc772e1f83ebd7197843e42d6a3d5d4cc4aa492d1aefad0f16a
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database-darwin-arm64@npm:0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database-darwin-arm64@npm:0.4.4"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database-linux-arm64-gnu@npm:0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database-linux-arm64-gnu@npm:0.4.4"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database-linux-x64-gnu@npm:0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database-linux-x64-gnu@npm:0.4.4"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database-win32-x64-msvc@npm:0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database-win32-x64-msvc@npm:0.4.4"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@tursodatabase/database@npm:^0.4.4":
+  version: 0.4.4
+  resolution: "@tursodatabase/database@npm:0.4.4"
+  dependencies:
+    "@tursodatabase/database-common": "npm:^0.4.4"
+    "@tursodatabase/database-darwin-arm64": "npm:0.4.4"
+    "@tursodatabase/database-linux-arm64-gnu": "npm:0.4.4"
+    "@tursodatabase/database-linux-x64-gnu": "npm:0.4.4"
+    "@tursodatabase/database-win32-x64-msvc": "npm:0.4.4"
+  dependenciesMeta:
+    "@tursodatabase/database-darwin-arm64":
+      optional: true
+    "@tursodatabase/database-linux-arm64-gnu":
+      optional: true
+    "@tursodatabase/database-linux-x64-gnu":
+      optional: true
+    "@tursodatabase/database-win32-x64-msvc":
+      optional: true
+  checksum: 10c0/b672b46e8de69f4745d3c20221137e1704399c50b0f54c01bb3ca30f362ccca1b2ccb903e1bed8be529c3cd7c977537572233d7822f769d39e8d35d00637e841
   languageName: node
   linkType: hard
 

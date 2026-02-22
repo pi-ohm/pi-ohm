@@ -85,6 +85,7 @@ pi-ohm/
 │   └── index.ts                    # local dev entrypoint (registers bundle package)
 ├── packages/
 │   ├── config/                     # @pi-ohm/config
+│   ├── db/                         # @pi-ohm/db (internal state/session store)
 │   ├── modes/                      # @pi-ohm/modes
 │   ├── handoff/                    # @pi-ohm/handoff (includes visualizer)
 │   ├── subagents/                  # @pi-ohm/subagents

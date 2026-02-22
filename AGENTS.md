@@ -12,6 +12,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 
 - `packages/config` → shared tui, mostly composites from @mariozechner/pi-tui / https://github.com/badlogic/pi-mono/tree/main/packages/tui
 - `packages/config` → shared config/settings helpers
+- `packages/db` → internal sqlite/turso-backed state + subagent session storage
 - `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
 - `packages/handoff` → handoff + handoff visualizer
 - `packages/subagents` → subagent delegation
