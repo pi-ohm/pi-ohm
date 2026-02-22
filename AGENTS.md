@@ -12,6 +12,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 
 - `packages/config` → shared tui, mostly composites from @mariozechner/pi-tui / https://github.com/badlogic/pi-mono/tree/main/packages/tui
 - `packages/config` → shared config/settings helpers
+- `packages/core` → shared runtime primitives (errors, grammar, paths)
 - `packages/db` → internal sqlite/turso-backed state + subagent session storage
 - `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
 - `packages/handoff` → handoff + handoff visualizer
@@ -76,10 +77,13 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 Each feature package should be installable by itself through npm:
 
 - `@pi-ohm/handoff`
+- `@pi-ohm/core`
 - `@pi-ohm/subagents`
 - `@pi-ohm/session-search`
 - `@pi-ohm/painter`
 - `@pi-ohm/modes`
+- `@pi-ohm/config`
+- `@pi-ohm/tui`
 
 Full bundle package:
 

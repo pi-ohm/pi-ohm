@@ -1,7 +1,6 @@
 {
   "name": "@pi-ohm/core",
-  "version": "0.6.2",
-  "private": true,
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/core#readme",
   "repository": {
     "type": "git",
@@ -9,17 +8,37 @@
     "directory": "packages/core"
   },
   "files": [
-    "src/",
+    "dist/",
     "README.md"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./errors": "./src/errors.ts",
-    "./grammar": "./src/grammar.ts",
-    "./paths": "./src/paths.ts"
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./grammar": {
+      "types": "./dist/grammar.d.ts",
+      "default": "./dist/grammar.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   },
   "dependencies": {
     "better-result": "catalog:"
+  },
+  "tsdown": {
+    "entry": {
+      "errors": "src/errors.ts",
+      "grammar": "src/grammar.ts",
+      "paths": "src/paths.ts"
+    }
   }
 }

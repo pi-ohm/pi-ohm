@@ -21,6 +21,7 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const SOURCES: ChangelogSource[] = [
   { label: "@pi-ohm/config", path: "packages/config/CHANGELOG.md" },
+  { label: "@pi-ohm/core", path: "packages/core/CHANGELOG.md" },
   { label: "@pi-ohm/modes", path: "packages/modes/CHANGELOG.md" },
   { label: "@pi-ohm/handoff", path: "packages/handoff/CHANGELOG.md" },
   { label: "@pi-ohm/subagents", path: "packages/subagents/CHANGELOG.md" },
@@ -228,13 +229,26 @@ async function main(): Promise<void> {
 
   for (const source of SOURCES) {
     const changelogPath = path.join(repoRoot, source.path);
-    const changelog = await readFile(changelogPath, "utf8");
-    const rawSection = extractVersionSection(changelog, args.version);
-    const normalizedSection = normalizeSection(filterSectionCommits(rawSection, allowedCommits));
-    const hasDetails = /^####\s+/m.test(normalizedSection);
-    const sectionBody = hasDetails
-      ? normalizedSection
-      : `${normalizedSection}\n\n_No package-specific changes in this release range._`;
+    let sectionBody = "_No changelog published for this package yet._";
+    try {
+      const changelog = await readFile(changelogPath, "utf8");
+      const rawSection = extractVersionSection(changelog, args.version);
+      const normalizedSection = normalizeSection(filterSectionCommits(rawSection, allowedCommits));
+      const hasDetails = /^####\s+/m.test(normalizedSection);
+      sectionBody = hasDetails
+        ? normalizedSection
+        : `${normalizedSection}\n\n_No package-specific changes in this release range._`;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !error.message.includes("Could not find changelog section")
+      ) {
+        const reason = error instanceof Error ? error.message : String(error);
+        if (!reason.includes("ENOENT")) {
+          throw error;
+        }
+      }
+    }
 
     sections.push(`## ${source.label}\n\n${sectionBody}`);
   }

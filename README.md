@@ -74,6 +74,7 @@ This repo uses Yarn workspaces.
 corepack enable
 corepack prepare yarn@stable --activate
 yarn install
+yarn build
 yarn typecheck
 ```
 
@@ -85,7 +86,9 @@ pi-ohm/
 │   └── index.ts                    # local dev entrypoint (registers bundle package)
 ├── packages/
 │   ├── config/                     # @pi-ohm/config
+│   ├── core/                       # @pi-ohm/core (shared runtime primitives)
 │   ├── db/                         # @pi-ohm/db (internal state/session store)
+│   ├── tui/                        # @pi-ohm/tui
 │   ├── modes/                      # @pi-ohm/modes
 │   ├── handoff/                    # @pi-ohm/handoff (includes visualizer)
 │   ├── subagents/                  # @pi-ohm/subagents

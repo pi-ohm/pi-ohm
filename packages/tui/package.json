@@ -8,12 +8,18 @@
     "directory": "packages/tui"
   },
   "files": [
-    "src/",
+    "dist/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -26,9 +32,15 @@
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
   },
+  "tsdown": {
+    "entry": {
+      "extension": "src/extension.ts",
+      "index": "src/index.ts"
+    }
+  },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./dist/extension.js"
     ]
   }
 }

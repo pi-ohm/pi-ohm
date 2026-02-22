@@ -21,6 +21,7 @@ on:
         options:
           - all
           - config
+          - core
           - modes
           - handoff
           - subagents
@@ -57,6 +58,12 @@ jobs:
           corepack enable
           corepack prepare yarn@4.12.0 --activate
           yarn --version
+
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Build distributables
+        run: yarn build
 
       - name: Publish all packages to npm @dev
         env:
@@ -113,6 +120,12 @@ jobs:
           corepack enable
           corepack prepare yarn@4.12.0 --activate
           yarn --version
+
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Build distributables
+        run: yarn build
 
       - name: Publish released package versions to npm @latest
         env:
@@ -210,6 +223,12 @@ jobs:
           corepack prepare yarn@4.12.0 --activate
           yarn --version
 
+      - name: Install
+        run: yarn install --immutable
+
+      - name: Build distributables
+        run: yarn build
+
       - name: Publish selected package(s)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -227,6 +246,9 @@ jobs:
           case "${{ inputs.package }}" in
             config)
               only="@pi-ohm/config"
+              ;;
+            core)
+              only="@pi-ohm/core"
               ;;
             modes)
               only="@pi-ohm/modes"

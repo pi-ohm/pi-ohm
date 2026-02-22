@@ -15,6 +15,7 @@
       "groupName": "pi-ohm-lockstep",
       "components": [
         "config",
+        "core",
         "modes",
         "handoff",
         "subagents",
@@ -29,6 +30,11 @@
     "packages/config": {
       "component": "config",
       "package-name": "@pi-ohm/config",
+      "skip-github-release": true
+    },
+    "packages/core": {
+      "component": "core",
+      "package-name": "@pi-ohm/core",
       "skip-github-release": true
     },
     "packages/modes": {
