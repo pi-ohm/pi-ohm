@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Theme, type AgentToolResult, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../catalog";
@@ -10,11 +10,49 @@ import {
   registerPrimarySubagentTools,
   runPrimarySubagentTool,
 } from "./primary";
-import type { TaskToolDependencies } from "./task/contracts";
+import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
 import { runTaskToolMvp } from "./task/operations";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
+}
+
+function stripAnsi(value: string): string {
+  return value
+    .split("\u001b[1m")
+    .join("")
+    .split("\u001b[22m")
+    .join("")
+    .split("\u001b[4m")
+    .join("")
+    .split("\u001b[24m")
+    .join("")
+    .split("\u001b[31m")
+    .join("")
+    .split("\u001b[32m")
+    .join("")
+    .split("\u001b[37m")
+    .join("")
+    .split("\u001b[39m")
+    .join("")
+    .split("\u001b[0m")
+    .join("");
+}
+
+interface RenderablePrimaryToolDefinition {
+  readonly renderResult: (
+    result: AgentToolResult<TaskToolResultDetails>,
+    options: { readonly expanded: boolean; readonly isPartial: boolean },
+    theme: Theme,
+  ) => { render(width: number): string[] };
+}
+
+function isRenderablePrimaryToolDefinition(
+  value: unknown,
+): value is RenderablePrimaryToolDefinition {
+  if (typeof value !== "object" || value === null) return false;
+  const renderResult = Reflect.get(value, "renderResult");
+  return typeof renderResult === "function";
 }
 
 const runtimeConfigFixture: OhmRuntimeConfig = {
@@ -407,4 +445,76 @@ defineTest("registerPrimarySubagentTools emits diagnostics for naming collisions
   assert.equal(result.diagnostics.length, 1);
   assert.match(result.diagnostics[0] ?? "", /naming collision/i);
   assert.equal(diagnostics.length, 1);
+});
+
+defineTest("registerPrimarySubagentTools renderResult respects expanded toggle", () => {
+  let librarianToolDefinition: unknown;
+  const renderTheme = new Theme(
+    new Proxy<Record<string, number>>(
+      {},
+      {
+        get: () => 7,
+      },
+    ),
+    new Proxy<Record<string, number>>(
+      {},
+      {
+        get: () => 0,
+      },
+    ),
+    "truecolor",
+  );
+
+  const pi: Pick<ExtensionAPI, "registerTool"> = {
+    registerTool(definition) {
+      if (definition.name === "librarian") {
+        librarianToolDefinition = definition;
+      }
+    },
+  };
+
+  registerPrimarySubagentTools(pi, {
+    taskDeps: makeTaskDeps(),
+    catalog: [librarianFixture],
+  });
+
+  if (!isRenderablePrimaryToolDefinition(librarianToolDefinition)) {
+    assert.fail("expected librarian primary tool renderResult to be registered");
+  }
+
+  const details: TaskToolResultDetails = {
+    op: "start",
+    status: "succeeded",
+    backend: "task",
+    summary: "done",
+    subagent_type: "librarian",
+    description: "search codebase",
+    prompt: "search codebase",
+    tool_rows: ["✓ Read a", "✓ Grep b", "✓ Find c", "✓ Ls d"],
+    assistant_text: "done",
+    output_available: false,
+  };
+
+  const result: AgentToolResult<TaskToolResultDetails> = {
+    content: [{ type: "text", text: "done" }],
+    details,
+  };
+
+  const collapsed = librarianToolDefinition.renderResult(
+    result,
+    { expanded: false, isPartial: false },
+    renderTheme,
+  );
+  const collapsedText = stripAnsi(collapsed.render(160).join("\n"));
+  assert.equal(collapsedText.includes("Find c"), false);
+  assert.equal(collapsedText.includes("ctrl+o to expand"), true);
+
+  const expanded = librarianToolDefinition.renderResult(
+    result,
+    { expanded: true, isPartial: false },
+    renderTheme,
+  );
+  const expandedText = stripAnsi(expanded.render(160).join("\n"));
+  assert.equal(expandedText.includes("Find c"), true);
+  assert.equal(expandedText.includes("ctrl+o to expand"), false);
 });

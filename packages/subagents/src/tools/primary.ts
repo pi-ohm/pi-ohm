@@ -295,9 +295,9 @@ function toPrimaryToolCallText(subagent: OhmSubagentDefinition, params: unknown)
   return `${subagent.id} · ${normalized.description}`;
 }
 
-function toResultText(result: AgentToolResult<unknown>): string {
+function toResultText(result: AgentToolResult<unknown>, expanded: boolean): string {
   if (isTaskToolResultDetails(result.details)) {
-    return formatTaskToolResult(result.details, false);
+    return formatTaskToolResult(result.details, expanded);
   }
 
   const textBlocks = result.content.filter(
@@ -414,8 +414,8 @@ export function registerPrimarySubagentTools(
       renderCall: (args, _theme) => {
         return new Text(toPrimaryToolCallText(subagent, args), 0, 0);
       },
-      renderResult: (result, _options, _theme) => {
-        return new Text(toResultText(result), 0, 0);
+      renderResult: (result, options, _theme) => {
+        return new Text(toResultText(result, options.expanded), 0, 0);
       },
     });
 
