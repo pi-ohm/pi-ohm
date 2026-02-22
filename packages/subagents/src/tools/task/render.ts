@@ -156,7 +156,24 @@ function toModelFacingContent(details: TaskToolResultDetails): string {
   const taskId = resolveModelTaskId(details);
   const timestamp = resolveModelTimestamp(details);
   const result = resolveModelResultText(details);
-  return [`task_id: ${taskId}`, `timestamp: ${timestamp}`, "result:", result].join("\n");
+  const lines = [
+    `task_id: ${taskId}`,
+    `status: ${details.status}`,
+    ...(details.subagent_type ? [`subagent: ${details.subagent_type}`] : []),
+    `backend: ${details.backend}`,
+    `provider: ${details.provider ?? "unavailable"}`,
+    `model: ${details.model ?? "unavailable"}`,
+    `runtime: ${details.runtime ?? details.backend}`,
+    `route: ${details.route ?? details.backend}`,
+    `timestamp: ${timestamp}`,
+    "result:",
+    result,
+  ];
+  return lines.join("\n");
+}
+
+export function formatTaskToolModelContent(details: TaskToolResultDetails): string {
+  return toModelFacingContent(details);
 }
 
 export function isOhmDebugEnabled(): boolean {
@@ -732,7 +749,7 @@ export function toAgentToolResult(
   );
 
   return {
-    content: [{ type: "text", text: toModelFacingContent(normalizedDetails) }],
+    content: [{ type: "text", text: formatTaskToolModelContent(normalizedDetails) }],
     details: normalizedDetails,
   };
 }

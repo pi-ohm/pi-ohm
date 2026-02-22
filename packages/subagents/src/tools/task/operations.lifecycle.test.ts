@@ -906,6 +906,114 @@ defineTest(
   },
 );
 
+defineTest(
+  "runTaskToolMvp non-ui updates hide tool rows and keep full final response text",
+  async () => {
+    const updates: string[] = [];
+
+    const deps = makeDeps({
+      backend: {
+        id: "interactive-sdk",
+        async executeStart(input: TaskBackendStartInput) {
+          input.onEvent?.({
+            type: "tool_start",
+            toolCallId: "tool_1",
+            toolName: "read",
+            argsText: '{"path":"src/index.ts"}',
+            atEpochMs: 1001,
+          });
+          input.onEvent?.({
+            type: "assistant_text_delta",
+            delta: "line-1\nline-2\nline-3\nline-4\nline-5",
+            atEpochMs: 1002,
+          });
+          input.onEvent?.({
+            type: "tool_end",
+            toolCallId: "tool_1",
+            toolName: "read",
+            resultText: '{"ok":true}',
+            status: "success",
+            atEpochMs: 1003,
+          });
+
+          return Result.ok({
+            summary: "Finder: streamed",
+            output: "line-1\nline-2\nline-3\nline-4\nline-5",
+            provider: "openai",
+            model: "gpt-5",
+            runtime: "pi-sdk",
+            route: "interactive-sdk",
+            events: [
+              {
+                type: "tool_start",
+                toolCallId: "tool_1",
+                toolName: "read",
+                argsText: '{"path":"src/index.ts"}',
+                atEpochMs: 1001,
+              },
+              {
+                type: "assistant_text_delta",
+                delta: "line-1\nline-2\nline-3\nline-4\nline-5",
+                atEpochMs: 1002,
+              },
+              {
+                type: "tool_end",
+                toolCallId: "tool_1",
+                toolName: "read",
+                resultText: '{"ok":true}',
+                status: "success",
+                atEpochMs: 1003,
+              },
+            ],
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const result = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Non-ui model payload",
+        prompt: "return five lines",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: (partial) => {
+        const text = partial.content.find((part) => part.type === "text");
+        if (text && text.type === "text") {
+          updates.push(stripAnsi(text.text));
+        }
+      },
+      deps,
+    });
+
+    assert.equal(result.details.status, "succeeded");
+    assert.equal(updates.length >= 2, true);
+
+    const finalUpdate = updates.at(-1) ?? "";
+    assert.match(finalUpdate, /^subagents /m);
+    assert.match(finalUpdate, /^task_id:\s+task_/m);
+    assert.match(finalUpdate, /^status:\s+succeeded$/m);
+    assert.match(finalUpdate, /^subagent:\s+finder$/m);
+    assert.match(finalUpdate, /^backend:\s+interactive-sdk$/m);
+    assert.match(finalUpdate, /^provider:\s+openai$/m);
+    assert.match(finalUpdate, /^model:\s+gpt-5$/m);
+    assert.match(finalUpdate, /^runtime:\s+pi-sdk$/m);
+    assert.match(finalUpdate, /^route:\s+interactive-sdk$/m);
+    assert.match(finalUpdate, /^result:$/m);
+    assert.match(finalUpdate, /line-1/);
+    assert.match(finalUpdate, /line-5/);
+    assert.doesNotMatch(finalUpdate, /tool_call:|✓ Read|├──|╰──|ctrl\+o/u);
+  },
+);
+
 defineTest("runTaskToolMvp streams sdk tool rows into onUpdate while running", async () => {
   const previousThrottle = process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS;
   process.env.OHM_SUBAGENTS_ONUPDATE_THROTTLE_MS = "1";
