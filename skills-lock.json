@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "tsdown": {
+      "source": "rolldown/tsdown",
+      "sourceType": "github",
+      "computedHash": "27d9f6ec30e49cf4c3492b80d1a879fda8ac0ac0b5805e2c84027f8408e168db"
+    }
+  }
+}
