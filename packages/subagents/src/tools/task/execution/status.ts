@@ -1,8 +1,8 @@
 import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import type { TaskToolParameters } from "../../../schema/task-tool";
-import { emitTaskRuntimeUpdate } from "../updates";
 import { lookupToItem } from "./projection";
+import { emitTaskOperationResult, toTaskOperationRuntimeContext } from "./kernel";
 import {
   buildCollectionResult,
   resolveCollectionBackend,
@@ -28,13 +28,8 @@ export async function runTaskStatus(
     promptProfileReason: observability.promptProfileReason,
   });
 
-  emitTaskRuntimeUpdate({
+  return emitTaskOperationResult({
     details: result.details,
-    deps: input.deps,
-    hasUI: input.hasUI,
-    ui: input.ui,
-    onUpdate: undefined,
+    runtime: toTaskOperationRuntimeContext(input, { onUpdate: undefined }),
   });
-
-  return result;
 }

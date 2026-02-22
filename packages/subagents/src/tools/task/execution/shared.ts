@@ -8,7 +8,6 @@ import { evaluateTaskPermission } from "../../../policy";
 import type { TaskExecutionBackend } from "../../../runtime/backend/types";
 import type {
   TaskLifecycleState,
-  TaskRuntimeLookup,
   TaskRuntimeObservability,
   TaskRuntimeSnapshot,
 } from "../../../runtime/tasks/types";
@@ -227,20 +226,6 @@ export function buildCollectionResult(
     done: options.done,
     wait_status: options.waitStatus,
   });
-}
-
-export function resolveSingleLookup(
-  op: TaskToolParameters["op"],
-  lookup: TaskRuntimeLookup | undefined,
-): AgentToolResult<TaskToolResultDetails> | TaskRuntimeSnapshot {
-  if (!lookup || !lookup.found || !lookup.snapshot) {
-    const taskId = lookup?.id ?? "unknown";
-    const code = lookup?.errorCode ?? "unknown_task_id";
-    const message = lookup?.errorMessage ?? `Unknown task id '${taskId}'`;
-    return toAgentToolResult(lookupNotFoundDetails(op, taskId, code, message));
-  }
-
-  return lookup.snapshot;
 }
 
 export function isTerminalState(state: TaskLifecycleState): boolean {

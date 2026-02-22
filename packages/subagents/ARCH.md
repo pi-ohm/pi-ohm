@@ -25,6 +25,7 @@
 - Schema layout decomposed under `src/schema/*` with `index.ts` re-export surface.
 - Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
 - Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
+- Task tool operation kernel added (`src/tools/task/execution/kernel.ts`) to centralize lookup resolution, result shaping, and runtime update emission.
 - Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
 - Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
@@ -52,6 +53,7 @@
 - `src/tools/task/updates.ts`
 - `src/tools/task/execution.ts`
 - `src/tools/task/operations.ts`
+- `src/tools/task/execution/kernel.ts` (internal tool-kernel surface: runtime context + `Result`-first lookup/result helpers)
 
 ### 5.2 Shared transcript parsing
 
@@ -121,6 +123,7 @@
 
 - Removing CLI backend fallback now.
 - Changing external task tool contract during decomposition.
+- Moving task-kernel primitives into `@pi-ohm/core` yet. Current kernel depends on task-tool details contract, runtime task-store lookups, and UI update semantics that are subagents-specific.
 
 ## 10) Prompt-profile routing contract (rollout hardening)
 
@@ -145,3 +148,13 @@
   1. add rule(s) in `ohm.providers.json`,
   2. verify selection diagnostics,
   3. only then consider new code-level profile packs.
+
+## 11) Task tool kernel contract
+
+- Keep operation handlers focused on domain decisions and task-store transitions.
+- Centralize transport concerns in kernel helpers:
+  - lookup normalization (`TaskRuntimeLookup -> Result<TaskRuntimeSnapshot, TaskToolResultDetails>`)
+  - result materialization (`TaskToolResultDetails -> AgentToolResult<TaskToolResultDetails>`)
+  - runtime/UI emission (`emitTaskRuntimeUpdate`)
+- Continue to model recoverable failures as `better-result` values end-to-end.
+- Keep this kernel in `@pi-ohm/subagents` until we have a generic cross-feature tool contract with no dependency on task-tool details fields or subagent runtime state types.

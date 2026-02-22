@@ -1,4 +1,5 @@
 import type { AgentToolResult, ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Text } from "@mariozechner/pi-tui";
 import { Result } from "better-result";
 import { getSubagentInvocationMode } from "../../extension";
@@ -63,6 +64,97 @@ function validationErrorDetails(
   };
 }
 
+function parseTaskOperationParameters(
+  params: unknown,
+): Result<TaskToolParameters, TaskToolResultDetails> {
+  const parsed = parseTaskToolParameters(params);
+  if (Result.isError(parsed)) {
+    const requestedOp = inferRequestedOp(params);
+    return Result.err(
+      validationErrorDetails(
+        requestedOp,
+        parsed.error.message,
+        parsed.error.code,
+        typeof parsed.error.path === "string" ? parsed.error.path : undefined,
+      ),
+    );
+  }
+
+  return Result.ok(parsed.value);
+}
+
+async function loadEnabledSubagentConfig(
+  input: RunTaskToolInput,
+  op: TaskToolParameters["op"],
+): Promise<Result<LoadedOhmRuntimeConfig, TaskToolResultDetails>> {
+  const configResult = await Result.tryPromise({
+    try: async () => input.deps.loadConfig(input.cwd),
+    catch: (cause) =>
+      new SubagentRuntimeError({
+        code: "task_config_load_failed",
+        stage: "task_tool",
+        cause,
+        message: "Failed to load runtime config for task tool",
+      }),
+  });
+
+  if (Result.isError(configResult)) {
+    return Result.err({
+      op,
+      status: "failed",
+      summary: configResult.error.message,
+      backend: input.deps.backend.id,
+      error_code: configResult.error.code,
+      error_message: configResult.error.message,
+    });
+  }
+
+  if (!configResult.value.config.features.subagents) {
+    const backendId = resolveBackendId(input.deps.backend, configResult.value.config);
+    return Result.err({
+      op,
+      status: "failed",
+      summary: "Subagents feature is disabled",
+      backend: backendId,
+      error_code: "subagents_disabled",
+      error_message:
+        "Enable features.subagents to use task orchestration and primary subagent tools",
+    });
+  }
+
+  return Result.ok(configResult.value);
+}
+
+async function runTaskOperation(input: {
+  readonly params: TaskToolParameters;
+  readonly runtimeConfig: LoadedOhmRuntimeConfig;
+  readonly toolInput: RunTaskToolInput;
+}): Promise<AgentToolResult<TaskToolResultDetails>> {
+  if (input.params.op === "start") {
+    return runTaskStart(input.params, input.toolInput, input.runtimeConfig);
+  }
+
+  if (input.params.op === "status") {
+    return runTaskStatus(input.params, input.toolInput);
+  }
+
+  if (input.params.op === "wait") {
+    return runTaskWait(input.params, input.toolInput);
+  }
+
+  if (input.params.op === "send") {
+    return runTaskSend(input.params, input.toolInput, input.runtimeConfig);
+  }
+
+  if (input.params.op === "cancel") {
+    return runTaskCancel(input.params, input.toolInput);
+  }
+
+  const unreachableOp: never = input.params;
+  void unreachableOp;
+  return toAgentToolResult(operationNotSupportedDetails("start"));
+}
+
 function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]): string {
   const lines: string[] = [
     "Orchestrate subagent execution. Supports start/status/wait/send/cancel.",
@@ -100,77 +192,17 @@ export async function runTaskToolMvp(
     });
   }
 
-  const parsed = parseTaskToolParameters(input.params);
-  if (Result.isError(parsed)) {
-    const requestedOp = inferRequestedOp(input.params);
-    return toAgentToolResult(
-      validationErrorDetails(
-        requestedOp,
-        parsed.error.message,
-        parsed.error.code,
-        typeof parsed.error.path === "string" ? parsed.error.path : undefined,
-      ),
-    );
-  }
+  const parsed = parseTaskOperationParameters(input.params);
+  if (Result.isError(parsed)) return toAgentToolResult(parsed.error);
 
-  const configResult = await Result.tryPromise({
-    try: async () => input.deps.loadConfig(input.cwd),
-    catch: (cause) =>
-      new SubagentRuntimeError({
-        code: "task_config_load_failed",
-        stage: "task_tool",
-        cause,
-        message: "Failed to load runtime config for task tool",
-      }),
+  const loadedConfig = await loadEnabledSubagentConfig(input, parsed.value.op);
+  if (Result.isError(loadedConfig)) return toAgentToolResult(loadedConfig.error);
+
+  return runTaskOperation({
+    params: parsed.value,
+    runtimeConfig: loadedConfig.value,
+    toolInput: input,
   });
-
-  if (Result.isError(configResult)) {
-    return toAgentToolResult({
-      op: parsed.value.op,
-      status: "failed",
-      summary: configResult.error.message,
-      backend: input.deps.backend.id,
-      error_code: configResult.error.code,
-      error_message: configResult.error.message,
-    });
-  }
-
-  if (!configResult.value.config.features.subagents) {
-    const backendId = resolveBackendId(input.deps.backend, configResult.value.config);
-    return toAgentToolResult({
-      op: parsed.value.op,
-      status: "failed",
-      summary: "Subagents feature is disabled",
-      backend: backendId,
-      error_code: "subagents_disabled",
-      error_message:
-        "Enable features.subagents to use task orchestration and primary subagent tools",
-    });
-  }
-
-  if (parsed.value.op === "start") {
-    return runTaskStart(parsed.value, input, configResult.value);
-  }
-
-  if (parsed.value.op === "status") {
-    return runTaskStatus(parsed.value, input);
-  }
-
-  if (parsed.value.op === "wait") {
-    return runTaskWait(parsed.value, input);
-  }
-
-  if (parsed.value.op === "send") {
-    return runTaskSend(parsed.value, input, configResult.value);
-  }
-
-  if (parsed.value.op === "cancel") {
-    return runTaskCancel(parsed.value, input);
-  }
-
-  const unreachableOp: never = parsed.value;
-  void unreachableOp;
-  return toAgentToolResult(operationNotSupportedDetails("start"));
 }
 
 export function registerTaskTool(

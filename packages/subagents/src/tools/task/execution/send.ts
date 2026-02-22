@@ -11,6 +11,11 @@ import {
   createSendEventAppender,
   emitTaskObservabilityUpdate,
 } from "./lifecycle";
+import {
+  emitTaskOperationResult,
+  resolveLookupSnapshot,
+  toTaskOperationRuntimeContext,
+} from "./kernel";
 import { snapshotToTaskResultDetails } from "./projection";
 import {
   availabilityFailedDetails,
@@ -19,7 +24,6 @@ import {
   isTerminalState,
   permissionFailedDetails,
   resolveBackendId,
-  resolveSingleLookup,
   subagentLookupFailedDetails,
 } from "./shared";
 
@@ -27,16 +31,10 @@ function emitSendFailure(
   input: RunTaskToolInput,
   details: TaskToolResultDetails,
 ): AgentToolResult<TaskToolResultDetails> {
-  const result = toAgentToolResult(details);
-  emitTaskRuntimeUpdate({
-    details: result.details,
-    deps: input.deps,
-    hasUI: input.hasUI,
-    ui: input.ui,
-    onUpdate: input.onUpdate,
+  return emitTaskOperationResult({
+    details,
+    runtime: toTaskOperationRuntimeContext(input),
   });
-
-  return result;
 }
 
 export async function runTaskSend(
@@ -45,9 +43,9 @@ export async function runTaskSend(
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
   const backendId = resolveBackendId(input.deps.backend, config.config);
-  const lookup = input.deps.taskStore.getTasks([params.id])[0];
-  const resolved = resolveSingleLookup("send", lookup);
-  if ("content" in resolved) return resolved;
+  const lookup = resolveLookupSnapshot("send", input.deps.taskStore.getTasks([params.id])[0]);
+  if (Result.isError(lookup)) return toAgentToolResult(lookup.error);
+  const resolved = lookup.value;
 
   if (isTerminalState(resolved.state)) {
     return toAgentToolResult({

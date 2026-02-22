@@ -4,6 +4,7 @@ import type { TaskToolParameters } from "../../../schema/task-tool";
 import type { RunTaskToolInput, TaskToolResultDetails, TaskWaitStatus } from "../contracts";
 import { toAgentToolResult } from "../render";
 import { emitTaskRuntimeUpdate } from "../updates";
+import { emitTaskOperationResult, toTaskOperationRuntimeContext } from "./kernel";
 import { lookupToItem } from "./projection";
 import {
   aggregateStatus,
@@ -205,13 +206,8 @@ export async function runTaskWait(
           })
         : baseResult;
 
-  emitTaskRuntimeUpdate({
+  return emitTaskOperationResult({
     details: result.details,
-    deps: input.deps,
-    hasUI: input.hasUI,
-    ui: input.ui,
-    onUpdate: input.onUpdate,
+    runtime: toTaskOperationRuntimeContext(input),
   });
-
-  return result;
 }
