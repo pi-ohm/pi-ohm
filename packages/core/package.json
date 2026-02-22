@@ -26,9 +26,9 @@
       "types": "./dist/paths.d.ts",
       "default": "./dist/paths.js"
     },
-    "./tool-kernel": {
-      "types": "./dist/tool-kernel.d.ts",
-      "default": "./dist/tool-kernel.js"
+    "./toolkit": {
+      "types": "./dist/toolkit.d.ts",
+      "default": "./dist/toolkit.js"
     }
   },
   "publishConfig": {
@@ -43,7 +43,7 @@
       "errors": "src/errors.ts",
       "grammar": "src/grammar.ts",
       "paths": "src/paths.ts",
-      "tool-kernel": "src/tool-kernel.ts"
+      "toolkit": "src/toolkit.ts"
     }
   }
 }

@@ -3,7 +3,7 @@ import {
   resolveLookupSnapshot as resolveCoreLookupSnapshot,
   toToolRuntimeContext,
   type ToolRuntimeContext,
-} from "@pi-ohm/core/tool-kernel";
+} from "@pi-ohm/core/toolkit";
 import { Result } from "better-result";
 import type { TaskRuntimeLookup, TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import type { TaskToolParameters } from "../../../schema/task-tool";

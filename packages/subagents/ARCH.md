@@ -25,7 +25,7 @@
 - Schema layout decomposed under `src/schema/*` with explicit per-schema modules (`task-tool`, `task-record`, `runtime-config`, `shared`).
 - Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
 - Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
-- Task tool operation kernel adapter (`src/tools/task/execution/kernel.ts`) now delegates generic primitives to `@pi-ohm/core/tool-kernel` while keeping task-specific detail mapping colocated.
+- Task tool operation kernel adapter (`src/tools/task/execution/kernel.ts`) now delegates generic primitives to `@pi-ohm/core/toolkit` while keeping task-specific detail mapping colocated.
 - Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
 - Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
@@ -50,7 +50,7 @@
 - `src/tools/task/operations.ts` (registration + parse/config/dispatch pipeline)
 - `src/tools/task/render.ts`
 - `src/tools/task/updates.ts`
-- `src/tools/task/execution/kernel.ts` (task adapter over `@pi-ohm/core/tool-kernel`)
+- `src/tools/task/execution/kernel.ts` (task adapter over `@pi-ohm/core/toolkit`)
 - `src/tools/task/execution/start.ts`
 - `src/tools/task/execution/status.ts`
 - `src/tools/task/execution/wait.ts`
@@ -153,10 +153,10 @@
   2. verify selection diagnostics,
   3. only then consider new code-level profile packs.
 
-## 11) Task tool kernel contract
+## 11) Task toolkit contract
 
 - Keep operation handlers focused on domain decisions and task-store transitions.
-- Keep generic transport concerns in `@pi-ohm/core/tool-kernel`, then adapt them in subagents:
+- Keep generic transport concerns in `@pi-ohm/core/toolkit`, then adapt them in subagents:
   - lookup normalization (`TaskRuntimeLookup -> Result<TaskRuntimeSnapshot, TaskToolResultDetails>`)
   - result materialization (`TaskToolResultDetails -> AgentToolResult<TaskToolResultDetails>`)
   - runtime/UI emission (`emitTaskRuntimeUpdate`)

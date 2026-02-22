@@ -6,9 +6,9 @@ Current scope:
 
 - typed error primitives via `better-result` (`errors.ts`)
 - grammar/path shared utilities (`grammar.ts`, `paths.ts`)
-- tool-kernel primitives for cross-tool orchestration glue (`tool-kernel.ts`)
+- toolkit primitives for cross-tool orchestration glue (`toolkit.ts`)
 
-Tool-kernel primitives are intentionally generic and transport-agnostic:
+Toolkit primitives are intentionally generic and transport-agnostic:
 
 - `toToolRuntimeContext` - normalize `{ deps, hasUI, ui, onUpdate }` flow with optional overrides.
 - `resolveLookupSnapshot` - normalize lookup objects into `Result<TSnapshot, TError>` via caller-provided missing lookup mapping.

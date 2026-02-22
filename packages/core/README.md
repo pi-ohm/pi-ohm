@@ -7,4 +7,4 @@ Current module:
 - `@pi-ohm/core/errors`
 - `@pi-ohm/core/grammar`
 - `@pi-ohm/core/paths`
-- `@pi-ohm/core/tool-kernel`
+- `@pi-ohm/core/toolkit`
