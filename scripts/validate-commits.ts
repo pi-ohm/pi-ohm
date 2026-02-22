@@ -41,6 +41,8 @@ const ALLOWED_SCOPES = new Set([
   "mono",
   "core",
   "tui",
+  "db",
+  "database",
 ]);
 
 const HEADER_PATTERN =
