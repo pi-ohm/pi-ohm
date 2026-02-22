@@ -19,13 +19,13 @@
 - adaptive backend timeout policy (global + per-subagent override, elevated defaults for oracle/librarian).
 - Structured event timeline persisted with bounded retention.
 - Shared transcript parser extracted (`src/runtime/task-transcript.ts`) and consumed by task/runtime UI paths.
-- Task tool file layout decomposed under `src/tools/task/*` with `index.ts` as public re-export surface.
+- Task tool file layout decomposed under `src/tools/task/*` with `operations.ts` as registration/dispatch entry.
 - Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
-- Task runtime store layout decomposed under `src/runtime/tasks/*` with `index.ts` export surface.
-- Schema layout decomposed under `src/schema/*` with `index.ts` re-export surface.
+- Task runtime store layout decomposed under `src/runtime/tasks/*` with explicit type/store/persistence/state-machine modules.
+- Schema layout decomposed under `src/schema/*` with explicit per-schema modules (`task-tool`, `task-record`, `runtime-config`, `shared`).
 - Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
 - Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
-- Task tool operation kernel added (`src/tools/task/execution/kernel.ts`) to centralize lookup resolution, result shaping, and runtime update emission.
+- Task tool operation kernel adapter (`src/tools/task/execution/kernel.ts`) now delegates generic primitives to `@pi-ohm/core/tool-kernel` while keeping task-specific detail mapping colocated.
 - Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
 - Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
 - Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
@@ -37,23 +37,29 @@
 
 ## 4) Known architecture debt
 
-- `src/runtime/backend.ts` mixes types, parsing, runners, prompt builders, and backend classes.
-- `src/runtime/tasks.ts` mixes persistence parsing/IO + state machine + store.
-- `src/runtime/ui.ts` duplicates transcript/tool-row parsing from task tool.
-- `src/schema.ts` mixes tool payload schema + task record/runtime config/profile schemas.
+- `src/tools/task/operations.ts` still carries operation-specific dispatch complexity and can move to declarative op registry over time.
+- `src/tools/task/execution/send.ts` still has dense lifecycle/event plumbing and can be split further into dedicated stage helpers.
+- Store-to-db migration is in progress, so task runtime persistence responsibilities are still split between in-memory store orchestration and file persistence adapters.
 
 ## 5) Target module map (incremental split)
 
 ### 5.1 Task tool
 
-- `src/tools/task/index.ts` (public API + registration)
 - `src/tools/task/contracts.ts`
 - `src/tools/task/defaults.ts`
+- `src/tools/task/operations.ts` (registration + parse/config/dispatch pipeline)
 - `src/tools/task/render.ts`
 - `src/tools/task/updates.ts`
-- `src/tools/task/execution.ts`
-- `src/tools/task/operations.ts`
-- `src/tools/task/execution/kernel.ts` (internal tool-kernel surface: runtime context + `Result`-first lookup/result helpers)
+- `src/tools/task/execution/kernel.ts` (task adapter over `@pi-ohm/core/tool-kernel`)
+- `src/tools/task/execution/start.ts`
+- `src/tools/task/execution/status.ts`
+- `src/tools/task/execution/wait.ts`
+- `src/tools/task/execution/send.ts`
+- `src/tools/task/execution/cancel.ts`
+- `src/tools/task/execution/batch.ts`
+- `src/tools/task/execution/lifecycle.ts`
+- `src/tools/task/execution/projection.ts`
+- `src/tools/task/execution/shared.ts`
 
 ### 5.2 Shared transcript parsing
 
@@ -77,7 +83,6 @@
 
 ### 5.4 Task store runtime
 
-- `src/runtime/tasks/index.ts`
 - `src/runtime/tasks/types.ts`
 - `src/runtime/tasks/state-machine.ts`
 - `src/runtime/tasks/persistence.ts`
@@ -85,7 +90,6 @@
 
 ### 5.5 Schemas
 
-- `src/schema/index.ts`
 - `src/schema/shared.ts`
 - `src/schema/task-tool.ts`
 - `src/schema/task-record.ts`
@@ -123,7 +127,7 @@
 
 - Removing CLI backend fallback now.
 - Changing external task tool contract during decomposition.
-- Moving task-kernel primitives into `@pi-ohm/core` yet. Current kernel depends on task-tool details contract, runtime task-store lookups, and UI update semantics that are subagents-specific.
+- Moving task-domain contracts (`TaskToolResultDetails`, task projection semantics, subagent policy mapping) into `@pi-ohm/core`.
 
 ## 10) Prompt-profile routing contract (rollout hardening)
 
@@ -152,9 +156,9 @@
 ## 11) Task tool kernel contract
 
 - Keep operation handlers focused on domain decisions and task-store transitions.
-- Centralize transport concerns in kernel helpers:
+- Keep generic transport concerns in `@pi-ohm/core/tool-kernel`, then adapt them in subagents:
   - lookup normalization (`TaskRuntimeLookup -> Result<TaskRuntimeSnapshot, TaskToolResultDetails>`)
   - result materialization (`TaskToolResultDetails -> AgentToolResult<TaskToolResultDetails>`)
   - runtime/UI emission (`emitTaskRuntimeUpdate`)
 - Continue to model recoverable failures as `better-result` values end-to-end.
-- Keep this kernel in `@pi-ohm/subagents` until we have a generic cross-feature tool contract with no dependency on task-tool details fields or subagent runtime state types.
+- Keep task-specific error/detail shaping in subagents so cross-package kernel APIs remain domain-agnostic.
