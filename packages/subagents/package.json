@@ -21,6 +21,7 @@
   "dependencies": {
     "@mariozechner/pi-coding-agent": "catalog:pi",
     "@pi-ohm/config": "workspace:*",
+    "@pi-ohm/core": "workspace:*",
     "@pi-ohm/tui": "workspace:*",
     "better-result": "catalog:",
     "zod": "catalog:"

@@ -11,7 +11,7 @@ Current scaffold provides:
 
 Default db file path:
 
-- `${XDG_DATA_HOME:-~/.local/share}/pi/agent/ohm.db`
+- `${XDG_DATA_HOME:-~/.local/share}/pi-ohm/agent/ohm.db`
 
 Optional override:
 

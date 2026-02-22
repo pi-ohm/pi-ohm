@@ -22,10 +22,10 @@ defineTest("resolveOhmDbPath uses XDG_DATA_HOME when OHM_DB_PATH is unset", () =
     },
   });
 
-  assert.equal(resolved, "/tmp/xdg-data/pi/agent/ohm.db");
+  assert.equal(resolved, "/tmp/xdg-data/pi-ohm/agent/ohm.db");
 });
 
 defineTest("resolveOhmDbPath falls back to ~/.local/share", () => {
   const resolved = resolveOhmDbPath({ env: {} });
-  assert.equal(resolved, join(homedir(), ".local", "share", "pi", "agent", "ohm.db"));
+  assert.equal(resolved, join(homedir(), ".local", "share", "pi-ohm", "agent", "ohm.db"));
 });

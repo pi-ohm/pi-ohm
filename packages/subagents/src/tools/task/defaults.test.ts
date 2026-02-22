@@ -39,7 +39,7 @@ defineTest("resolveDefaultTaskPersistencePath uses XDG_DATA_HOME by default", ()
     setEnv("XDG_DATA_HOME", "/tmp/xdg-data");
 
     const resolved = resolveDefaultTaskPersistencePath();
-    assert.equal(resolved, "/tmp/xdg-data/pi/agent/ohm.subagents.tasks.json");
+    assert.equal(resolved, "/tmp/xdg-data/pi-ohm/agent/ohm.subagents.tasks.json");
   } finally {
     restoreEnv();
   }
@@ -55,7 +55,7 @@ defineTest(
       const resolved = resolveDefaultTaskPersistencePath();
       assert.equal(
         resolved,
-        join(homedir(), ".local", "share", "pi", "agent", "ohm.subagents.tasks.json"),
+        join(homedir(), ".local", "share", "pi-ohm", "agent", "ohm.subagents.tasks.json"),
       );
     } finally {
       restoreEnv();

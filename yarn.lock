@@ -1492,7 +1492,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@pi-ohm/core@workspace:packages/core":
+"@pi-ohm/core@workspace:*, @pi-ohm/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@pi-ohm/core@workspace:packages/core"
   dependencies:
@@ -1504,6 +1504,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/db@workspace:packages/db"
   dependencies:
+    "@pi-ohm/core": "workspace:*"
     "@tursodatabase/database": "npm:^0.4.4"
     better-result: "catalog:"
   languageName: unknown
@@ -1560,6 +1561,7 @@ __metadata:
   dependencies:
     "@mariozechner/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
     "@pi-ohm/tui": "workspace:*"
     better-result: "catalog:"
     zod: "catalog:"

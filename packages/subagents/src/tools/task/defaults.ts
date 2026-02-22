@@ -1,6 +1,6 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadOhmRuntimeConfig } from "@pi-ohm/config";
+import { resolveOhmAgentDataHome } from "@pi-ohm/core/paths";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "../../catalog";
 import { createDefaultTaskExecutionBackend } from "../../runtime/backend/index";
 import { createJsonTaskRuntimePersistence } from "../../runtime/tasks/persistence";
@@ -61,19 +61,10 @@ export function resolveOnUpdateThrottleMs(): number {
   return 120;
 }
 
-function resolveTaskPersistenceDataDir(): string {
-  const xdgDataHome = parseNonEmptyEnvString("XDG_DATA_HOME");
-  if (xdgDataHome) {
-    return join(xdgDataHome, "pi", "agent");
-  }
-
-  return join(homedir(), ".local", "share", "pi", "agent");
-}
-
 export function resolveDefaultTaskPersistencePath(): string {
   const explicitPath = parseNonEmptyEnvString("OHM_SUBAGENTS_TASK_PERSIST_PATH");
   if (explicitPath) return explicitPath;
-  return join(resolveTaskPersistenceDataDir(), "ohm.subagents.tasks.json");
+  return join(resolveOhmAgentDataHome(), "ohm.subagents.tasks.json");
 }
 
 const DEFAULT_TASK_STORE = createInMemoryTaskRuntimeStore({

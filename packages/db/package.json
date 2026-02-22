@@ -19,6 +19,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@pi-ohm/core": "workspace:*",
     "@tursodatabase/database": "^0.4.4",
     "better-result": "catalog:"
   }

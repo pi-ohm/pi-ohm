@@ -1,5 +1,5 @@
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveOhmAgentDataHome } from "@pi-ohm/core/paths";
 
 export interface ResolveDbPathInput {
   readonly env?: NodeJS.ProcessEnv;
@@ -17,9 +17,5 @@ export function resolveOhmDbPath(input: ResolveDbPathInput = {}): string {
   const env = input.env ?? process.env;
   const explicit = readNonEmptyEnv(env, "OHM_DB_PATH");
   if (explicit) return explicit;
-
-  const xdgDataHome = readNonEmptyEnv(env, "XDG_DATA_HOME");
-  if (xdgDataHome) return join(xdgDataHome, "pi", "agent", "ohm.db");
-
-  return join(homedir(), ".local", "share", "pi", "agent", "ohm.db");
+  return join(resolveOhmAgentDataHome({ env }), "ohm.db");
 }
