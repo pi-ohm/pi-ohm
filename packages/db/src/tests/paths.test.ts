@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { resolveOhmDbPath } from "../src/paths";
+import { resolveOhmDbPath } from "../paths";
 import { defineTest } from "./test-fixtures";
 
 defineTest("resolveOhmDbPath prefers explicit OHM_DB_PATH", () => {

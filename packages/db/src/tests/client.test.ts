@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { Result } from "better-result";
-import { createOhmDb } from "../src/client";
-import { OHM_DB_SCHEMA_VERSION } from "../src/schema";
+import { createOhmDb } from "../client";
+import { OHM_DB_SCHEMA_VERSION } from "../schema";
 import { defineTest } from "./test-fixtures";
 
 defineTest("createOhmDb initializes schema tables", async () => {
