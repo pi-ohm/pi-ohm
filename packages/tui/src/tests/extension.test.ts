@@ -3,7 +3,7 @@ import test from "node:test";
 import registerOhmTuiExtension, {
   runOhmTuiPreviewCommand,
   runOhmTuiPreviewClearCommand,
-} from "./extension";
+} from "../extension";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

@@ -4,7 +4,7 @@ import {
   createSubagentTaskTreeComponent,
   renderSubagentTaskTreeLines,
   type SubagentTaskTreeEntry,
-} from "./subagent-task-tree";
+} from "../subagent-task-tree";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
