@@ -156,7 +156,7 @@ Built-in prompt management:
 - catalog metadata (`packages/subagents/src/catalog.ts`) is now display/orchestration metadata for
   main-agent exposure (name/description/when-to-use/invocation)
 - execution prompt text is resolved separately
-- built-in execution prompts are file-backed under `packages/subagents/prompts/*`
+- built-in execution prompts are file-backed under `packages/subagents/src/runtime/backend/prompts/*`
 - built-in variant selection uses wildcard model keys (`*gemini*`, `*gpt*`, `*claude*`)
 
 ## Dynamic prompt profile routing

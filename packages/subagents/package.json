@@ -9,7 +9,7 @@
   },
   "files": [
     "dist/",
-    "prompts/",
+    "src/runtime/backend/prompts/",
     "README.md"
   ],
   "type": "module",

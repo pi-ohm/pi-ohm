@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveSubagentVariantPattern } from "@pi-ohm/config/subagents";
@@ -35,7 +36,15 @@ const BUILT_IN_PROMPT_PROFILES: Readonly<Record<string, BuiltInSubagentPromptPro
 };
 
 function resolvePromptsBaseDir(): string {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../prompts");
+  const baseDir = path.dirname(fileURLToPath(import.meta.url));
+  const dirs = [
+    path.resolve(baseDir, "prompts"),
+    path.resolve(baseDir, "../src/runtime/backend/prompts"),
+  ];
+
+  const found = dirs.find((dir) => fs.existsSync(dir));
+  if (found) return found;
+  return dirs[0];
 }
 
 function toFileReference(filePath: string): string {
