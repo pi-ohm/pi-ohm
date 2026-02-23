@@ -210,3 +210,28 @@ defineTest("subagent session store supports upsert/list/event timeline", async (
     await db.close();
   }
 });
+
+defineTest("createOhmDb enforces foreign keys for subagent events", async () => {
+  const created = await createOhmDb({ path: ":memory:" });
+  if (Result.isError(created)) {
+    assert.fail(created.error.message);
+  }
+
+  const db = created.value;
+  try {
+    const appendResult = await db.subagentSessions.appendEvent({
+      sessionId: "missing-session",
+      eventType: "assistant_text_delta",
+      payload: { delta: "orphan" },
+      atEpochMs: 1700000000000,
+    });
+
+    if (!Result.isError(appendResult)) {
+      assert.fail("Expected foreign key violation for missing subagent session");
+    }
+
+    assert.equal(appendResult.error.code, "db_subagent_session_event_insert_failed");
+  } finally {
+    await db.close();
+  }
+});

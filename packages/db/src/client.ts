@@ -298,6 +298,7 @@ class OhmDbClientImpl implements OhmDb {
 
   constructor(
     readonly path: string,
+    private readonly connectionUrl: string,
     private readonly client: Client,
     private readonly db: LibSQLDatabase<typeof schema>,
     private readonly migrationsFolder: string,
@@ -319,6 +320,22 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   async initialize(): Promise<OhmDbResult<true>> {
+    if (this.connectionUrl.startsWith("file:")) {
+      const foreignKeys = await Result.tryPromise({
+        try: async () => {
+          await this.client.execute("PRAGMA foreign_keys = ON");
+        },
+        catch: (cause) =>
+          new OhmDbRuntimeError({
+            code: "db_foreign_keys_enable_failed",
+            stage: "migrate",
+            cause,
+          }),
+      });
+
+      if (Result.isError(foreignKeys)) return foreignKeys;
+    }
+
     const migration = await Result.tryPromise({
       try: async () =>
         migrate(this.db, {
@@ -774,11 +791,11 @@ function resolveInputPath(pathValue: string | undefined): string {
 
 export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbResult<OhmDb>> {
   const resolvedPath = resolveInputPath(input.path);
+  const connectionUrl = toLibsqlUrl(resolvedPath);
   const migrationsFolder = resolveMigrationsFolder(input.migrationsFolder);
   const opened = await Result.tryPromise({
     try: async () => {
-      const url = toLibsqlUrl(resolvedPath);
-      return createClient({ url });
+      return createClient({ url: connectionUrl });
     },
     catch: (cause) =>
       new OhmDbRuntimeError({
@@ -793,6 +810,7 @@ export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbRe
   const db = drizzle(opened.value, { schema });
   const client = new OhmDbClientImpl(
     resolvedPath,
+    connectionUrl,
     opened.value,
     db,
     migrationsFolder,
