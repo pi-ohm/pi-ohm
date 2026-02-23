@@ -5,7 +5,7 @@
   "sideEffects": false,
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && mv .output/dist/client/ .output/public/",
+    "build": "vite build && mv .output/dist/client/ .output/public/ && cp .output/public/_shell.html .output/public/index.html",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "start": "serve .output/public --config ../../serve.json",
