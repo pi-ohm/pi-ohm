@@ -22,6 +22,14 @@ TypeBox config schemas are exported for subagent profile authoring/validation:
 - `parseSubagentProfileVariantPatch(input)`
 - `parseSubagentProfilePatch(input)`
 
+Tree-shakeable modular entrypoints:
+
+- `@pi-ohm/config` - full runtime loader + settings registration helpers
+- `@pi-ohm/config/subagents` - subagent profile types, schema, resolvers, and merge helpers
+- `@pi-ohm/config/features` - feature-flag defaults + merge helpers
+- `@pi-ohm/config/modes` - mode type/default/normalizer
+- `@pi-ohm/config/painter` - painter provider defaults + merge helpers
+
 Subagents runtime config highlights:
 
 - `subagents.taskMaxConcurrency`

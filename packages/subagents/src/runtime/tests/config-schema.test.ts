@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSubagentProfilePatch, parseSubagentProfileVariantPatch } from "@pi-ohm/config";
+import {
+  parseSubagentProfilePatch,
+  parseSubagentProfileVariantPatch,
+} from "@pi-ohm/config/subagents";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
