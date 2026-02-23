@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Result } from "better-result";
-import { resolveLookupSnapshot } from "./toolkit";
+import { resolveLookupSnapshot } from "../toolkit";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
