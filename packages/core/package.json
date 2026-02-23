@@ -25,6 +25,10 @@
     "./paths": {
       "types": "./dist/paths.d.ts",
       "default": "./dist/paths.js"
+    },
+    "./toolkit": {
+      "types": "./dist/toolkit.d.ts",
+      "default": "./dist/toolkit.js"
     }
   },
   "publishConfig": {
@@ -38,7 +42,8 @@
     "entry": {
       "errors": "src/errors.ts",
       "grammar": "src/grammar.ts",
-      "paths": "src/paths.ts"
+      "paths": "src/paths.ts",
+      "toolkit": "src/toolkit.ts"
     }
   }
 }

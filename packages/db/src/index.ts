@@ -6,7 +6,16 @@ export {
   type OhmSubagentSessionStore,
 } from "./client";
 export { resolveOhmDbPath, type ResolveDbPathInput } from "./paths";
-export { OHM_DB_BOOTSTRAP_SQL, OHM_DB_SCHEMA_VERSION } from "./schema";
+export { OHM_DB_SCHEMA_VERSION } from "./schema";
+export {
+  schema,
+  ohmMetaTable,
+  ohmStateTable,
+  ohmSubagentSessionEventTable,
+  ohmSubagentSessionTable,
+  type OhmSubagentSessionEventRow,
+  type OhmSubagentSessionRow,
+} from "./schema";
 export type {
   AppendSubagentSessionEventInput,
   DeleteStateInput,
@@ -20,6 +29,7 @@ export type {
   SubagentSessionStatus,
   UpsertSubagentSessionInput,
 } from "./models";
+export { SUBAGENT_INVOCATION_MODES, SUBAGENT_SESSION_STATUSES } from "./models";
 export {
   OhmDbRuntimeError,
   OhmDbValidationError,

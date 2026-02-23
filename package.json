@@ -17,7 +17,8 @@
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev#readme",
   "license": "MIT",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "docs/"
   ],
   "files": [
     "extensions/",

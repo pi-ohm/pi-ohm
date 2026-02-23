@@ -99,6 +99,22 @@ function extractNarrativeResult(output: string | undefined): string | undefined 
   return sections.narrativeLines.join("\n");
 }
 
+function resolveModelItemResultText(item: TaskToolItemDetails): string {
+  if (!item.found) {
+    return item.error_message ?? item.summary;
+  }
+
+  const assistantText = item.assistant_text?.trim();
+  if (assistantText && assistantText.length > 0) return assistantText;
+
+  const outputNarrative =
+    item.output_available && item.output ? extractNarrativeResult(item.output) : undefined;
+  if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
+
+  if (item.error_message && item.error_message.length > 0) return item.error_message;
+  return item.summary;
+}
+
 function resolveModelResultText(details: TaskToolResultDetails): string {
   const assistantText = details.assistant_text?.trim();
   if (assistantText && assistantText.length > 0) return assistantText;
@@ -110,15 +126,7 @@ function resolveModelResultText(details: TaskToolResultDetails): string {
   if (details.items && details.items.length === 1) {
     const [item] = details.items;
     if (item && item.found) {
-      const itemAssistantText = item.assistant_text?.trim();
-      if (itemAssistantText && itemAssistantText.length > 0) return itemAssistantText;
-
-      const itemNarrative =
-        item.output_available && item.output ? extractNarrativeResult(item.output) : undefined;
-      if (itemNarrative && itemNarrative.length > 0) return itemNarrative;
-
-      if (item.error_message && item.error_message.length > 0) return item.error_message;
-      return item.summary;
+      return resolveModelItemResultText(item);
     }
   }
 
@@ -126,19 +134,51 @@ function resolveModelResultText(details: TaskToolResultDetails): string {
   return details.summary;
 }
 
-function resolveModelTaskId(details: TaskToolResultDetails): string {
-  if (details.task_id && details.task_id.length > 0) return details.task_id;
-  if (details.items && details.items.length === 1) {
-    const [item] = details.items;
-    if (item && item.id.length > 0) return item.id;
+function resolveModelTaskIds(details: TaskToolResultDetails): readonly string[] {
+  const seen = new Set<string>();
+
+  const append = (value: string | undefined): void => {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    seen.add(trimmed);
+  };
+
+  append(details.task_id);
+  for (const item of details.items ?? []) {
+    append(item.id);
   }
+
+  return [...seen];
+}
+
+function resolveModelTaskId(details: TaskToolResultDetails): string {
+  const [primaryId] = resolveModelTaskIds(details);
+  if (primaryId) return primaryId;
   return "unavailable";
+}
+
+function resolveBatchTimestamp(details: TaskToolResultDetails): string | undefined {
+  if (!details.items || details.items.length === 0) return undefined;
+
+  let latestEpochMs: number | undefined;
+  for (const item of details.items) {
+    const candidate =
+      item.ended_at_epoch_ms ?? item.updated_at_epoch_ms ?? details.ended_at_epoch_ms;
+    if (typeof candidate !== "number" || !Number.isFinite(candidate)) continue;
+    latestEpochMs = latestEpochMs === undefined ? candidate : Math.max(latestEpochMs, candidate);
+  }
+
+  return toIsoTimestamp(latestEpochMs);
 }
 
 function resolveModelTimestamp(details: TaskToolResultDetails): string {
   const directTimestamp =
     toIsoTimestamp(details.ended_at_epoch_ms) ?? toIsoTimestamp(details.updated_at_epoch_ms);
   if (directTimestamp) return directTimestamp;
+
+  const batchTimestamp = resolveBatchTimestamp(details);
+  if (batchTimestamp) return batchTimestamp;
 
   if (details.items && details.items.length === 1) {
     const [item] = details.items;
@@ -152,12 +192,34 @@ function resolveModelTimestamp(details: TaskToolResultDetails): string {
   return "unavailable";
 }
 
+function toModelBatchItemLines(item: TaskToolItemDetails, index: number): readonly string[] {
+  const status = item.found ? (item.status ?? "failed") : "failed";
+  const subagent = item.subagent_type ?? "unknown";
+  const description = item.description ? ` · ${item.description}` : "";
+  const result = resolveModelItemResultText(item);
+  const resultLines = result.split("\n");
+  const lines = [`- ${index + 1}. ${item.id} [${status}] ${subagent}${description}`];
+
+  if (resultLines.length <= 1) {
+    lines.push(`  result: ${resultLines[0] ?? ""}`);
+    return lines;
+  }
+
+  lines.push("  result:");
+  for (const line of resultLines) {
+    lines.push(`    ${line}`);
+  }
+  return lines;
+}
+
 function toModelFacingContent(details: TaskToolResultDetails): string {
+  const taskIds = resolveModelTaskIds(details);
   const taskId = resolveModelTaskId(details);
   const timestamp = resolveModelTimestamp(details);
   const result = resolveModelResultText(details);
   const lines = [
     `task_id: ${taskId}`,
+    ...(taskIds.length > 1 ? [`task_ids: ${taskIds.join(", ")}`] : []),
     `status: ${details.status}`,
     ...(details.subagent_type ? [`subagent: ${details.subagent_type}`] : []),
     `backend: ${details.backend}`,
@@ -169,6 +231,14 @@ function toModelFacingContent(details: TaskToolResultDetails): string {
     "result:",
     result,
   ];
+
+  if (details.items && details.items.length > 1) {
+    lines.push("items:");
+    for (const [index, item] of details.items.entries()) {
+      lines.push(...toModelBatchItemLines(item, index));
+    }
+  }
+
   return lines.join("\n");
 }
 

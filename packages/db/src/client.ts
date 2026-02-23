@@ -1,5 +1,11 @@
-import { connect, type Database } from "@tursodatabase/database";
+import { createClient, type Client } from "@libsql/client";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { Result } from "better-result";
+import { z } from "zod";
 import type {
   AppendSubagentSessionEventInput,
   DeleteStateInput,
@@ -7,26 +13,61 @@ import type {
   ListSubagentSessionEventsInput,
   ListSubagentSessionsInput,
   SetStateInput,
-  SubagentInvocationMode,
   SubagentSessionEvent,
   SubagentSessionSnapshot,
-  SubagentSessionStatus,
   UpsertSubagentSessionInput,
 } from "./models";
+import { SUBAGENT_INVOCATION_MODES, SUBAGENT_SESSION_STATUSES } from "./models";
+import {
+  OHM_DB_SCHEMA_VERSION,
+  ohmMetaTable,
+  ohmStateTable,
+  ohmSubagentSessionEventTable,
+  ohmSubagentSessionTable,
+  schema,
+  type OhmSubagentSessionEventRow,
+  type OhmSubagentSessionRow,
+} from "./schema";
 import { OhmDbRuntimeError, OhmDbValidationError, type OhmDbResult } from "./errors";
 import { resolveOhmDbPath } from "./paths";
-import { OHM_DB_BOOTSTRAP_SQL, OHM_DB_SCHEMA_VERSION } from "./schema";
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const nonEmptyTrimmedStringSchema = z
+  .string()
+  .transform((value) => value.trim())
+  .refine((value) => value.length > 0, {
+    message: "Expected a non-empty string",
+  });
 
-function readNonEmptyString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed;
-}
+const epochMsSchema = z.number().int().nonnegative();
+
+const subagentSessionRowSchema = z.object({
+  id: nonEmptyTrimmedStringSchema,
+  projectCwd: nonEmptyTrimmedStringSchema,
+  subagentType: nonEmptyTrimmedStringSchema,
+  invocation: z.enum(SUBAGENT_INVOCATION_MODES),
+  status: z.enum(SUBAGENT_SESSION_STATUSES),
+  summary: nonEmptyTrimmedStringSchema,
+  output: z
+    .string()
+    .nullable()
+    .transform((value) => {
+      if (value === null) return undefined;
+      const trimmed = value.trim();
+      if (trimmed.length === 0) return undefined;
+      return trimmed;
+    }),
+  createdAtEpochMs: epochMsSchema,
+  updatedAtEpochMs: epochMsSchema,
+  endedAtEpochMs: epochMsSchema.nullable().transform((value) => value ?? undefined),
+});
+
+const subagentSessionEventRowSchema = z.object({
+  sessionId: nonEmptyTrimmedStringSchema,
+  sequence: z.number().int().positive(),
+  eventType: nonEmptyTrimmedStringSchema,
+  payloadJson: nonEmptyTrimmedStringSchema,
+  atEpochMs: epochMsSchema,
+});
 
 function readFiniteInteger(value: unknown): number | undefined {
   if (typeof value === "number") {
@@ -43,27 +84,18 @@ function readFiniteInteger(value: unknown): number | undefined {
   return undefined;
 }
 
-function parseInvocationMode(value: unknown): SubagentInvocationMode | undefined {
-  if (value === "task-routed" || value === "primary-tool") return value;
-  return undefined;
-}
+type IdentifierField =
+  | "namespace"
+  | "key"
+  | "sessionId"
+  | "eventType"
+  | "summary"
+  | "projectCwd"
+  | "subagentType";
 
-function parseSessionStatus(value: unknown): SubagentSessionStatus | undefined {
-  if (
-    value === "queued" ||
-    value === "running" ||
-    value === "succeeded" ||
-    value === "failed" ||
-    value === "cancelled"
-  ) {
-    return value;
-  }
-  return undefined;
-}
-
-function validateNamespaceOrKey(input: {
+function validateIdentifier(input: {
   readonly value: string;
-  readonly field: "namespace" | "key" | "sessionId" | "eventType";
+  readonly field: IdentifierField;
 }): OhmDbResult<string, OhmDbValidationError> {
   const trimmed = input.value.trim();
   if (trimmed.length > 0) return Result.ok(trimmed);
@@ -146,118 +178,48 @@ function deserializeJson(raw: string): OhmDbResult<unknown, OhmDbRuntimeError> {
 }
 
 function parseSubagentSessionRow(
-  input: unknown,
+  input: OhmSubagentSessionRow,
 ): OhmDbResult<SubagentSessionSnapshot, OhmDbValidationError> {
-  if (!isObjectRecord(input)) {
+  const parsed = subagentSessionRowSchema.safeParse(input);
+  if (!parsed.success) {
     return Result.err(
       new OhmDbValidationError({
         code: "db_row_invalid_shape",
         field: "session",
-        message: "Subagent session row must be an object",
-      }),
-    );
-  }
-
-  const id = readNonEmptyString(Reflect.get(input, "id"));
-  const projectCwd = readNonEmptyString(Reflect.get(input, "project_cwd"));
-  const subagentType = readNonEmptyString(Reflect.get(input, "subagent_type"));
-  const invocation = parseInvocationMode(Reflect.get(input, "invocation"));
-  const status = parseSessionStatus(Reflect.get(input, "status"));
-  const summary = readNonEmptyString(Reflect.get(input, "summary"));
-  const outputValue = Reflect.get(input, "output");
-  const output = outputValue === null ? undefined : readNonEmptyString(outputValue);
-  const createdAtEpochMs = readFiniteInteger(Reflect.get(input, "created_at_epoch_ms"));
-  const updatedAtEpochMs = readFiniteInteger(Reflect.get(input, "updated_at_epoch_ms"));
-  const endedAtEpochMsRaw = Reflect.get(input, "ended_at_epoch_ms");
-  const endedAtEpochMs =
-    endedAtEpochMsRaw === null || endedAtEpochMsRaw === undefined
-      ? undefined
-      : readFiniteInteger(endedAtEpochMsRaw);
-
-  if (!id || !projectCwd || !subagentType || !invocation || !status || !summary) {
-    return Result.err(
-      new OhmDbValidationError({
-        code: "db_row_missing_fields",
-        field: "session",
-        message: "Subagent session row is missing required fields",
-      }),
-    );
-  }
-
-  if (createdAtEpochMs === undefined || updatedAtEpochMs === undefined) {
-    return Result.err(
-      new OhmDbValidationError({
-        code: "db_row_invalid_epoch_ms",
-        field: "session",
-        message: "Subagent session row has invalid epoch fields",
-      }),
-    );
-  }
-
-  if (
-    endedAtEpochMsRaw !== null &&
-    endedAtEpochMsRaw !== undefined &&
-    endedAtEpochMs === undefined
-  ) {
-    return Result.err(
-      new OhmDbValidationError({
-        code: "db_row_invalid_epoch_ms",
-        field: "session",
-        message: "Subagent session row has invalid ended_at_epoch_ms",
+        cause: parsed.error,
       }),
     );
   }
 
   return Result.ok({
-    id,
-    projectCwd,
-    subagentType,
-    invocation,
-    status,
-    summary,
-    output,
-    createdAtEpochMs,
-    updatedAtEpochMs,
-    endedAtEpochMs,
+    id: parsed.data.id,
+    projectCwd: parsed.data.projectCwd,
+    subagentType: parsed.data.subagentType,
+    invocation: parsed.data.invocation,
+    status: parsed.data.status,
+    summary: parsed.data.summary,
+    output: parsed.data.output,
+    createdAtEpochMs: parsed.data.createdAtEpochMs,
+    updatedAtEpochMs: parsed.data.updatedAtEpochMs,
+    endedAtEpochMs: parsed.data.endedAtEpochMs,
   });
 }
 
 function parseSubagentSessionEventRow(
-  input: unknown,
+  input: OhmSubagentSessionEventRow,
 ): OhmDbResult<SubagentSessionEvent, OhmDbValidationError> {
-  if (!isObjectRecord(input)) {
+  const parsed = subagentSessionEventRowSchema.safeParse(input);
+  if (!parsed.success) {
     return Result.err(
       new OhmDbValidationError({
         code: "db_row_invalid_shape",
         field: "event",
-        message: "Subagent session event row must be an object",
+        cause: parsed.error,
       }),
     );
   }
 
-  const sessionId = readNonEmptyString(Reflect.get(input, "session_id"));
-  const sequence = readFiniteInteger(Reflect.get(input, "seq"));
-  const eventType = readNonEmptyString(Reflect.get(input, "event_type"));
-  const payloadJson = readNonEmptyString(Reflect.get(input, "payload_json"));
-  const atEpochMs = readFiniteInteger(Reflect.get(input, "at_epoch_ms"));
-
-  if (
-    !sessionId ||
-    sequence === undefined ||
-    !eventType ||
-    !payloadJson ||
-    atEpochMs === undefined
-  ) {
-    return Result.err(
-      new OhmDbValidationError({
-        code: "db_row_missing_fields",
-        field: "event",
-        message: "Subagent session event row is missing required fields",
-      }),
-    );
-  }
-
-  const payload = deserializeJson(payloadJson);
+  const payload = deserializeJson(parsed.data.payloadJson);
   if (Result.isError(payload)) {
     return Result.err(
       new OhmDbValidationError({
@@ -269,12 +231,41 @@ function parseSubagentSessionEventRow(
   }
 
   return Result.ok({
-    sessionId,
-    sequence,
-    eventType,
+    sessionId: parsed.data.sessionId,
+    sequence: parsed.data.sequence,
+    eventType: parsed.data.eventType,
     payload: payload.value,
-    atEpochMs,
+    atEpochMs: parsed.data.atEpochMs,
   });
+}
+
+function toLibsqlUrl(pathValue: string): string {
+  const trimmed = pathValue.trim();
+  if (trimmed === ":memory:") return "file::memory:";
+
+  const hasUrlScheme =
+    trimmed.startsWith("file:") ||
+    trimmed.startsWith("libsql:") ||
+    trimmed.startsWith("http:") ||
+    trimmed.startsWith("https:") ||
+    trimmed.startsWith("ws:") ||
+    trimmed.startsWith("wss:");
+
+  if (hasUrlScheme) return trimmed;
+  return `file:${trimmed}`;
+}
+
+function defaultMigrationsFolder(): string {
+  const currentFilePath = fileURLToPath(import.meta.url);
+  const currentFileDir = dirname(currentFilePath);
+  return join(currentFileDir, "..", "drizzle");
+}
+
+function resolveMigrationsFolder(folder: string | undefined): string {
+  if (!folder) return defaultMigrationsFolder();
+  const trimmed = folder.trim();
+  if (trimmed.length === 0) return defaultMigrationsFolder();
+  return trimmed;
 }
 
 export interface OhmStateStore {
@@ -307,7 +298,10 @@ class OhmDbClientImpl implements OhmDb {
 
   constructor(
     readonly path: string,
-    private readonly db: Database,
+    private readonly connectionUrl: string,
+    private readonly client: Client,
+    private readonly db: LibSQLDatabase<typeof schema>,
+    private readonly migrationsFolder: string,
     private readonly now: () => number,
   ) {
     this.state = {
@@ -326,35 +320,59 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   async initialize(): Promise<OhmDbResult<true>> {
-    const bootstrap = await Result.tryPromise({
-      try: async () => this.db.exec(OHM_DB_BOOTSTRAP_SQL),
+    if (this.connectionUrl.startsWith("file:")) {
+      const foreignKeys = await Result.tryPromise({
+        try: async () => {
+          await this.client.execute("PRAGMA foreign_keys = ON");
+        },
+        catch: (cause) =>
+          new OhmDbRuntimeError({
+            code: "db_foreign_keys_enable_failed",
+            stage: "migrate",
+            cause,
+          }),
+      });
+
+      if (Result.isError(foreignKeys)) return foreignKeys;
+    }
+
+    const migration = await Result.tryPromise({
+      try: async () =>
+        migrate(this.db, {
+          migrationsFolder: this.migrationsFolder,
+        }),
       catch: (cause) =>
         new OhmDbRuntimeError({
-          code: "db_schema_bootstrap_failed",
-          stage: "bootstrap",
+          code: "db_schema_migrate_failed",
+          stage: "migrate",
           cause,
         }),
     });
 
-    if (Result.isError(bootstrap)) return bootstrap;
+    if (Result.isError(migration)) return migration;
 
     const updatedAt = this.now();
     const versionWrite = await Result.tryPromise({
-      try: async () =>
-        this.db
-          .prepare(
-            [
-              "INSERT INTO ohm_meta (key, value, updated_at_epoch_ms)",
-              "VALUES ('schema_version', ?, ?)",
-              "ON CONFLICT(key) DO UPDATE",
-              "SET value = excluded.value, updated_at_epoch_ms = excluded.updated_at_epoch_ms",
-            ].join(" "),
-          )
-          .run(String(OHM_DB_SCHEMA_VERSION), updatedAt),
+      try: async () => {
+        await this.db
+          .insert(ohmMetaTable)
+          .values({
+            key: "schema_version",
+            value: String(OHM_DB_SCHEMA_VERSION),
+            updatedAtEpochMs: updatedAt,
+          })
+          .onConflictDoUpdate({
+            target: ohmMetaTable.key,
+            set: {
+              value: String(OHM_DB_SCHEMA_VERSION),
+              updatedAtEpochMs: updatedAt,
+            },
+          });
+      },
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_schema_version_write_failed",
-          stage: "bootstrap",
+          stage: "migrate",
           cause,
         }),
     });
@@ -364,8 +382,8 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   async close(): Promise<OhmDbResult<true>> {
-    const closed = await Result.tryPromise({
-      try: async () => this.db.close(),
+    const closed = Result.try({
+      try: () => this.client.close(),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_close_failed",
@@ -379,17 +397,21 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   private async getState(input: GetStateInput): Promise<OhmDbResult<unknown>> {
-    const namespace = validateNamespaceOrKey({ value: input.namespace, field: "namespace" });
+    const namespace = validateIdentifier({ value: input.namespace, field: "namespace" });
     if (Result.isError(namespace)) return namespace;
 
-    const key = validateNamespaceOrKey({ value: input.key, field: "key" });
+    const key = validateIdentifier({ value: input.key, field: "key" });
     if (Result.isError(key)) return key;
 
-    const row = await Result.tryPromise({
+    const rows = await Result.tryPromise({
       try: async () =>
         this.db
-          .prepare("SELECT value_json FROM ohm_state WHERE namespace = ? AND key = ?")
-          .get(namespace.value, key.value),
+          .select({ valueJson: ohmStateTable.valueJson })
+          .from(ohmStateTable)
+          .where(
+            and(eq(ohmStateTable.namespace, namespace.value), eq(ohmStateTable.key, key.value)),
+          )
+          .limit(1),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_state_get_failed",
@@ -398,22 +420,21 @@ class OhmDbClientImpl implements OhmDb {
         }),
     });
 
-    if (Result.isError(row)) return row;
-    if (!isObjectRecord(row.value)) return Result.ok(undefined);
+    if (Result.isError(rows)) return rows;
 
-    const rawJson = readNonEmptyString(Reflect.get(row.value, "value_json"));
-    if (!rawJson) return Result.ok(undefined);
+    const row = rows.value[0];
+    if (!row) return Result.ok(undefined);
 
-    const parsed = deserializeJson(rawJson);
+    const parsed = deserializeJson(row.valueJson);
     if (Result.isError(parsed)) return parsed;
     return Result.ok(parsed.value);
   }
 
   private async setState(input: SetStateInput): Promise<OhmDbResult<true>> {
-    const namespace = validateNamespaceOrKey({ value: input.namespace, field: "namespace" });
+    const namespace = validateIdentifier({ value: input.namespace, field: "namespace" });
     if (Result.isError(namespace)) return namespace;
 
-    const key = validateNamespaceOrKey({ value: input.key, field: "key" });
+    const key = validateIdentifier({ value: input.key, field: "key" });
     if (Result.isError(key)) return key;
 
     const updatedAtEpochMs = validateEpochMs({
@@ -426,17 +447,23 @@ class OhmDbClientImpl implements OhmDb {
     if (Result.isError(serialized)) return serialized;
 
     const written = await Result.tryPromise({
-      try: async () =>
-        this.db
-          .prepare(
-            [
-              "INSERT INTO ohm_state (namespace, key, value_json, updated_at_epoch_ms)",
-              "VALUES (?, ?, ?, ?)",
-              "ON CONFLICT(namespace, key) DO UPDATE",
-              "SET value_json = excluded.value_json, updated_at_epoch_ms = excluded.updated_at_epoch_ms",
-            ].join(" "),
-          )
-          .run(namespace.value, key.value, serialized.value, updatedAtEpochMs.value),
+      try: async () => {
+        await this.db
+          .insert(ohmStateTable)
+          .values({
+            namespace: namespace.value,
+            key: key.value,
+            valueJson: serialized.value,
+            updatedAtEpochMs: updatedAtEpochMs.value,
+          })
+          .onConflictDoUpdate({
+            target: [ohmStateTable.namespace, ohmStateTable.key],
+            set: {
+              valueJson: serialized.value,
+              updatedAtEpochMs: updatedAtEpochMs.value,
+            },
+          });
+      },
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_state_set_failed",
@@ -450,17 +477,20 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   private async deleteState(input: DeleteStateInput): Promise<OhmDbResult<true>> {
-    const namespace = validateNamespaceOrKey({ value: input.namespace, field: "namespace" });
+    const namespace = validateIdentifier({ value: input.namespace, field: "namespace" });
     if (Result.isError(namespace)) return namespace;
 
-    const key = validateNamespaceOrKey({ value: input.key, field: "key" });
+    const key = validateIdentifier({ value: input.key, field: "key" });
     if (Result.isError(key)) return key;
 
     const deleted = await Result.tryPromise({
-      try: async () =>
-        this.db
-          .prepare("DELETE FROM ohm_state WHERE namespace = ? AND key = ?")
-          .run(namespace.value, key.value),
+      try: async () => {
+        await this.db
+          .delete(ohmStateTable)
+          .where(
+            and(eq(ohmStateTable.namespace, namespace.value), eq(ohmStateTable.key, key.value)),
+          );
+      },
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_state_delete_failed",
@@ -477,22 +507,22 @@ class OhmDbClientImpl implements OhmDb {
     input: UpsertSubagentSessionInput,
   ): Promise<OhmDbResult<true>> {
     const snapshot = input.snapshot;
-    const id = validateNamespaceOrKey({ value: snapshot.id, field: "sessionId" });
+    const id = validateIdentifier({ value: snapshot.id, field: "sessionId" });
     if (Result.isError(id)) return id;
 
-    const projectCwd = validateNamespaceOrKey({
+    const projectCwd = validateIdentifier({
       value: snapshot.projectCwd,
-      field: "namespace",
+      field: "projectCwd",
     });
     if (Result.isError(projectCwd)) return projectCwd;
 
-    const subagentType = validateNamespaceOrKey({
+    const subagentType = validateIdentifier({
       value: snapshot.subagentType,
-      field: "key",
+      field: "subagentType",
     });
     if (Result.isError(subagentType)) return subagentType;
 
-    const summary = validateNamespaceOrKey({ value: snapshot.summary, field: "eventType" });
+    const summary = validateIdentifier({ value: snapshot.summary, field: "summary" });
     if (Result.isError(summary)) return summary;
 
     const createdAtEpochMs = validateEpochMs({
@@ -516,38 +546,36 @@ class OhmDbClientImpl implements OhmDb {
     }
 
     const written = await Result.tryPromise({
-      try: async () =>
-        this.db
-          .prepare(
-            [
-              "INSERT INTO ohm_subagent_session",
-              "(id, project_cwd, subagent_type, invocation, status, summary, output,",
-              "created_at_epoch_ms, updated_at_epoch_ms, ended_at_epoch_ms)",
-              "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              "ON CONFLICT(id) DO UPDATE SET",
-              "project_cwd = excluded.project_cwd,",
-              "subagent_type = excluded.subagent_type,",
-              "invocation = excluded.invocation,",
-              "status = excluded.status,",
-              "summary = excluded.summary,",
-              "output = excluded.output,",
-              "created_at_epoch_ms = excluded.created_at_epoch_ms,",
-              "updated_at_epoch_ms = excluded.updated_at_epoch_ms,",
-              "ended_at_epoch_ms = excluded.ended_at_epoch_ms",
-            ].join(" "),
-          )
-          .run(
-            id.value,
-            projectCwd.value,
-            subagentType.value,
-            snapshot.invocation,
-            snapshot.status,
-            summary.value,
-            snapshot.output ?? null,
-            createdAtEpochMs.value,
-            updatedAtEpochMs.value,
-            snapshot.endedAtEpochMs ?? null,
-          ),
+      try: async () => {
+        await this.db
+          .insert(ohmSubagentSessionTable)
+          .values({
+            id: id.value,
+            projectCwd: projectCwd.value,
+            subagentType: subagentType.value,
+            invocation: snapshot.invocation,
+            status: snapshot.status,
+            summary: summary.value,
+            output: snapshot.output ?? null,
+            createdAtEpochMs: createdAtEpochMs.value,
+            updatedAtEpochMs: updatedAtEpochMs.value,
+            endedAtEpochMs: snapshot.endedAtEpochMs ?? null,
+          })
+          .onConflictDoUpdate({
+            target: ohmSubagentSessionTable.id,
+            set: {
+              projectCwd: projectCwd.value,
+              subagentType: subagentType.value,
+              invocation: snapshot.invocation,
+              status: snapshot.status,
+              summary: summary.value,
+              output: snapshot.output ?? null,
+              createdAtEpochMs: createdAtEpochMs.value,
+              updatedAtEpochMs: updatedAtEpochMs.value,
+              endedAtEpochMs: snapshot.endedAtEpochMs ?? null,
+            },
+          });
+      },
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_upsert_failed",
@@ -563,12 +591,16 @@ class OhmDbClientImpl implements OhmDb {
   private async getSubagentSession(
     sessionId: string,
   ): Promise<OhmDbResult<SubagentSessionSnapshot | undefined>> {
-    const id = validateNamespaceOrKey({ value: sessionId, field: "sessionId" });
+    const id = validateIdentifier({ value: sessionId, field: "sessionId" });
     if (Result.isError(id)) return id;
 
-    const row = await Result.tryPromise({
+    const rows = await Result.tryPromise({
       try: async () =>
-        this.db.prepare("SELECT * FROM ohm_subagent_session WHERE id = ?").get(id.value),
+        this.db
+          .select()
+          .from(ohmSubagentSessionTable)
+          .where(eq(ohmSubagentSessionTable.id, id.value))
+          .limit(1),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_get_failed",
@@ -577,10 +609,12 @@ class OhmDbClientImpl implements OhmDb {
         }),
     });
 
-    if (Result.isError(row)) return row;
-    if (!isObjectRecord(row.value)) return Result.ok(undefined);
+    if (Result.isError(rows)) return rows;
 
-    const parsed = parseSubagentSessionRow(row.value);
+    const row = rows.value[0];
+    if (!row) return Result.ok(undefined);
+
+    const parsed = parseSubagentSessionRow(row);
     if (Result.isError(parsed)) return parsed;
     return Result.ok(parsed.value);
   }
@@ -588,9 +622,9 @@ class OhmDbClientImpl implements OhmDb {
   private async listSubagentSessions(
     input: ListSubagentSessionsInput,
   ): Promise<OhmDbResult<readonly SubagentSessionSnapshot[]>> {
-    const projectCwd = validateNamespaceOrKey({
+    const projectCwd = validateIdentifier({
       value: input.projectCwd,
-      field: "namespace",
+      field: "projectCwd",
     });
     if (Result.isError(projectCwd)) return projectCwd;
 
@@ -598,15 +632,11 @@ class OhmDbClientImpl implements OhmDb {
     const rows = await Result.tryPromise({
       try: async () =>
         this.db
-          .prepare(
-            [
-              "SELECT * FROM ohm_subagent_session",
-              "WHERE project_cwd = ?",
-              "ORDER BY updated_at_epoch_ms DESC",
-              "LIMIT ?",
-            ].join(" "),
-          )
-          .all(projectCwd.value, limit),
+          .select()
+          .from(ohmSubagentSessionTable)
+          .where(eq(ohmSubagentSessionTable.projectCwd, projectCwd.value))
+          .orderBy(desc(ohmSubagentSessionTable.updatedAtEpochMs))
+          .limit(limit),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_list_failed",
@@ -617,9 +647,8 @@ class OhmDbClientImpl implements OhmDb {
 
     if (Result.isError(rows)) return rows;
 
-    const normalizedRows: unknown[] = rows.value;
     const items: SubagentSessionSnapshot[] = [];
-    for (const row of normalizedRows) {
+    for (const row of rows.value) {
       const parsed = parseSubagentSessionRow(row);
       if (Result.isError(parsed)) return parsed;
       items.push(parsed.value);
@@ -631,10 +660,10 @@ class OhmDbClientImpl implements OhmDb {
   private async appendSubagentSessionEvent(
     input: AppendSubagentSessionEventInput,
   ): Promise<OhmDbResult<SubagentSessionEvent>> {
-    const sessionId = validateNamespaceOrKey({ value: input.sessionId, field: "sessionId" });
+    const sessionId = validateIdentifier({ value: input.sessionId, field: "sessionId" });
     if (Result.isError(sessionId)) return sessionId;
 
-    const eventType = validateNamespaceOrKey({ value: input.eventType, field: "eventType" });
+    const eventType = validateIdentifier({ value: input.eventType, field: "eventType" });
     if (Result.isError(eventType)) return eventType;
 
     const atEpochMs = validateEpochMs({ value: input.atEpochMs, field: "atEpochMs" });
@@ -647,22 +676,15 @@ class OhmDbClientImpl implements OhmDb {
     if (Result.isError(sequenceResult)) return sequenceResult;
 
     const inserted = await Result.tryPromise({
-      try: async () =>
-        this.db
-          .prepare(
-            [
-              "INSERT INTO ohm_subagent_session_event",
-              "(session_id, seq, event_type, payload_json, at_epoch_ms)",
-              "VALUES (?, ?, ?, ?, ?)",
-            ].join(" "),
-          )
-          .run(
-            sessionId.value,
-            sequenceResult.value,
-            eventType.value,
-            payloadJson.value,
-            atEpochMs.value,
-          ),
+      try: async () => {
+        await this.db.insert(ohmSubagentSessionEventTable).values({
+          sessionId: sessionId.value,
+          sequence: sequenceResult.value,
+          eventType: eventType.value,
+          payloadJson: payloadJson.value,
+          atEpochMs: atEpochMs.value,
+        });
+      },
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_event_insert_failed",
@@ -685,23 +707,18 @@ class OhmDbClientImpl implements OhmDb {
   private async listSubagentSessionEvents(
     input: ListSubagentSessionEventsInput,
   ): Promise<OhmDbResult<readonly SubagentSessionEvent[]>> {
-    const sessionId = validateNamespaceOrKey({ value: input.sessionId, field: "sessionId" });
+    const sessionId = validateIdentifier({ value: input.sessionId, field: "sessionId" });
     if (Result.isError(sessionId)) return sessionId;
 
     const limit = validateLimit(input.limit);
     const rows = await Result.tryPromise({
       try: async () =>
         this.db
-          .prepare(
-            [
-              "SELECT session_id, seq, event_type, payload_json, at_epoch_ms",
-              "FROM ohm_subagent_session_event",
-              "WHERE session_id = ?",
-              "ORDER BY seq ASC",
-              "LIMIT ?",
-            ].join(" "),
-          )
-          .all(sessionId.value, limit),
+          .select()
+          .from(ohmSubagentSessionEventTable)
+          .where(eq(ohmSubagentSessionEventTable.sessionId, sessionId.value))
+          .orderBy(asc(ohmSubagentSessionEventTable.sequence))
+          .limit(limit),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_event_list_failed",
@@ -712,9 +729,8 @@ class OhmDbClientImpl implements OhmDb {
 
     if (Result.isError(rows)) return rows;
 
-    const normalizedRows: unknown[] = rows.value;
     const items: SubagentSessionEvent[] = [];
-    for (const row of normalizedRows) {
+    for (const row of rows.value) {
       const parsed = parseSubagentSessionEventRow(row);
       if (Result.isError(parsed)) return parsed;
       items.push(parsed.value);
@@ -724,13 +740,14 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   private async nextSubagentSessionEventSequence(sessionId: string): Promise<OhmDbResult<number>> {
-    const maxRow = await Result.tryPromise({
+    const maxRows = await Result.tryPromise({
       try: async () =>
         this.db
-          .prepare(
-            "SELECT COALESCE(MAX(seq), 0) AS max_seq FROM ohm_subagent_session_event WHERE session_id = ?",
-          )
-          .get(sessionId),
+          .select({
+            maxSequence: sql<number>`COALESCE(MAX(${ohmSubagentSessionEventTable.sequence}), 0)`,
+          })
+          .from(ohmSubagentSessionEventTable)
+          .where(eq(ohmSubagentSessionEventTable.sessionId, sessionId)),
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_subagent_session_event_seq_failed",
@@ -739,10 +756,12 @@ class OhmDbClientImpl implements OhmDb {
         }),
     });
 
-    if (Result.isError(maxRow)) return maxRow;
-    if (!isObjectRecord(maxRow.value)) return Result.ok(1);
+    if (Result.isError(maxRows)) return maxRows;
 
-    const current = readFiniteInteger(Reflect.get(maxRow.value, "max_seq"));
+    const currentRaw = maxRows.value[0]?.maxSequence;
+    if (currentRaw === undefined) return Result.ok(1);
+
+    const current = readFiniteInteger(currentRaw);
     if (current === undefined) {
       return Result.err(
         new OhmDbRuntimeError({
@@ -759,6 +778,7 @@ class OhmDbClientImpl implements OhmDb {
 
 export interface CreateOhmDbInput {
   readonly path?: string;
+  readonly migrationsFolder?: string;
   readonly now?: () => number;
 }
 
@@ -771,8 +791,12 @@ function resolveInputPath(pathValue: string | undefined): string {
 
 export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbResult<OhmDb>> {
   const resolvedPath = resolveInputPath(input.path);
+  const connectionUrl = toLibsqlUrl(resolvedPath);
+  const migrationsFolder = resolveMigrationsFolder(input.migrationsFolder);
   const opened = await Result.tryPromise({
-    try: async () => connect(resolvedPath),
+    try: async () => {
+      return createClient({ url: connectionUrl });
+    },
     catch: (cause) =>
       new OhmDbRuntimeError({
         code: "db_connect_failed",
@@ -783,7 +807,15 @@ export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbRe
 
   if (Result.isError(opened)) return opened;
 
-  const client = new OhmDbClientImpl(resolvedPath, opened.value, input.now ?? (() => Date.now()));
+  const db = drizzle(opened.value, { schema });
+  const client = new OhmDbClientImpl(
+    resolvedPath,
+    connectionUrl,
+    opened.value,
+    db,
+    migrationsFolder,
+    input.now ?? (() => Date.now()),
+  );
   const initialized = await client.initialize();
   if (Result.isError(initialized)) {
     await client.close();

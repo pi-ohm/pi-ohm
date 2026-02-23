@@ -9,6 +9,7 @@
     "directory": "packages/db"
   },
   "files": [
+    "drizzle/",
     "src/",
     "README.md"
   ],
@@ -18,9 +19,18 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts"
+  },
   "dependencies": {
+    "@libsql/client": "catalog:",
     "@pi-ohm/core": "workspace:*",
-    "@tursodatabase/database": "^0.4.4",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "drizzle-kit": "catalog:"
   }
 }
