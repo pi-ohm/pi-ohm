@@ -7,6 +7,11 @@ import {
   setSetting,
   type SettingDefinition,
 } from "@juanibiapina/pi-extension-settings";
+import {
+  parseSubagentProfilePatch,
+  parseSubagentProfileVariantPatch,
+  type SubagentToolPermissionDecisionPatch,
+} from "./schema";
 
 export const OHM_EXTENSION_NAME = "pi-ohm";
 
@@ -288,28 +293,6 @@ function stripThinkingSuffix(modelId: string): string {
   return trimmed.slice(0, colonIndex).trim();
 }
 
-function normalizeOptionalString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed;
-}
-
-function normalizeOptionalStringArray(value: unknown): readonly string[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-
-  const normalized: string[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "string") continue;
-    const trimmed = entry.trim();
-    if (trimmed.length === 0) continue;
-    normalized.push(trimmed);
-  }
-
-  if (normalized.length === 0) return undefined;
-  return normalized;
-}
-
 function normalizeSubagentToolPermissionDecision(
   value: unknown,
 ): OhmSubagentToolPermissionDecision | undefined {
@@ -318,6 +301,13 @@ function normalizeSubagentToolPermissionDecision(
   // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
   if (value === "ask") return "deny";
   return undefined;
+}
+
+function normalizeSubagentToolPermissionDecisionPatch(
+  value: SubagentToolPermissionDecisionPatch,
+): OhmSubagentToolPermissionDecision {
+  if (value === "allow" || value === "deny" || value === "inherit") return value;
+  return "deny";
 }
 
 function normalizeSubagentToolPermissionMap(
@@ -349,12 +339,23 @@ function mergeSubagentVariantConfig(
   patch: JsonMap,
   fallback: OhmSubagentProfileVariantRuntimeConfig | undefined,
 ): OhmSubagentProfileVariantRuntimeConfig | undefined {
-  const model = normalizeSubagentModelOverride(patch.model);
-  const prompt = normalizeOptionalString(patch.prompt);
-  const description = normalizeOptionalString(patch.description);
-  const whenToUse = normalizeOptionalStringArray(patch.whenToUse);
+  const parsedPatch = parseSubagentProfileVariantPatch(patch);
+  if (!parsedPatch) return fallback;
+
+  const model = normalizeSubagentModelOverride(parsedPatch.model);
+  const prompt = parsedPatch.prompt;
+  const description = parsedPatch.description;
+  const whenToUse = parsedPatch.whenToUse;
+  const normalizedPermissionsInput = parsedPatch.permissions
+    ? Object.fromEntries(
+        Object.entries(parsedPatch.permissions).map(([tool, decision]) => [
+          tool,
+          normalizeSubagentToolPermissionDecisionPatch(decision),
+        ]),
+      )
+    : undefined;
   const permissions = normalizeSubagentToolPermissionMap(
-    patch.permissions,
+    normalizedPermissionsInput,
     fallback?.permissions ?? {},
   );
 
@@ -402,15 +403,26 @@ function mergeSubagentProfileConfig(
   patch: JsonMap,
   fallback: OhmSubagentProfileRuntimeConfig | undefined,
 ): OhmSubagentProfileRuntimeConfig | undefined {
-  const model = normalizeSubagentModelOverride(patch.model);
-  const prompt = normalizeOptionalString(patch.prompt);
-  const description = normalizeOptionalString(patch.description);
-  const whenToUse = normalizeOptionalStringArray(patch.whenToUse);
+  const parsedPatch = parseSubagentProfilePatch(patch);
+  if (!parsedPatch) return fallback;
+
+  const model = normalizeSubagentModelOverride(parsedPatch.model);
+  const prompt = parsedPatch.prompt;
+  const description = parsedPatch.description;
+  const whenToUse = parsedPatch.whenToUse;
+  const normalizedPermissionsInput = parsedPatch.permissions
+    ? Object.fromEntries(
+        Object.entries(parsedPatch.permissions).map(([tool, decision]) => [
+          tool,
+          normalizeSubagentToolPermissionDecisionPatch(decision),
+        ]),
+      )
+    : undefined;
   const permissions = normalizeSubagentToolPermissionMap(
-    patch.permissions,
+    normalizedPermissionsInput,
     fallback?.permissions ?? {},
   );
-  const variants = normalizeSubagentVariantMap(patch.variants, fallback?.variants ?? {});
+  const variants = normalizeSubagentVariantMap(parsedPatch.variants, fallback?.variants ?? {});
 
   const merged: OhmSubagentProfileRuntimeConfig = {
     ...fallback,
@@ -985,3 +997,16 @@ export function setOhmSetting(settingId: string, value: string): void {
 export function getDefaultOhmConfig(): OhmRuntimeConfig {
   return structuredClone(DEFAULT_OHM_CONFIG);
 }
+
+export {
+  parseSubagentProfilePatch,
+  parseSubagentProfileVariantPatch,
+  SubagentProfilePatchSchema,
+  SubagentProfileVariantMapPatchSchema,
+  SubagentProfileVariantPatchSchema,
+  SubagentToolPermissionDecisionSchema,
+  SubagentToolPermissionMapSchema,
+  type SubagentProfilePatch,
+  type SubagentProfileVariantPatch,
+  type SubagentToolPermissionDecisionPatch,
+} from "./schema";

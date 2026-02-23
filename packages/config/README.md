@@ -12,6 +12,16 @@ Responsibilities:
   - `${configDir}/ohm.providers.json`
 - expose typed runtime config helpers to feature packages
 
+TypeBox config schemas are exported for subagent profile authoring/validation:
+
+- `SubagentToolPermissionDecisionSchema`
+- `SubagentToolPermissionMapSchema`
+- `SubagentProfileVariantPatchSchema`
+- `SubagentProfileVariantMapPatchSchema`
+- `SubagentProfilePatchSchema`
+- `parseSubagentProfileVariantPatch(input)`
+- `parseSubagentProfilePatch(input)`
+
 Subagents runtime config highlights:
 
 - `subagents.taskMaxConcurrency`
