@@ -2238,6 +2238,73 @@ defineTest("runTaskToolMvp supports batch start with deterministic item ordering
   assert.equal(items[2]?.status, "succeeded");
 });
 
+defineTest("runTaskToolMvp batch start emits per-item model payload content", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "interactive-sdk",
+      async executeStart(input: TaskBackendStartInput) {
+        return Result.ok({
+          summary: `Finder: ${input.description}`,
+          output: `output for ${input.description}`,
+          provider: "openai",
+          model: "gpt-5",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+        });
+      },
+      async executeSend(input: TaskBackendSendInput) {
+        return Result.ok({
+          summary: `Finder follow-up: ${input.prompt}`,
+          output: `follow-up output for ${input.prompt}`,
+          provider: "openai",
+          model: "gpt-5",
+          runtime: "pi-sdk",
+          route: "interactive-sdk",
+        });
+      },
+    },
+  });
+
+  const result = await runTask({
+    params: {
+      op: "start",
+      tasks: [
+        {
+          subagent_type: "finder",
+          description: "role-def-librarian",
+          prompt: "find librarian role",
+        },
+        {
+          subagent_type: "finder",
+          description: "role-def-oracle",
+          prompt: "find oracle role",
+        },
+      ],
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const textBlock = result.content.find((part) => part.type === "text");
+  assert.notEqual(textBlock, undefined);
+  if (!textBlock || textBlock.type !== "text") {
+    assert.fail("expected text block");
+  }
+
+  const plainText = stripAnsi(textBlock.text);
+  assert.match(plainText, /^task_id:\s+batch_2$/m);
+  assert.match(plainText, /^result:$/m);
+  assert.match(plainText, /Completed batch tasks: 2\/2 succeeded/);
+  assert.match(plainText, /^items:$/m);
+  assert.match(plainText, /- 1\. task_test_0001 \[succeeded\] finder · role-def-librarian/);
+  assert.match(plainText, /- 2\. task_test_0002 \[succeeded\] finder · role-def-oracle/);
+  assert.match(plainText, /result: output for role-def-librarian/);
+  assert.match(plainText, /result: output for role-def-oracle/);
+  assert.doesNotMatch(plainText, /tool_call:|├──|╰──|ctrl\+o/u);
+});
+
 defineTest("runTaskToolMvp batch start streams aggregate updates", async () => {
   const deps = makeDeps({
     backend: {
