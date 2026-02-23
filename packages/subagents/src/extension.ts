@@ -5,8 +5,12 @@ import {
   registerOhmSettings,
   type OhmRuntimeConfig,
 } from "@pi-ohm/config";
-import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
+import { OHM_SUBAGENT_CATALOG } from "./catalog";
 import { isSubagentVisibleInTaskRoster } from "./policy";
+import {
+  resolveRuntimeSubagentById,
+  resolveRuntimeSubagentCatalog,
+} from "./runtime/subagent-profiles";
 import {
   getTaskLiveUiMode,
   parseTaskLiveUiModeInput,
@@ -65,7 +69,9 @@ function listSubagentIds(): string {
 }
 
 function getVisibleSubagents(config: OhmRuntimeConfig) {
-  return OHM_SUBAGENT_CATALOG.filter((agent) => isSubagentVisibleInTaskRoster(agent, config));
+  return resolveRuntimeSubagentCatalog(config).filter((agent) =>
+    isSubagentVisibleInTaskRoster(agent, config),
+  );
 }
 
 export function buildSubagentsOverviewText(input: {
@@ -242,11 +248,14 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("ohm-subagent", {
-    description: `Inspect one subagent scaffold (${listSubagentIds()})`,
+    description: `Inspect one subagent scaffold/profile (${listSubagentIds()} + custom profiles)`,
     handler: async (args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const [requested = ""] = normalizeCommandArgs(args);
-      const match = getSubagentById(requested);
+      const match = resolveRuntimeSubagentById({
+        subagentId: requested,
+        config,
+      });
 
       const visibleSubagents = getVisibleSubagents(config);
       const visibleIds = visibleSubagents.map((agent) => agent.id);

@@ -39,7 +39,31 @@ export interface OhmPainterProviders {
 }
 
 export interface OhmSubagentProfileRuntimeConfig {
-  model: string;
+  model?: string;
+  prompt?: string;
+  description?: string;
+  whenToUse?: readonly string[];
+  permissions?: Readonly<Record<string, OhmSubagentToolPermissionDecision>>;
+  variants?: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>>;
+}
+
+export type OhmSubagentToolPermissionDecision = "allow" | "deny" | "inherit";
+
+export interface OhmSubagentProfileVariantRuntimeConfig {
+  model?: string;
+  prompt?: string;
+  description?: string;
+  whenToUse?: readonly string[];
+  permissions?: Readonly<Record<string, OhmSubagentToolPermissionDecision>>;
+}
+
+export interface ResolvedOhmSubagentProfileRuntimeConfig {
+  model?: string;
+  prompt?: string;
+  description?: string;
+  whenToUse?: readonly string[];
+  permissions: Readonly<Record<string, "allow" | "deny">>;
+  variantPattern?: string;
 }
 
 export interface OhmSubagentRuntimeConfig {
@@ -242,6 +266,174 @@ function normalizeSubagentModelOverride(value: unknown): string | undefined {
   return `${provider}/${model}`;
 }
 
+const SUBAGENT_THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
+
+function stripThinkingSuffix(modelId: string): string {
+  const trimmed = modelId.trim();
+  if (trimmed.length === 0) return "";
+
+  const colonIndex = trimmed.lastIndexOf(":");
+  if (colonIndex <= 0 || colonIndex >= trimmed.length - 1) {
+    return trimmed;
+  }
+
+  const suffix = trimmed
+    .slice(colonIndex + 1)
+    .trim()
+    .toLowerCase();
+  if (!SUBAGENT_THINKING_LEVELS.has(suffix)) {
+    return trimmed;
+  }
+
+  return trimmed.slice(0, colonIndex).trim();
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function normalizeOptionalStringArray(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const trimmed = entry.trim();
+    if (trimmed.length === 0) continue;
+    normalized.push(trimmed);
+  }
+
+  if (normalized.length === 0) return undefined;
+  return normalized;
+}
+
+function normalizeSubagentToolPermissionDecision(
+  value: unknown,
+): OhmSubagentToolPermissionDecision | undefined {
+  if (value === "allow" || value === "deny" || value === "inherit") return value;
+
+  // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
+  if (value === "ask") return "deny";
+  return undefined;
+}
+
+function normalizeSubagentToolPermissionMap(
+  value: unknown,
+  fallback: Readonly<Record<string, OhmSubagentToolPermissionDecision>>,
+): Readonly<Record<string, OhmSubagentToolPermissionDecision>> {
+  if (!isJsonMap(value)) return fallback;
+
+  const normalized: Record<string, OhmSubagentToolPermissionDecision> = { ...fallback };
+  for (const [rawToolName, rawDecision] of Object.entries(value)) {
+    const toolName = rawToolName.trim().toLowerCase();
+    if (toolName.length === 0) continue;
+
+    const decision = normalizeSubagentToolPermissionDecision(rawDecision);
+    if (!decision) continue;
+    normalized[toolName] = decision;
+  }
+
+  return normalized;
+}
+
+function normalizeSubagentVariantPattern(value: string): string | undefined {
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function mergeSubagentVariantConfig(
+  patch: JsonMap,
+  fallback: OhmSubagentProfileVariantRuntimeConfig | undefined,
+): OhmSubagentProfileVariantRuntimeConfig | undefined {
+  const model = normalizeSubagentModelOverride(patch.model);
+  const prompt = normalizeOptionalString(patch.prompt);
+  const description = normalizeOptionalString(patch.description);
+  const whenToUse = normalizeOptionalStringArray(patch.whenToUse);
+  const permissions = normalizeSubagentToolPermissionMap(
+    patch.permissions,
+    fallback?.permissions ?? {},
+  );
+
+  const merged: OhmSubagentProfileVariantRuntimeConfig = {
+    ...fallback,
+    ...(model ? { model } : {}),
+    ...(prompt ? { prompt } : {}),
+    ...(description ? { description } : {}),
+    ...(whenToUse ? { whenToUse } : {}),
+    ...(Object.keys(permissions).length > 0 ? { permissions } : {}),
+  };
+
+  const hasValues =
+    merged.model !== undefined ||
+    merged.prompt !== undefined ||
+    merged.description !== undefined ||
+    merged.whenToUse !== undefined ||
+    merged.permissions !== undefined;
+
+  if (!hasValues) return undefined;
+  return merged;
+}
+
+function normalizeSubagentVariantMap(
+  value: unknown,
+  fallback: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>>,
+): Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>> {
+  if (!isJsonMap(value)) return fallback;
+
+  const merged: Record<string, OhmSubagentProfileVariantRuntimeConfig> = { ...fallback };
+  for (const [rawPattern, rawVariant] of Object.entries(value)) {
+    const pattern = normalizeSubagentVariantPattern(rawPattern);
+    if (!pattern) continue;
+    if (!isJsonMap(rawVariant)) continue;
+
+    const variant = mergeSubagentVariantConfig(rawVariant, merged[pattern]);
+    if (!variant) continue;
+    merged[pattern] = variant;
+  }
+
+  return merged;
+}
+
+function mergeSubagentProfileConfig(
+  patch: JsonMap,
+  fallback: OhmSubagentProfileRuntimeConfig | undefined,
+): OhmSubagentProfileRuntimeConfig | undefined {
+  const model = normalizeSubagentModelOverride(patch.model);
+  const prompt = normalizeOptionalString(patch.prompt);
+  const description = normalizeOptionalString(patch.description);
+  const whenToUse = normalizeOptionalStringArray(patch.whenToUse);
+  const permissions = normalizeSubagentToolPermissionMap(
+    patch.permissions,
+    fallback?.permissions ?? {},
+  );
+  const variants = normalizeSubagentVariantMap(patch.variants, fallback?.variants ?? {});
+
+  const merged: OhmSubagentProfileRuntimeConfig = {
+    ...fallback,
+    ...(model ? { model } : {}),
+    ...(prompt ? { prompt } : {}),
+    ...(description ? { description } : {}),
+    ...(whenToUse ? { whenToUse } : {}),
+    ...(Object.keys(permissions).length > 0 ? { permissions } : {}),
+    ...(Object.keys(variants).length > 0 ? { variants } : {}),
+  };
+
+  const hasValues =
+    merged.model !== undefined ||
+    merged.prompt !== undefined ||
+    merged.description !== undefined ||
+    merged.whenToUse !== undefined ||
+    merged.permissions !== undefined ||
+    merged.variants !== undefined;
+
+  if (!hasValues) return undefined;
+  return merged;
+}
+
 const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
   "taskMaxConcurrency",
   "taskRetentionMs",
@@ -261,10 +453,9 @@ function normalizeSubagentProfileMap(
     if (key.length === 0) continue;
     if (!isJsonMap(rawValue)) continue;
 
-    const model = normalizeSubagentModelOverride(rawValue.model);
-    if (!model) continue;
-
-    normalized[key] = { model };
+    const mergedProfile = mergeSubagentProfileConfig(rawValue, normalized[key]);
+    if (!mergedProfile) continue;
+    normalized[key] = mergedProfile;
   }
 
   return normalized;
@@ -284,10 +475,9 @@ function normalizeInlineSubagentProfiles(
     if (key.length === 0) continue;
     if (!isJsonMap(rawValue)) continue;
 
-    const model = normalizeSubagentModelOverride(rawValue.model);
-    if (!model) continue;
-
-    normalized[key] = { model };
+    const mergedProfile = mergeSubagentProfileConfig(rawValue, normalized[key]);
+    if (!mergedProfile) continue;
+    normalized[key] = mergedProfile;
   }
 
   return normalized;
@@ -566,6 +756,120 @@ export function getSubagentConfiguredModel(
   const key = subagentId.trim().toLowerCase();
   if (key.length === 0) return undefined;
   return config.subagents?.profiles[key]?.model;
+}
+
+export function getSubagentProfileRuntimeConfig(
+  config: OhmRuntimeConfig,
+  subagentId: string,
+): OhmSubagentProfileRuntimeConfig | undefined {
+  const key = subagentId.trim().toLowerCase();
+  if (key.length === 0) return undefined;
+  return config.subagents?.profiles[key];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function toWildcardRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .split("*")
+    .map((segment) => escapeRegExp(segment))
+    .join(".*");
+  return new RegExp(`^${escaped}$`, "i");
+}
+
+function toModelVariantCandidates(modelPattern: string | undefined): readonly string[] {
+  if (!modelPattern) return [];
+
+  const normalized = normalizeSubagentModelOverride(modelPattern);
+  if (!normalized) return [];
+
+  const slashIndex = normalized.indexOf("/");
+  if (slashIndex <= 0 || slashIndex >= normalized.length - 1) return [];
+
+  const provider = normalized.slice(0, slashIndex);
+  const modelWithThinking = normalized.slice(slashIndex + 1);
+  const modelId = stripThinkingSuffix(modelWithThinking).trim().toLowerCase();
+  if (provider.length === 0 || modelId.length === 0) return [];
+
+  return [`${provider}/${modelId}`, modelId];
+}
+
+export function resolveSubagentVariantPattern(input: {
+  readonly variants: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>> | undefined;
+  readonly modelPattern: string | undefined;
+}): string | undefined {
+  if (!input.variants) return undefined;
+
+  const candidates = toModelVariantCandidates(input.modelPattern);
+  if (candidates.length === 0) return undefined;
+
+  for (const pattern of Object.keys(input.variants)) {
+    const normalizedPattern = normalizeSubagentVariantPattern(pattern);
+    if (!normalizedPattern) continue;
+    const matcher = toWildcardRegExp(normalizedPattern);
+    if (candidates.some((candidate) => matcher.test(candidate))) {
+      return normalizedPattern;
+    }
+  }
+
+  return undefined;
+}
+
+function applyInheritedToolPermissions(input: {
+  readonly base: Readonly<Record<string, OhmSubagentToolPermissionDecision>> | undefined;
+  readonly override: Readonly<Record<string, OhmSubagentToolPermissionDecision>> | undefined;
+}): Readonly<Record<string, "allow" | "deny">> {
+  const resolved: Record<string, "allow" | "deny"> = {};
+
+  for (const [tool, decision] of Object.entries(input.base ?? {})) {
+    if (decision === "allow" || decision === "deny") {
+      resolved[tool] = decision;
+    }
+  }
+
+  for (const [tool, decision] of Object.entries(input.override ?? {})) {
+    if (decision === "inherit") {
+      if (!input.base || input.base[tool] === undefined) {
+        delete resolved[tool];
+      }
+      continue;
+    }
+
+    resolved[tool] = decision;
+  }
+
+  return resolved;
+}
+
+export function resolveSubagentProfileRuntimeConfig(input: {
+  readonly config: OhmRuntimeConfig;
+  readonly subagentId: string;
+  readonly modelPattern?: string;
+}): ResolvedOhmSubagentProfileRuntimeConfig | undefined {
+  const profile = getSubagentProfileRuntimeConfig(input.config, input.subagentId);
+  if (!profile) return undefined;
+
+  const variantPattern = resolveSubagentVariantPattern({
+    variants: profile.variants,
+    modelPattern: input.modelPattern ?? profile.model,
+  });
+  const variant = variantPattern ? profile.variants?.[variantPattern] : undefined;
+
+  const permissions = applyInheritedToolPermissions({
+    base: profile.permissions,
+    override: variant?.permissions,
+  });
+
+  return {
+    model: variant?.model ?? profile.model,
+    prompt: variant?.prompt ?? profile.prompt,
+    description: variant?.description ?? profile.description,
+    whenToUse: variant?.whenToUse ?? profile.whenToUse,
+    permissions,
+    ...(variantPattern ? { variantPattern } : {}),
+  };
 }
 
 let didRegisterSettings = false;

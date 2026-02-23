@@ -1,7 +1,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { OhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
-import type { OhmSubagentDefinition, OhmSubagentId } from "../../../catalog";
+import type { OhmSubagentDefinition } from "../../../catalog";
 import { SubagentRuntimeError } from "../../../errors";
 import { getSubagentInvocationMode } from "../../../extension";
 import { evaluateTaskPermission } from "../../../policy";
@@ -61,7 +61,7 @@ export function lookupNotFoundDetails(
 }
 
 function getFeatureGateForSubagent(
-  subagentId: OhmSubagentId,
+  subagentId: string,
 ): keyof OhmRuntimeConfig["features"] | undefined {
   if (subagentId === "painter") return "painterImagegen";
   return undefined;

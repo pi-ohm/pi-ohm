@@ -102,6 +102,55 @@ Per-subagent model override is supported via `ohm.json`:
 - SDK backend validates against Pi model registry (built-ins + custom `models.json`)
 - interactive-shell backend forwards the same `--model` pattern to nested `pi`
 
+Subagent runtime profiles now support prompt/description/usage overrides, custom
+subagent entries, and wildcard variants:
+
+```jsonc
+{
+  "subagents": {
+    "librarian": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/librarian.general.txt}",
+      "description": "Optional summary override",
+      "whenToUse": ["Optional guidance override"],
+    },
+    "my-custom-agent": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/my-custom-agent.general.txt}",
+      "description": "Custom delegated helper",
+      "whenToUse": ["Use for custom workflows"],
+      "permissions": {
+        "bash": "allow",
+        "edit": "deny",
+      },
+      "variants": {
+        "*gemini*": {
+          "model": "github-copilot/gemini-3.1-pro-preview:high",
+          "prompt": "{file:./prompts/my-custom-agent.gemini.txt}",
+          "permissions": {
+            "edit": "inherit",
+            "apply_patch": "deny",
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+Variant matching rules:
+
+- variant keys are wildcard matchers (for example `*gemini*`)
+- match target is normalized model pattern + model token (provider is optional)
+- first matching variant wins
+- variant fields override base profile fields (`model`, `prompt`, `description`, `whenToUse`)
+- permissions support `allow|deny|inherit` (inherit falls back to base profile map)
+
+Prompt file references:
+
+- prompt fields support `{file:...}` references
+- relative paths resolve from task `cwd` first, then Pi config dir fallback
+
 ## Dynamic prompt profile routing
 
 SDK prompt profile selection is runtime-driven and deterministic:

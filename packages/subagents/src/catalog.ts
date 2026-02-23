@@ -1,7 +1,8 @@
 export type OhmSubagentId = "librarian" | "oracle" | "finder" | "task" | "painter";
+export type OhmSubagentIdentifier = OhmSubagentId | (string & {});
 
 export interface OhmSubagentDefinition {
-  id: OhmSubagentId;
+  id: OhmSubagentIdentifier;
   name: string;
   summary: string;
   /**
@@ -14,7 +15,7 @@ export interface OhmSubagentDefinition {
    * policy explicitly allows internal routing.
    */
   internal?: boolean;
-  whenToUse: string[];
+  whenToUse: readonly string[];
   scaffoldPrompt: string;
   requiresPackage?: string;
 }
