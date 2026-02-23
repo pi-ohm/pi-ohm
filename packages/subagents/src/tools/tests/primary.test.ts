@@ -107,27 +107,27 @@ const loadedConfigFixture: LoadedOhmRuntimeConfig = {
 const librarianFixture: OhmSubagentDefinition = {
   id: "librarian",
   name: "Librarian",
-  summary: "Codebase understanding specialist",
+  description: "Codebase understanding specialist",
   primary: true,
   whenToUse: ["Analyze architecture"],
-  scaffoldPrompt: "Analyze repo",
+  whenNotToUse: ["Simple exact-path file reads"],
+  usageGuidelines: ["Provide repository scope and success criteria"],
+  examples: ["Map auth architecture across service and client repos"],
 };
 
 const finderFixture: OhmSubagentDefinition = {
   id: "finder",
   name: "Finder",
-  summary: "Search specialist",
+  description: "Search specialist",
   whenToUse: ["Find code by behavior"],
-  scaffoldPrompt: "Search repo",
 };
 
 const oracleFixture: OhmSubagentDefinition = {
   id: "oracle",
   name: "Oracle",
-  summary: "Architecture and code review advisor",
+  description: "Architecture and code review advisor",
   primary: true,
   whenToUse: ["Review architecture"],
-  scaffoldPrompt: "Review plan",
 };
 
 function makeTaskDeps(overrides: Partial<TaskToolDependencies> = {}): TaskToolDependencies {
@@ -381,6 +381,9 @@ defineTest("registerPrimarySubagentTools registers only primary profiles", () =>
   assert.equal(result.diagnostics.length, 0);
   assert.match(descriptions[0] ?? "", /When to use:/);
   assert.match(descriptions[0] ?? "", /Analyze architecture/);
+  assert.match(descriptions[0] ?? "", /When not to use:/);
+  assert.match(descriptions[0] ?? "", /Usage guidelines:/);
+  assert.match(descriptions[0] ?? "", /Examples:/);
   assert.match(descriptions[0] ?? "", /Task route still available/);
 });
 
@@ -422,10 +425,9 @@ defineTest("registerPrimarySubagentTools emits diagnostics for naming collisions
   const conflictingPrimary: OhmSubagentDefinition = {
     id: "task",
     name: "Task",
-    summary: "Conflicting primary",
+    description: "Conflicting primary",
     primary: true,
     whenToUse: ["conflict"],
-    scaffoldPrompt: "conflict",
   };
 
   const pi: Pick<ExtensionAPI, "registerTool"> = {

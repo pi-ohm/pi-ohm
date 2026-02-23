@@ -120,9 +120,11 @@ const loadedConfigFixture: LoadedOhmRuntimeConfig = {
 const finderSubagentFixture: OhmSubagentDefinition = {
   id: "finder",
   name: "Finder",
-  summary: "Search specialist",
+  description: "Search specialist",
   whenToUse: ["search"],
-  scaffoldPrompt: "search prompt",
+  whenNotToUse: ["exact symbol lookup"],
+  usageGuidelines: ["state required artifacts"],
+  examples: ["where do we validate jwt headers"],
 };
 
 class SuccessfulBackend implements TaskExecutionBackend {
@@ -2863,6 +2865,9 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.match(registeredDescriptions[0], /synchronous and blocking/);
   assert.match(registeredDescriptions[0], /Active subagent roster:/);
   assert.match(registeredDescriptions[0], /whenToUse:/);
+  assert.match(registeredDescriptions[0], /whenNotToUse:/);
+  assert.match(registeredDescriptions[0], /usageGuidelines:/);
+  assert.match(registeredDescriptions[0], /examples:/);
   assert.match(registeredDescriptions[0], /search/);
 });
 
@@ -2872,10 +2877,9 @@ defineTest("registerTaskTool hides internal profiles from model-visible roster d
   const internalProfile: OhmSubagentDefinition = {
     id: "oracle",
     name: "Oracle Internal",
-    summary: "Internal advisory profile",
+    description: "Internal advisory profile",
     internal: true,
     whenToUse: ["Internal debugging"],
-    scaffoldPrompt: "Internal prompt",
   };
 
   const extensionApi: Pick<ExtensionAPI, "registerTool"> = {

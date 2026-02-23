@@ -28,7 +28,7 @@ defineTest("librarian is primary by default", () => {
   assert.equal(librarian.primary, true);
 });
 
-defineTest("finder and oracle are task-routed by default", () => {
+defineTest("finder and oracle are primary by default", () => {
   const finder = getSubagentById("finder");
   const oracle = getSubagentById("oracle");
 
@@ -39,8 +39,8 @@ defineTest("finder and oracle are task-routed by default", () => {
     assert.fail("Expected finder and oracle profiles in catalog");
   }
 
-  assert.equal(finder.primary, undefined);
-  assert.equal(oracle.primary, undefined);
+  assert.equal(finder.primary, true);
+  assert.equal(oracle.primary, true);
 });
 
 defineTest("getSubagentById is case-insensitive and trims input", () => {

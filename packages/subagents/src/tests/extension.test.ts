@@ -106,8 +106,8 @@ defineTest("registerSubagentTools registers task tool + primary tools", () => {
 
   assert.equal(registeredTools.includes("task"), true);
   assert.equal(registeredTools.includes("librarian"), true);
-  assert.equal(registeredTools.includes("finder"), false);
-  assert.equal(registeredTools.includes("oracle"), false);
+  assert.equal(registeredTools.includes("finder"), true);
+  assert.equal(registeredTools.includes("oracle"), true);
 });
 
 defineTest("buildSubagentsOverviewText preserves command compatibility output", () => {

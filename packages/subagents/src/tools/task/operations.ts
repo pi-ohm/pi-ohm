@@ -169,13 +169,25 @@ function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]):
     if (subagent.internal) continue;
     const invocation = getSubagentInvocationMode(subagent.primary);
     lines.push(`- ${subagent.id} (${invocation}): ${getSubagentDescription(subagent)}`);
-    lines.push("  whenToUse:");
-    for (const guidance of subagent.whenToUse) {
-      lines.push(`  - ${guidance}`);
-    }
+    appendIndentedListSection(lines, "whenToUse:", subagent.whenToUse);
+    appendIndentedListSection(lines, "whenNotToUse:", subagent.whenNotToUse);
+    appendIndentedListSection(lines, "usageGuidelines:", subagent.usageGuidelines);
+    appendIndentedListSection(lines, "examples:", subagent.examples);
   }
 
   return lines.join("\n");
+}
+
+function appendIndentedListSection(
+  lines: string[],
+  heading: string,
+  entries: readonly string[] | undefined,
+): void {
+  if (!entries || entries.length === 0) return;
+  lines.push(`  ${heading}`);
+  for (const entry of entries) {
+    lines.push(`  - ${entry}`);
+  }
 }
 
 export async function runTaskToolMvp(
