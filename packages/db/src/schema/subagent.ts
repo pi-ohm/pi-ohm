@@ -1,22 +1,5 @@
 import { index, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { SUBAGENT_INVOCATION_MODES, SUBAGENT_SESSION_STATUSES } from "./models";
-
-export const ohmMetaTable = sqliteTable("ohm_meta", {
-  key: text("key").notNull().primaryKey(),
-  value: text("value").notNull(),
-  updatedAtEpochMs: integer("updated_at_epoch_ms").notNull(),
-});
-
-export const ohmStateTable = sqliteTable(
-  "ohm_state",
-  {
-    namespace: text("namespace").notNull(),
-    key: text("key").notNull(),
-    valueJson: text("value_json").notNull(),
-    updatedAtEpochMs: integer("updated_at_epoch_ms").notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.namespace, table.key] })],
-);
+import { SUBAGENT_INVOCATION_MODES, SUBAGENT_SESSION_STATUSES } from "../models";
 
 export const ohmSubagentSessionTable = sqliteTable(
   "ohm_subagent_session",
@@ -53,13 +36,6 @@ export const ohmSubagentSessionEventTable = sqliteTable(
     index("idx_ohm_subagent_session_event_session_at").on(table.sessionId, table.atEpochMs),
   ],
 );
-
-export const ohmDbSchema = {
-  ohmMetaTable,
-  ohmStateTable,
-  ohmSubagentSessionTable,
-  ohmSubagentSessionEventTable,
-} as const;
 
 export type OhmSubagentSessionRow = typeof ohmSubagentSessionTable.$inferSelect;
 export type OhmSubagentSessionEventRow = typeof ohmSubagentSessionEventTable.$inferSelect;

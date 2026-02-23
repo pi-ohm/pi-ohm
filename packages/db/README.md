@@ -20,7 +20,7 @@ Optional override:
 
 Drizzle setup:
 
-- schema: `packages/db/src/drizzle-schema.ts`
+- schema: `packages/db/src/schema/`
 - config: `packages/db/drizzle.config.ts`
 - generate migration SQL: `yarn workspace @pi-ohm/db db:generate`
 - apply migrations: `yarn workspace @pi-ohm/db db:migrate`

@@ -8,14 +8,14 @@ export {
 export { resolveOhmDbPath, type ResolveDbPathInput } from "./paths";
 export { OHM_DB_SCHEMA_VERSION } from "./schema";
 export {
-  ohmDbSchema,
+  schema,
   ohmMetaTable,
   ohmStateTable,
   ohmSubagentSessionEventTable,
   ohmSubagentSessionTable,
   type OhmSubagentSessionEventRow,
   type OhmSubagentSessionRow,
-} from "./drizzle-schema";
+} from "./schema";
 export type {
   AppendSubagentSessionEventInput,
   DeleteStateInput,

@@ -19,17 +19,17 @@ import type {
 } from "./models";
 import { SUBAGENT_INVOCATION_MODES, SUBAGENT_SESSION_STATUSES } from "./models";
 import {
-  ohmDbSchema,
+  OHM_DB_SCHEMA_VERSION,
   ohmMetaTable,
   ohmStateTable,
   ohmSubagentSessionEventTable,
   ohmSubagentSessionTable,
+  schema,
   type OhmSubagentSessionEventRow,
   type OhmSubagentSessionRow,
-} from "./drizzle-schema";
+} from "./schema";
 import { OhmDbRuntimeError, OhmDbValidationError, type OhmDbResult } from "./errors";
 import { resolveOhmDbPath } from "./paths";
-import { OHM_DB_SCHEMA_VERSION } from "./schema";
 
 const nonEmptyTrimmedStringSchema = z
   .string()
@@ -299,7 +299,7 @@ class OhmDbClientImpl implements OhmDb {
   constructor(
     readonly path: string,
     private readonly client: Client,
-    private readonly db: LibSQLDatabase<typeof ohmDbSchema>,
+    private readonly db: LibSQLDatabase<typeof schema>,
     private readonly migrationsFolder: string,
     private readonly now: () => number,
   ) {
@@ -790,7 +790,7 @@ export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbRe
 
   if (Result.isError(opened)) return opened;
 
-  const db = drizzle(opened.value, { schema: ohmDbSchema });
+  const db = drizzle(opened.value, { schema });
   const client = new OhmDbClientImpl(
     resolvedPath,
     opened.value,
