@@ -168,6 +168,13 @@ function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]):
   for (const subagent of subagents) {
     if (subagent.internal) continue;
     const invocation = getSubagentInvocationMode(subagent.primary);
+    if (subagent.primary) {
+      lines.push(
+        `- ${subagent.id} (${invocation}): the ${subagent.name} is available via primary tool '${subagent.id}' and task start`,
+      );
+      continue;
+    }
+
     lines.push(`- ${subagent.id} (${invocation}): ${getSubagentDescription(subagent)}`);
     appendIndentedListSection(lines, "When to use:", subagent.whenToUse);
     appendIndentedListSection(lines, "When not to use:", subagent.whenNotToUse);
