@@ -316,6 +316,16 @@ H7-004 provider-add repro demo (config-only mapping + end-to-end validation):
 yarn test:subagents --test-name-pattern "new provider mapping can be added via rules"
 ```
 
+System prompt harness snapshots:
+
+```bash
+# verify full main-agent + subagent-sdk prompt/tool snapshots
+yarn test:subagents:golden
+
+# regenerate snapshot goldens from current code
+yarn test:subagents:golden:update
+```
+
 ### 3.2) Provider onboarding playbook (no core router edits)
 
 1. Add a rule in `ohm.providers.json` under `subagents.promptProfiles.rules`:
