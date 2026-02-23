@@ -1,5 +1,5 @@
 import alchemy from "alchemy";
-import { TanStackStart } from "alchemy/cloudflare";
+import { Vite } from "alchemy/cloudflare";
 import { CloudflareStateStore } from "alchemy/state";
 
 function readNonEmptyEnv(name: string): string | undefined {
@@ -32,11 +32,12 @@ const app = await alchemy("pi-ohm-docs", {
   stateStore: (scope) => new CloudflareStateStore(scope),
 });
 
-export const docs = await TanStackStart("docs", {
+export const docs = await Vite("docs", {
   adopt: true,
-  spa: true,
-  entrypoint: ".output/server/index.mjs",
+  build: "yarn build",
   assets: ".output/public",
+  compatibility: "node",
+  spa: true,
   domains: domain ? [domain] : undefined,
   url: domain ? false : true,
 });
