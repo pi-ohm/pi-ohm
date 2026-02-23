@@ -28,7 +28,7 @@ defineTest("librarian is primary by default", () => {
   assert.equal(librarian.primary, true);
 });
 
-defineTest("finder and oracle are task-routed by default", () => {
+defineTest("finder and oracle are primary by default", () => {
   const finder = getSubagentById("finder");
   const oracle = getSubagentById("oracle");
 
@@ -39,8 +39,8 @@ defineTest("finder and oracle are task-routed by default", () => {
     assert.fail("Expected finder and oracle profiles in catalog");
   }
 
-  assert.equal(finder.primary, undefined);
-  assert.equal(oracle.primary, undefined);
+  assert.equal(finder.primary, true);
+  assert.equal(oracle.primary, true);
 });
 
 defineTest("getSubagentById is case-insensitive and trims input", () => {
@@ -58,11 +58,10 @@ defineTest("getSubagentById returns undefined for unknown ids", () => {
   assert.equal(match, undefined);
 });
 
-defineTest("catalog entries contain required non-empty scaffold fields", () => {
+defineTest("catalog entries contain required non-empty display fields", () => {
   for (const agent of OHM_SUBAGENT_CATALOG) {
     assert.ok(agent.name.trim().length > 0);
-    assert.ok(agent.summary.trim().length > 0);
-    assert.ok(agent.scaffoldPrompt.trim().length > 0);
+    assert.ok((agent.description ?? agent.summary ?? "").trim().length > 0);
     assert.ok(agent.whenToUse.length > 0);
     for (const condition of agent.whenToUse) {
       assert.ok(condition.trim().length > 0);

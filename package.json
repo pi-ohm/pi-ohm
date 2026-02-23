@@ -39,6 +39,8 @@
     "typecheck": "tsgo --noEmit -p tsconfig.json",
     "test:db": "tsx --test \"packages/db/src/**/*.test.ts\"",
     "test:subagents": "tsx --test \"packages/subagents/src/**/*.test.ts\"",
+    "test:subagents:golden": "tsx --test packages/subagents/src/runtime/backend/tests/system-prompt-harness.test.ts",
+    "test:subagents:golden:update": "UPDATE_PROMPTS=1 yarn test:subagents:golden",
     "oxlint": "oxlint --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\"",
     "lint": "yarn oxlint -- .",
     "lint:fix": "yarn oxlint -- --fix .",

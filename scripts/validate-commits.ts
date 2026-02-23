@@ -43,6 +43,7 @@ const ALLOWED_SCOPES = new Set([
   "tui",
   "db",
   "database",
+  "prompts",
 ]);
 
 const HEADER_PATTERN =

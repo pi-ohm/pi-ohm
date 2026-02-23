@@ -102,6 +102,63 @@ Per-subagent model override is supported via `ohm.json`:
 - SDK backend validates against Pi model registry (built-ins + custom `models.json`)
 - interactive-shell backend forwards the same `--model` pattern to nested `pi`
 
+Subagent runtime profiles now support prompt/description/usage overrides, custom
+subagent entries, and wildcard variants:
+
+```jsonc
+{
+  "subagents": {
+    "librarian": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/librarian.general.txt}",
+      "description": "Optional summary override",
+      "whenToUse": ["Optional guidance override"],
+    },
+    "my-custom-agent": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/my-custom-agent.general.txt}",
+      "description": "Custom delegated helper",
+      "whenToUse": ["Use for custom workflows"],
+      "permissions": {
+        "bash": "allow",
+        "edit": "deny",
+      },
+      "variants": {
+        "*gemini*": {
+          "model": "github-copilot/gemini-3.1-pro-preview:high",
+          "prompt": "{file:./prompts/my-custom-agent.gemini.txt}",
+          "permissions": {
+            "edit": "inherit",
+            "apply_patch": "deny",
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+Variant matching rules:
+
+- variant keys are wildcard matchers (for example `*gemini*`)
+- match target is normalized model pattern + model token (provider is optional)
+- first matching variant wins
+- variant fields override base profile fields (`model`, `prompt`, `description`, `whenToUse`)
+- permissions support `allow|deny|inherit` (inherit falls back to base profile map)
+
+Prompt file references:
+
+- prompt fields support `{file:...}` references
+- relative paths resolve from task `cwd` first, then Pi config dir fallback
+
+Built-in prompt management:
+
+- catalog metadata (`packages/subagents/src/catalog.ts`) is now display/orchestration metadata for
+  main-agent exposure (name/description/when-to-use/invocation)
+- execution prompt text is resolved separately
+- built-in execution prompts are file-backed under `packages/subagents/src/runtime/backend/prompts/*`
+- built-in variant selection uses wildcard model keys (`*gemini*`, `*gpt*`, `*claude*`)
+
 ## Dynamic prompt profile routing
 
 SDK prompt profile selection is runtime-driven and deterministic:
@@ -257,6 +314,16 @@ H7-004 provider-add repro demo (config-only mapping + end-to-end validation):
 
 ```bash
 yarn test:subagents --test-name-pattern "new provider mapping can be added via rules"
+```
+
+System prompt harness snapshots:
+
+```bash
+# verify full main-agent + subagent-sdk prompt/tool snapshots
+yarn test:subagents:golden
+
+# regenerate snapshot goldens from current code
+yarn test:subagents:golden:update
 ```
 
 ### 3.2) Provider onboarding playbook (no core router edits)

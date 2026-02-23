@@ -1,5 +1,9 @@
 import { Result } from "better-result";
-import { getSubagentConfiguredModel, type OhmRuntimeConfig } from "@pi-ohm/config";
+import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import {
+  getSubagentConfiguredModel,
+  resolveSubagentProfileRuntimeConfig,
+} from "@pi-ohm/config/subagents";
 import type { OhmSubagentDefinition } from "../../catalog";
 import { SubagentRuntimeError, type SubagentResult } from "../../errors";
 import { buildSendPrompt, buildStartPrompt, truncate } from "./prompts";
@@ -150,7 +154,14 @@ function resolveSubagentModelPattern(input: {
   readonly config: OhmRuntimeConfig;
   readonly subagent: OhmSubagentDefinition;
 }): string | undefined {
-  return getSubagentConfiguredModel(input.config, input.subagent.id);
+  const configuredModel = getSubagentConfiguredModel(input.config, input.subagent.id);
+  const resolvedProfile = resolveSubagentProfileRuntimeConfig({
+    config: input.config,
+    subagentId: input.subagent.id,
+    modelPattern: configuredModel,
+  });
+
+  return resolvedProfile?.model ?? configuredModel;
 }
 
 function parseModelPattern(
@@ -226,7 +237,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     });
     const run = await this.runner({
       cwd: input.cwd,
-      prompt: buildStartPrompt(input),
+      prompt: await buildStartPrompt({
+        ...input,
+        modelPattern,
+      }),
       modelPattern,
       signal: input.signal,
       timeoutMs,

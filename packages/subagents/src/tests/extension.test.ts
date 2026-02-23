@@ -106,8 +106,8 @@ defineTest("registerSubagentTools registers task tool + primary tools", () => {
 
   assert.equal(registeredTools.includes("task"), true);
   assert.equal(registeredTools.includes("librarian"), true);
-  assert.equal(registeredTools.includes("finder"), false);
-  assert.equal(registeredTools.includes("oracle"), false);
+  assert.equal(registeredTools.includes("finder"), true);
+  assert.equal(registeredTools.includes("oracle"), true);
 });
 
 defineTest("buildSubagentsOverviewText preserves command compatibility output", () => {
@@ -137,8 +137,8 @@ defineTest("buildSubagentDetailText preserves detailed subagent view", () => {
   assert.match(text, /Subagent: Librarian/);
   assert.match(text, /model: runtime default/);
   assert.match(text, /thinking: runtime default/);
+  assert.match(text, /description:/);
   assert.match(text, /When to use:/);
-  assert.match(text, /Scaffold prompt:/);
 });
 
 defineTest("buildSubagentDetailText shows configured model + thinking override", () => {

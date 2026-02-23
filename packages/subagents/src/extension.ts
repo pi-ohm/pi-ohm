@@ -5,8 +5,16 @@ import {
   registerOhmSettings,
   type OhmRuntimeConfig,
 } from "@pi-ohm/config";
-import { getSubagentById, OHM_SUBAGENT_CATALOG } from "./catalog";
+import {
+  getSubagentDescription,
+  OHM_SUBAGENT_CATALOG,
+  type OhmSubagentDefinition,
+} from "./catalog";
 import { isSubagentVisibleInTaskRoster } from "./policy";
+import {
+  resolveRuntimeSubagentById,
+  resolveRuntimeSubagentCatalog,
+} from "./runtime/subagent-profiles";
 import {
   getTaskLiveUiMode,
   parseTaskLiveUiModeInput,
@@ -65,7 +73,9 @@ function listSubagentIds(): string {
 }
 
 function getVisibleSubagents(config: OhmRuntimeConfig) {
-  return OHM_SUBAGENT_CATALOG.filter((agent) => isSubagentVisibleInTaskRoster(agent, config));
+  return resolveRuntimeSubagentCatalog(config).filter((agent) =>
+    isSubagentVisibleInTaskRoster(agent, config),
+  );
 }
 
 export function buildSubagentsOverviewText(input: {
@@ -79,7 +89,7 @@ export function buildSubagentsOverviewText(input: {
     const available = !needsPainterPackage || input.config.features.painterImagegen;
     const availability = available ? "available" : "requires painter feature/package";
     const invocation = getSubagentInvocationMode(agent.primary);
-    return `- ${agent.name} (${agent.id}): ${agent.summary} [${availability} · ${invocation}]`;
+    return `- ${agent.name} (${agent.id}): ${getSubagentDescription(agent)} [${availability} · ${invocation}]`;
   });
 
   return [
@@ -98,7 +108,7 @@ export function buildSubagentsOverviewText(input: {
 
 export function buildSubagentDetailText(input: {
   readonly config: OhmRuntimeConfig;
-  readonly subagent: (typeof OHM_SUBAGENT_CATALOG)[number];
+  readonly subagent: OhmSubagentDefinition;
 }): string {
   const isAvailable = input.subagent.id !== "painter" || input.config.features.painterImagegen;
   const configuredModelPattern = getSubagentConfiguredModel(input.config, input.subagent.id);
@@ -120,11 +130,10 @@ export function buildSubagentDetailText(input: {
       ? `requiresPackage: ${input.subagent.requiresPackage}`
       : "requiresPackage: none",
     "",
+    `description: ${getSubagentDescription(input.subagent)}`,
+    "",
     "When to use:",
     ...input.subagent.whenToUse.map((line) => `- ${line}`),
-    "",
-    "Scaffold prompt:",
-    input.subagent.scaffoldPrompt,
   ].join("\n");
 }
 
@@ -242,11 +251,14 @@ export default function registerSubagentsExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand("ohm-subagent", {
-    description: `Inspect one subagent scaffold (${listSubagentIds()})`,
+    description: `Inspect one subagent scaffold/profile (${listSubagentIds()} + custom profiles)`,
     handler: async (args, ctx) => {
       const { config } = await loadOhmRuntimeConfig(ctx.cwd);
       const [requested = ""] = normalizeCommandArgs(args);
-      const match = getSubagentById(requested);
+      const match = resolveRuntimeSubagentById({
+        subagentId: requested,
+        config,
+      });
 
       const visibleSubagents = getVisibleSubagents(config);
       const visibleIds = visibleSubagents.map((agent) => agent.id);

@@ -2,6 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import type { TaskExecutionBackend } from "../../../runtime/backend/types";
+import { resolveRuntimeSubagentById } from "../../../runtime/subagent-profiles";
 import type { TaskToolParameters } from "../../../schema/task-tool";
 import { emitTaskRuntimeUpdate, startTaskProgressPulse } from "../updates";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
@@ -62,7 +63,10 @@ export async function runTaskSend(
     });
   }
 
-  const subagent = input.deps.findSubagentById(resolved.subagentType);
+  const subagent = resolveRuntimeSubagentById({
+    subagentId: resolved.subagentType,
+    config: config.config,
+  });
   if (!subagent) {
     return toAgentToolResult(
       subagentLookupFailedDetails({

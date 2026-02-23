@@ -18,6 +18,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./subagents": {
+      "types": "./dist/subagents.d.ts",
+      "default": "./dist/subagents.js"
+    },
+    "./features": {
+      "types": "./dist/features.d.ts",
+      "default": "./dist/features.js"
+    },
+    "./modes": {
+      "types": "./dist/modes.d.ts",
+      "default": "./dist/modes.js"
+    },
+    "./painter": {
+      "types": "./dist/painter.d.ts",
+      "default": "./dist/painter.js"
     }
   },
   "publishConfig": {
@@ -27,13 +43,20 @@
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
     "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi",
+    "@sinclair/typebox": "^0.34.41"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
   },
   "tsdown": {
-    "entry": "src/index.ts"
+    "entry": [
+      "src/index.ts",
+      "src/subagents.ts",
+      "src/features.ts",
+      "src/modes.ts",
+      "src/painter.ts"
+    ]
   }
 }

@@ -2,6 +2,7 @@ import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Result } from "better-result";
 import { getTaskLiveUiMode } from "../../../runtime/live-ui";
+import { resolveRuntimeSubagentById } from "../../../runtime/subagent-profiles";
 import type { TaskRuntimeSnapshot } from "../../../runtime/tasks/types";
 import { emitTaskRuntimeUpdate } from "../updates";
 import type {
@@ -227,7 +228,10 @@ export async function runTaskStartBatch(
       continue;
     }
 
-    const subagent = input.deps.findSubagentById(task.subagent_type);
+    const subagent = resolveRuntimeSubagentById({
+      subagentId: task.subagent_type,
+      config: config.config,
+    });
     if (!subagent) {
       items[index] = toTaskItemFailure({
         id: `task_batch_${index + 1}`,

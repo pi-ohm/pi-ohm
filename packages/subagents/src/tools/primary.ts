@@ -6,7 +6,7 @@ import type {
 import { Text } from "@mariozechner/pi-tui";
 import { Type, type Static } from "@sinclair/typebox";
 import type { OhmSubagentDefinition } from "../catalog";
-import { OHM_SUBAGENT_CATALOG } from "../catalog";
+import { getSubagentDescription, OHM_SUBAGENT_CATALOG } from "../catalog";
 import { getSubagentInvocationMode } from "../extension";
 import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
 import { createDefaultTaskToolDependencies } from "./task/defaults";
@@ -88,10 +88,12 @@ export interface PrimarySubagentToolRegistrationOptions {
 }
 
 function buildPrimaryToolDescription(subagent: OhmSubagentDefinition): string {
-  const lines: string[] = [subagent.summary, "", "When to use:"];
-  for (const when of subagent.whenToUse) {
-    lines.push(`- ${when}`);
-  }
+  const lines: string[] = [getSubagentDescription(subagent)];
+
+  appendListSection(lines, "When to use:", subagent.whenToUse);
+  appendListSection(lines, "When not to use:", subagent.whenNotToUse);
+  appendListSection(lines, "Usage guidelines:", subagent.usageGuidelines);
+  appendListSection(lines, "Examples:", subagent.examples);
 
   lines.push(
     "",
@@ -110,6 +112,18 @@ function buildPrimaryToolDescription(subagent: OhmSubagentDefinition): string {
   }
 
   return lines.join("\n");
+}
+
+function appendListSection(
+  lines: string[],
+  heading: string,
+  entries: readonly string[] | undefined,
+): void {
+  if (!entries || entries.length === 0) return;
+  lines.push("", heading);
+  for (const entry of entries) {
+    lines.push(`- ${entry}`);
+  }
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

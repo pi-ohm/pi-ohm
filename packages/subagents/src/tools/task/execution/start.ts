@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import type { TaskToolParameters } from "../../../schema/task-tool";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import { toAgentToolResult } from "../render";
+import { resolveRuntimeSubagentById } from "../../../runtime/subagent-profiles";
 import { prepareTaskExecution } from "./lifecycle";
 import { snapshotToTaskResultDetails } from "./projection";
 import { runTaskStartBatch } from "./batch";
@@ -26,7 +27,10 @@ async function runTaskStartSingle(
   config: LoadedOhmRuntimeConfig,
 ): Promise<AgentToolResult<TaskToolResultDetails>> {
   const backendId = resolveBackendId(input.deps.backend, config.config);
-  const subagent = input.deps.findSubagentById(params.subagent_type);
+  const subagent = resolveRuntimeSubagentById({
+    subagentId: params.subagent_type,
+    config: config.config,
+  });
   if (!subagent) {
     return toAgentToolResult(
       subagentLookupFailedDetails({

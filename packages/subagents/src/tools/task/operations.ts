@@ -3,6 +3,7 @@ import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Text } from "@mariozechner/pi-tui";
 import { Result } from "better-result";
 import { getSubagentInvocationMode } from "../../extension";
+import { getSubagentDescription } from "../../catalog";
 import { SubagentRuntimeError } from "../../errors";
 import {
   parseTaskToolParameters,
@@ -167,14 +168,33 @@ function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]):
   for (const subagent of subagents) {
     if (subagent.internal) continue;
     const invocation = getSubagentInvocationMode(subagent.primary);
-    lines.push(`- ${subagent.id} (${invocation}): ${subagent.summary}`);
-    lines.push("  whenToUse:");
-    for (const guidance of subagent.whenToUse) {
-      lines.push(`  - ${guidance}`);
+    if (subagent.primary) {
+      lines.push(
+        `- ${subagent.id} (${invocation}): the ${subagent.name} is available via primary tool '${subagent.id}' and task start`,
+      );
+      continue;
     }
+
+    lines.push(`- ${subagent.id} (${invocation}): ${getSubagentDescription(subagent)}`);
+    appendIndentedListSection(lines, "When to use:", subagent.whenToUse);
+    appendIndentedListSection(lines, "When not to use:", subagent.whenNotToUse);
+    appendIndentedListSection(lines, "Usage guidelines:", subagent.usageGuidelines);
+    appendIndentedListSection(lines, "Examples:", subagent.examples);
   }
 
   return lines.join("\n");
+}
+
+function appendIndentedListSection(
+  lines: string[],
+  heading: string,
+  entries: readonly string[] | undefined,
+): void {
+  if (!entries || entries.length === 0) return;
+  lines.push(`  ${heading}`);
+  for (const entry of entries) {
+    lines.push(`  - ${entry}`);
+  }
 }
 
 export async function runTaskToolMvp(

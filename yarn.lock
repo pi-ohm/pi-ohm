@@ -3757,6 +3757,7 @@ __metadata:
     "@juanibiapina/pi-extension-settings": "npm:^0.5.0"
     "@mariozechner/pi-coding-agent": "catalog:pi"
     "@mariozechner/pi-tui": "catalog:pi"
+    "@sinclair/typebox": "npm:^0.34.41"
   peerDependencies:
     "@mariozechner/pi-coding-agent": "*"
     "@mariozechner/pi-tui": "*"

@@ -120,9 +120,11 @@ const loadedConfigFixture: LoadedOhmRuntimeConfig = {
 const finderSubagentFixture: OhmSubagentDefinition = {
   id: "finder",
   name: "Finder",
-  summary: "Search specialist",
+  description: "Search specialist",
   whenToUse: ["search"],
-  scaffoldPrompt: "search prompt",
+  whenNotToUse: ["exact symbol lookup"],
+  usageGuidelines: ["state required artifacts"],
+  examples: ["where do we validate jwt headers"],
 };
 
 class SuccessfulBackend implements TaskExecutionBackend {
@@ -2862,8 +2864,47 @@ defineTest("registerTaskTool registers task tool definition", () => {
   assert.match(registeredDescriptions[0], /start\/status\/wait\/send\/cancel/);
   assert.match(registeredDescriptions[0], /synchronous and blocking/);
   assert.match(registeredDescriptions[0], /Active subagent roster:/);
-  assert.match(registeredDescriptions[0], /whenToUse:/);
+  assert.match(registeredDescriptions[0], /When to use:/);
+  assert.match(registeredDescriptions[0], /When not to use:/);
+  assert.match(registeredDescriptions[0], /Usage guidelines:/);
+  assert.match(registeredDescriptions[0], /Examples:/);
   assert.match(registeredDescriptions[0], /search/);
+});
+
+defineTest("registerTaskTool keeps primary roster entries concise", () => {
+  const registeredDescriptions: string[] = [];
+
+  const primaryFinder: OhmSubagentDefinition = {
+    id: "finder",
+    name: "Finder",
+    description: "Search specialist",
+    primary: true,
+    whenToUse: ["search"],
+    whenNotToUse: ["exact match"],
+    usageGuidelines: ["state constraints"],
+    examples: ["find auth middleware"],
+  };
+
+  const extensionApi: Pick<ExtensionAPI, "registerTool"> = {
+    registerTool(definition) {
+      registeredDescriptions.push(definition.description);
+    },
+  };
+
+  registerTaskTool(
+    extensionApi,
+    makeDeps({
+      subagents: [primaryFinder],
+      findSubagentById: (id) => (id === "finder" ? primaryFinder : undefined),
+    }),
+  );
+
+  const description = registeredDescriptions[0] ?? "";
+  assert.match(description, /the Finder is available via primary tool 'finder' and task start/);
+  assert.doesNotMatch(description, /When to use:\n  - search/);
+  assert.doesNotMatch(description, /When not to use:\n  - exact match/);
+  assert.doesNotMatch(description, /Usage guidelines:\n  - state constraints/);
+  assert.doesNotMatch(description, /Examples:\n  - find auth middleware/);
 });
 
 defineTest("registerTaskTool hides internal profiles from model-visible roster description", () => {
@@ -2872,10 +2913,9 @@ defineTest("registerTaskTool hides internal profiles from model-visible roster d
   const internalProfile: OhmSubagentDefinition = {
     id: "oracle",
     name: "Oracle Internal",
-    summary: "Internal advisory profile",
+    description: "Internal advisory profile",
     internal: true,
     whenToUse: ["Internal debugging"],
-    scaffoldPrompt: "Internal prompt",
   };
 
   const extensionApi: Pick<ExtensionAPI, "registerTool"> = {
