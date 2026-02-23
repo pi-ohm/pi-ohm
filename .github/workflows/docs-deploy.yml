@@ -1,0 +1,54 @@
+name: Docs Deploy
+
+on:
+  push:
+    branches: ["dev", "prod"]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+concurrency:
+  group: docs-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || (github.ref_name == 'prod' && 'prod' || 'dev') }}
+      DOCS_DEV_DOMAIN: ${{ vars.DOCS_DEV_DOMAIN || 'dev.ohm.moe' }}
+      DOCS_PROD_DOMAIN: ${{ vars.DOCS_PROD_DOMAIN || 'ohm.moe' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Yarn
+        run: |
+          corepack enable
+          corepack prepare yarn@4.12.0 --activate
+          yarn --version
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Deploy docs with Alchemy
+        run: yarn workspace docs deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
