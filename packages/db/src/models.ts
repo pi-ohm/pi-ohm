@@ -1,5 +1,14 @@
-export type SubagentInvocationMode = "task-routed" | "primary-tool";
-export type SubagentSessionStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+export const SUBAGENT_INVOCATION_MODES = ["task-routed", "primary-tool"] as const;
+export type SubagentInvocationMode = (typeof SUBAGENT_INVOCATION_MODES)[number];
+
+export const SUBAGENT_SESSION_STATUSES = [
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "cancelled",
+] as const;
+export type SubagentSessionStatus = (typeof SUBAGENT_SESSION_STATUSES)[number];
 
 export interface SubagentSessionSnapshot {
   readonly id: string;

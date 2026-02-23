@@ -26,6 +26,28 @@ defineTest("createOhmDb initializes schema tables", async () => {
   }
 });
 
+defineTest("createOhmDb accepts libsql file URL paths", async () => {
+  const created = await createOhmDb({ path: "file::memory:" });
+  if (Result.isError(created)) {
+    assert.fail(created.error.message);
+  }
+
+  const db = created.value;
+  try {
+    const setResult = await db.state.set({
+      namespace: "health",
+      key: "ok",
+      value: true,
+      updatedAtEpochMs: 1700000000000,
+    });
+    if (Result.isError(setResult)) {
+      assert.fail(setResult.error.message);
+    }
+  } finally {
+    await db.close();
+  }
+});
+
 defineTest("state store supports set/get/delete roundtrip", async () => {
   const created = await createOhmDb({ path: ":memory:", now: () => 1700000000000 });
   if (Result.isError(created)) {
