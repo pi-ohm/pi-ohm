@@ -119,7 +119,7 @@ See `packages/core/src/errors.ts` and `packages/subagents/src/errors.ts` for the
 - Concise, grammar is secondary to clarity.
 - No comments unless explaining genuinely non-obvious behavior.
 - Tests: write a failing test first, then implement. Tests live alongside source files.
-- Commands must be namespaced under `ohm-*` (e.g. `/ohm-subagents`, `/ohm-mode`).
+- Command names do not need to be namespaced under `ohm-*`, but every command description must include "ohm" so it surfaces in autocomplete.
 - Settings registered via `@juanibiapina/pi-extension-settings`.
 - Config files are read from `.pi/ohm.json` or `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`.
 
