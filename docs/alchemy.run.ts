@@ -34,6 +34,9 @@ const app = await alchemy("pi-ohm-docs", {
 
 export const docs = await TanStackStart("docs", {
   adopt: true,
+  spa: true,
+  entrypoint: ".output/server/index.mjs",
+  assets: ".output/public",
   domains: domain ? [domain] : undefined,
   url: domain ? false : true,
 });
