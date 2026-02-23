@@ -169,10 +169,10 @@ function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]):
     if (subagent.internal) continue;
     const invocation = getSubagentInvocationMode(subagent.primary);
     lines.push(`- ${subagent.id} (${invocation}): ${getSubagentDescription(subagent)}`);
-    appendIndentedListSection(lines, "whenToUse:", subagent.whenToUse);
-    appendIndentedListSection(lines, "whenNotToUse:", subagent.whenNotToUse);
-    appendIndentedListSection(lines, "usageGuidelines:", subagent.usageGuidelines);
-    appendIndentedListSection(lines, "examples:", subagent.examples);
+    appendIndentedListSection(lines, "When to use:", subagent.whenToUse);
+    appendIndentedListSection(lines, "When not to use:", subagent.whenNotToUse);
+    appendIndentedListSection(lines, "Usage guidelines:", subagent.usageGuidelines);
+    appendIndentedListSection(lines, "Examples:", subagent.examples);
   }
 
   return lines.join("\n");
