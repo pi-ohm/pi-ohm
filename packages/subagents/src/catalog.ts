@@ -71,6 +71,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "oracle",
     name: "Oracle",
+    primary: true,
     description:
       "Reasoning-heavy advisor for code review, architecture feedback, complex debugging, and planning.",
     whenToUse: [
@@ -94,6 +95,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "finder",
     name: "Finder",
+    primary: true,
     description:
       "Intelligently search your codebase: Use it for complex, multi-step search tasks where you need to find code based on functionality or concepts rather than exact matches. Anytime you want to chain multiple grep calls you should use this tool.",
     whenToUse: [
