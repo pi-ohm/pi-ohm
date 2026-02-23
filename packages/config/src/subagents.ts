@@ -471,7 +471,8 @@ export function resolveSubagentVariantPattern(input: {
   const candidates = toModelVariantCandidates(input.modelPattern);
   if (candidates.length === 0) return undefined;
 
-  for (const pattern of Object.keys(input.variants)) {
+  const patterns = Object.keys(input.variants).reverse();
+  for (const pattern of patterns) {
     const normalizedPattern = normalizeSubagentVariantPattern(pattern);
     if (!normalizedPattern) continue;
     const matcher = toWildcardRegExp(normalizedPattern);

@@ -79,7 +79,8 @@ defineTest(
       } finally {
         if (previousPiConfigDir === undefined) {
           delete process.env.PI_CONFIG_DIR;
-        } else {
+        }
+        if (previousPiConfigDir !== undefined) {
           process.env.PI_CONFIG_DIR = previousPiConfigDir;
         }
       }
@@ -185,3 +186,67 @@ defineTest("loadOhmRuntimeConfig parses subagent prompt metadata + wildcard vari
     }
   });
 });
+
+defineTest(
+  "resolveSubagentProfileRuntimeConfig prefers project variants over global wildcard matches",
+  async () => {
+    await withTempDir(async (cwd) => {
+      const configDir = join(cwd, ".pi-global");
+      mkdirSync(configDir, { recursive: true });
+      mkdirSync(join(cwd, ".pi"), { recursive: true });
+
+      writeFileSync(
+        join(configDir, "ohm.json"),
+        JSON.stringify({
+          subagents: {
+            finder: {
+              variants: {
+                "*gpt*": {
+                  prompt: "global wildcard",
+                },
+              },
+            },
+          },
+        }),
+        "utf8",
+      );
+
+      writeFileSync(
+        join(cwd, ".pi", "ohm.json"),
+        JSON.stringify({
+          subagents: {
+            finder: {
+              variants: {
+                "openai/gpt-5*": {
+                  prompt: "project gpt5 override",
+                },
+              },
+            },
+          },
+        }),
+        "utf8",
+      );
+
+      const previousPiConfigDir = process.env.PI_CONFIG_DIR;
+      process.env.PI_CONFIG_DIR = configDir;
+
+      try {
+        const loaded = await loadOhmRuntimeConfig(cwd);
+        const resolved = resolveSubagentProfileRuntimeConfig({
+          config: loaded.config,
+          subagentId: "finder",
+          modelPattern: "openai/gpt-5",
+        });
+
+        assert.equal(resolved?.variantPattern, "openai/gpt-5*");
+        assert.equal(resolved?.prompt, "project gpt5 override");
+      } finally {
+        if (previousPiConfigDir === undefined) {
+          delete process.env.PI_CONFIG_DIR;
+        } else {
+          process.env.PI_CONFIG_DIR = previousPiConfigDir;
+        }
+      }
+    });
+  },
+);
