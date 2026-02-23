@@ -9,6 +9,7 @@
     "directory": "packages/db"
   },
   "files": [
+    "drizzle/",
     "src/",
     "README.md"
   ],

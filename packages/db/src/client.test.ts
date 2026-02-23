@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { Result } from "better-result";
 import { createOhmDb } from "./client";
 import { OHM_DB_SCHEMA_VERSION } from "./schema";
@@ -46,6 +47,32 @@ defineTest("createOhmDb accepts libsql file URL paths", async () => {
   } finally {
     await db.close();
   }
+});
+
+defineTest("createOhmDb supports explicit migrations folder override", async () => {
+  const created = await createOhmDb({
+    path: ":memory:",
+    migrationsFolder: join(process.cwd(), "packages", "db", "drizzle"),
+  });
+  if (Result.isError(created)) {
+    assert.fail(created.error.message);
+  }
+
+  await created.value.close();
+});
+
+defineTest("createOhmDb returns migration error when migrations folder is invalid", async () => {
+  const created = await createOhmDb({
+    path: ":memory:",
+    migrationsFolder: `/tmp/pi-ohm-db-migrations-missing-${Date.now()}`,
+  });
+
+  if (!Result.isError(created)) {
+    await created.value.close();
+    assert.fail("Expected createOhmDb to fail for invalid migrations folder");
+  }
+
+  assert.equal(created.error.code, "db_schema_migrate_failed");
 });
 
 defineTest("state store supports set/get/delete roundtrip", async () => {

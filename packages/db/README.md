@@ -5,7 +5,7 @@ Internal database package for pi-ohm runtime state.
 Current scaffold provides:
 
 - XDG-aware db path resolution
-- sqlite schema bootstrap on `@libsql/client`
+- sqlite schema migrations on startup via `drizzle-orm/libsql/migrator`
 - drizzle schema + query layer (`drizzle-orm`)
 - key/value internal state store
 - subagent session + event store primitives

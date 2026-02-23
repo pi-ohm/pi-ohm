@@ -6,7 +6,7 @@ export {
   type OhmSubagentSessionStore,
 } from "./client";
 export { resolveOhmDbPath, type ResolveDbPathInput } from "./paths";
-export { OHM_DB_BOOTSTRAP_SQL, OHM_DB_SCHEMA_VERSION } from "./schema";
+export { OHM_DB_SCHEMA_VERSION } from "./schema";
 export {
   ohmDbSchema,
   ohmMetaTable,

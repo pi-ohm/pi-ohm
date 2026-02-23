@@ -1,6 +1,9 @@
 import { createClient, type Client } from "@libsql/client";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { Result } from "better-result";
 import { z } from "zod";
 import type {
@@ -26,7 +29,7 @@ import {
 } from "./drizzle-schema";
 import { OhmDbRuntimeError, OhmDbValidationError, type OhmDbResult } from "./errors";
 import { resolveOhmDbPath } from "./paths";
-import { OHM_DB_BOOTSTRAP_SQL, OHM_DB_SCHEMA_VERSION } from "./schema";
+import { OHM_DB_SCHEMA_VERSION } from "./schema";
 
 const nonEmptyTrimmedStringSchema = z
   .string()
@@ -252,6 +255,19 @@ function toLibsqlUrl(pathValue: string): string {
   return `file:${trimmed}`;
 }
 
+function defaultMigrationsFolder(): string {
+  const currentFilePath = fileURLToPath(import.meta.url);
+  const currentFileDir = dirname(currentFilePath);
+  return join(currentFileDir, "..", "drizzle");
+}
+
+function resolveMigrationsFolder(folder: string | undefined): string {
+  if (!folder) return defaultMigrationsFolder();
+  const trimmed = folder.trim();
+  if (trimmed.length === 0) return defaultMigrationsFolder();
+  return trimmed;
+}
+
 export interface OhmStateStore {
   get(input: GetStateInput): Promise<OhmDbResult<unknown>>;
   set(input: SetStateInput): Promise<OhmDbResult<true>>;
@@ -284,6 +300,7 @@ class OhmDbClientImpl implements OhmDb {
     readonly path: string,
     private readonly client: Client,
     private readonly db: LibSQLDatabase<typeof ohmDbSchema>,
+    private readonly migrationsFolder: string,
     private readonly now: () => number,
   ) {
     this.state = {
@@ -302,17 +319,20 @@ class OhmDbClientImpl implements OhmDb {
   }
 
   async initialize(): Promise<OhmDbResult<true>> {
-    const bootstrap = await Result.tryPromise({
-      try: async () => this.client.executeMultiple(OHM_DB_BOOTSTRAP_SQL),
+    const migration = await Result.tryPromise({
+      try: async () =>
+        migrate(this.db, {
+          migrationsFolder: this.migrationsFolder,
+        }),
       catch: (cause) =>
         new OhmDbRuntimeError({
-          code: "db_schema_bootstrap_failed",
-          stage: "bootstrap",
+          code: "db_schema_migrate_failed",
+          stage: "migrate",
           cause,
         }),
     });
 
-    if (Result.isError(bootstrap)) return bootstrap;
+    if (Result.isError(migration)) return migration;
 
     const updatedAt = this.now();
     const versionWrite = await Result.tryPromise({
@@ -335,7 +355,7 @@ class OhmDbClientImpl implements OhmDb {
       catch: (cause) =>
         new OhmDbRuntimeError({
           code: "db_schema_version_write_failed",
-          stage: "bootstrap",
+          stage: "migrate",
           cause,
         }),
     });
@@ -741,6 +761,7 @@ class OhmDbClientImpl implements OhmDb {
 
 export interface CreateOhmDbInput {
   readonly path?: string;
+  readonly migrationsFolder?: string;
   readonly now?: () => number;
 }
 
@@ -753,6 +774,7 @@ function resolveInputPath(pathValue: string | undefined): string {
 
 export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbResult<OhmDb>> {
   const resolvedPath = resolveInputPath(input.path);
+  const migrationsFolder = resolveMigrationsFolder(input.migrationsFolder);
   const opened = await Result.tryPromise({
     try: async () => {
       const url = toLibsqlUrl(resolvedPath);
@@ -773,6 +795,7 @@ export async function createOhmDb(input: CreateOhmDbInput = {}): Promise<OhmDbRe
     resolvedPath,
     opened.value,
     db,
+    migrationsFolder,
     input.now ?? (() => Date.now()),
   );
   const initialized = await client.initialize();
