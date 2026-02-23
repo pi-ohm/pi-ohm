@@ -8,6 +8,8 @@ interface BuiltInSubagentPromptProfile {
   readonly variants: Readonly<Record<string, string>>;
 }
 
+const BUILT_IN_PROMPT_SAMPLE_FILE = "finder.general.txt";
+
 const BUILT_IN_PROMPT_PROFILES: Readonly<Record<string, BuiltInSubagentPromptProfile>> = {
   librarian: {
     defaultPromptFile: "librarian.general.txt",
@@ -35,32 +37,67 @@ const BUILT_IN_PROMPT_PROFILES: Readonly<Record<string, BuiltInSubagentPromptPro
   },
 };
 
-function resolvePromptsBaseDir(): string {
-  const baseDir = path.dirname(fileURLToPath(import.meta.url));
-  const dirs = [
-    path.resolve(baseDir, "prompts"),
-    path.resolve(baseDir, "../src/runtime/backend/prompts"),
-  ];
+function isDirectory(input: string): boolean {
+  try {
+    return fs.statSync(input).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
-  const found = dirs.find((dir) => fs.existsSync(dir));
-  if (found) return found;
-  return dirs[0];
+function isFile(input: string): boolean {
+  try {
+    return fs.statSync(input).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function resolvePromptsBaseDirFrom(moduleDir: string): string | undefined {
+  const dirs: string[] = [path.resolve(moduleDir, "prompts")];
+
+  let cursor = moduleDir;
+  while (true) {
+    dirs.push(path.resolve(cursor, "src/runtime/backend/prompts"));
+    dirs.push(path.resolve(cursor, "runtime/backend/prompts"));
+
+    const parent = path.dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+
+  for (const dir of dirs) {
+    if (!isDirectory(dir)) continue;
+    if (!isFile(path.join(dir, BUILT_IN_PROMPT_SAMPLE_FILE))) continue;
+    return dir;
+  }
+
+  return undefined;
 }
 
 function toFileReference(filePath: string): string {
   return `{file:${filePath}}`;
 }
 
-function toPromptFilePath(fileName: string): string {
-  return path.join(resolvePromptsBaseDir(), fileName);
+function toPromptFileReference(input: {
+  readonly baseDir: string | undefined;
+  readonly fileName: string;
+}): string | undefined {
+  if (!input.baseDir) return undefined;
+  const filePath = path.join(input.baseDir, input.fileName);
+  if (!isFile(filePath)) return undefined;
+  return toFileReference(filePath);
 }
 
 export function resolveBuiltInSubagentPromptReference(input: {
   readonly subagentId: string;
   readonly modelPattern?: string;
+  readonly moduleDir?: string;
 }): string | undefined {
   const profile = BUILT_IN_PROMPT_PROFILES[input.subagentId];
   if (!profile) return undefined;
+  const moduleDir = input.moduleDir ?? path.dirname(fileURLToPath(import.meta.url));
+  const baseDir = resolvePromptsBaseDirFrom(moduleDir);
 
   const variantPattern = resolveSubagentVariantPattern({
     variants: Object.fromEntries(Object.keys(profile.variants).map((pattern) => [pattern, {}])),
@@ -70,9 +107,13 @@ export function resolveBuiltInSubagentPromptReference(input: {
   if (variantPattern) {
     const fileName = profile.variants[variantPattern];
     if (fileName) {
-      return toFileReference(toPromptFilePath(fileName));
+      const resolvedVariant = toPromptFileReference({ baseDir, fileName });
+      if (resolvedVariant) return resolvedVariant;
     }
   }
 
-  return toFileReference(toPromptFilePath(profile.defaultPromptFile));
+  return toPromptFileReference({
+    baseDir,
+    fileName: profile.defaultPromptFile,
+  });
 }
