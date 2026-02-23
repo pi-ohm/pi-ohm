@@ -4,7 +4,9 @@ export type OhmSubagentIdentifier = OhmSubagentId | (string & {});
 export interface OhmSubagentDefinition {
   id: OhmSubagentIdentifier;
   name: string;
-  summary: string;
+  description?: string;
+  /** @deprecated use description */
+  summary?: string;
   /**
    * When true, this profile should be exposed as a directly invokable primary tool
    * instead of requiring delegated Task-style invocation.
@@ -16,7 +18,8 @@ export interface OhmSubagentDefinition {
    */
   internal?: boolean;
   whenToUse: readonly string[];
-  scaffoldPrompt: string;
+  /** @deprecated execution prompt now resolves outside catalog */
+  scaffoldPrompt?: string;
   requiresPackage?: string;
 }
 
@@ -26,7 +29,7 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
   {
     id: "librarian",
     name: "Librarian",
-    summary:
+    description:
       "A specialized codebase understanding agent that helps you answer questions about large, complex codebases. Works by reading from temporary local github checkouts. Works as your personal, multi-repository codebase expert, providing thorough analysis and comprehensive explanations across repositories",
     primary: true,
     whenToUse: [
@@ -38,13 +41,11 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
       "Getting comprehensive explanations of how major features work",
       "Exploring how systems are designed end-to-end across repositories",
     ],
-    scaffoldPrompt:
-      "Analyze this codebase (and linked repos if provided). Build an architecture map: boundaries, key modules, integration points, and risky coupling.",
   },
   {
     id: "oracle",
     name: "Oracle",
-    summary:
+    description:
       "Reasoning-heavy advisor for code review, architecture feedback, complex debugging, and planning.",
     whenToUse: [
       "Code reviews and architecture feedback",
@@ -53,13 +54,11 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
       "Answering complex technical questions that require deep technical reasoning",
       "Providing an alternative point of view when you are struggling to solve a problem",
     ],
-    scaffoldPrompt:
-      "Act as a critical reviewer. Challenge assumptions, rank risks, and provide a concrete implementation plan with trade-offs.",
   },
   {
     id: "finder",
     name: "Finder",
-    summary:
+    description:
       "Intelligently search your codebase: Use it for complex, multi-step search tasks where you need to find code based on functionality or concepts rather than exact matches. Anytime you want to chain multiple grep calls you should use this tool.",
     whenToUse: [
       "You must locate code by behavior or concept",
@@ -68,8 +67,6 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
       `You must filter broad terms ("config", "logger", "cache") by context.`,
       `You need answers to questions such as "Where do we validate JWT authentication headers?" or "Which module handles file-watcher retry logic"`,
     ],
-    scaffoldPrompt:
-      "Search this codebase for all implementations and call paths related to the requested behavior. Return files, rationale, and confidence.",
   },
   // {
   //   id: "task",
@@ -102,4 +99,16 @@ export const OHM_SUBAGENT_CATALOG: readonly OhmSubagentDefinition[] = [
 export function getSubagentById(id: string): OhmSubagentDefinition | undefined {
   const needle = id.trim().toLowerCase();
   return OHM_SUBAGENT_CATALOG.find((agent) => agent.id === needle);
+}
+
+export function getSubagentDescription(subagent: OhmSubagentDefinition): string {
+  if (subagent.description && subagent.description.trim().length > 0) {
+    return subagent.description;
+  }
+
+  if (subagent.summary && subagent.summary.trim().length > 0) {
+    return subagent.summary;
+  }
+
+  return "Subagent profile";
 }

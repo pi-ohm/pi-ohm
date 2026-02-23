@@ -58,11 +58,10 @@ defineTest("getSubagentById returns undefined for unknown ids", () => {
   assert.equal(match, undefined);
 });
 
-defineTest("catalog entries contain required non-empty scaffold fields", () => {
+defineTest("catalog entries contain required non-empty display fields", () => {
   for (const agent of OHM_SUBAGENT_CATALOG) {
     assert.ok(agent.name.trim().length > 0);
-    assert.ok(agent.summary.trim().length > 0);
-    assert.ok(agent.scaffoldPrompt.trim().length > 0);
+    assert.ok((agent.description ?? agent.summary ?? "").trim().length > 0);
     assert.ok(agent.whenToUse.length > 0);
     for (const condition of agent.whenToUse) {
       assert.ok(condition.trim().length > 0);

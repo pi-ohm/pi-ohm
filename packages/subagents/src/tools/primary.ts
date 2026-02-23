@@ -6,7 +6,7 @@ import type {
 import { Text } from "@mariozechner/pi-tui";
 import { Type, type Static } from "@sinclair/typebox";
 import type { OhmSubagentDefinition } from "../catalog";
-import { OHM_SUBAGENT_CATALOG } from "../catalog";
+import { getSubagentDescription, OHM_SUBAGENT_CATALOG } from "../catalog";
 import { getSubagentInvocationMode } from "../extension";
 import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
 import { createDefaultTaskToolDependencies } from "./task/defaults";
@@ -88,7 +88,7 @@ export interface PrimarySubagentToolRegistrationOptions {
 }
 
 function buildPrimaryToolDescription(subagent: OhmSubagentDefinition): string {
-  const lines: string[] = [subagent.summary, "", "When to use:"];
+  const lines: string[] = [getSubagentDescription(subagent), "", "When to use:"];
   for (const when of subagent.whenToUse) {
     lines.push(`- ${when}`);
   }

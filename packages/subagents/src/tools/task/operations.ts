@@ -3,6 +3,7 @@ import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
 import { Text } from "@mariozechner/pi-tui";
 import { Result } from "better-result";
 import { getSubagentInvocationMode } from "../../extension";
+import { getSubagentDescription } from "../../catalog";
 import { SubagentRuntimeError } from "../../errors";
 import {
   parseTaskToolParameters,
@@ -167,7 +168,7 @@ function buildTaskToolDescription(subagents: TaskToolDependencies["subagents"]):
   for (const subagent of subagents) {
     if (subagent.internal) continue;
     const invocation = getSubagentInvocationMode(subagent.primary);
-    lines.push(`- ${subagent.id} (${invocation}): ${subagent.summary}`);
+    lines.push(`- ${subagent.id} (${invocation}): ${getSubagentDescription(subagent)}`);
     lines.push("  whenToUse:");
     for (const guidance of subagent.whenToUse) {
       lines.push(`  - ${guidance}`);

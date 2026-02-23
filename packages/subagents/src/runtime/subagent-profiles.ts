@@ -22,10 +22,6 @@ function toDefaultWhenToUse(id: string): readonly string[] {
   return [`Use '${id}' for specialized delegated tasks configured in subagents profile.`];
 }
 
-function toDefaultPrompt(id: string): string {
-  return `You are the '${id}' subagent. Complete the delegated task concisely and return concrete findings.`;
-}
-
 function applyResolvedProfileOverrides(input: {
   readonly base: OhmSubagentDefinition;
   readonly config: OhmRuntimeConfig;
@@ -41,7 +37,9 @@ function applyResolvedProfileOverrides(input: {
 
   return {
     ...input.base,
-    ...(resolvedProfile.description ? { summary: resolvedProfile.description } : {}),
+    ...(resolvedProfile.description
+      ? { description: resolvedProfile.description, summary: resolvedProfile.description }
+      : {}),
     ...(resolvedProfile.whenToUse ? { whenToUse: [...resolvedProfile.whenToUse] } : {}),
     ...(resolvedProfile.prompt ? { scaffoldPrompt: resolvedProfile.prompt } : {}),
   };
@@ -65,11 +63,14 @@ function buildCustomSubagentDefinition(input: {
   return {
     id: normalizedId,
     name: toTitleCaseFromId(normalizedId),
+    description:
+      resolvedProfile.description ??
+      `User-defined subagent '${normalizedId}' loaded from runtime configuration.`,
     summary:
       resolvedProfile.description ??
       `User-defined subagent '${normalizedId}' loaded from runtime configuration.`,
     whenToUse: resolvedProfile.whenToUse ?? toDefaultWhenToUse(normalizedId),
-    scaffoldPrompt: resolvedProfile.prompt ?? toDefaultPrompt(normalizedId),
+    ...(resolvedProfile.prompt ? { scaffoldPrompt: resolvedProfile.prompt } : {}),
   };
 }
 

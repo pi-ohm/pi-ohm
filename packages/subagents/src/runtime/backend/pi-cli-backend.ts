@@ -237,7 +237,10 @@ export class PiCliTaskExecutionBackend implements TaskExecutionBackend {
     });
     const run = await this.runner({
       cwd: input.cwd,
-      prompt: await buildStartPrompt(input),
+      prompt: await buildStartPrompt({
+        ...input,
+        modelPattern,
+      }),
       modelPattern,
       signal: input.signal,
       timeoutMs,

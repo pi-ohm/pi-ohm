@@ -2,6 +2,9 @@ import type { TaskBackendSendInput, TaskBackendStartInput } from "./types";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveOhmConfigDir } from "@pi-ohm/config";
+import { resolveSubagentProfileRuntimeConfig } from "@pi-ohm/config/subagents";
+import { getSubagentDescription } from "../../catalog";
+import { resolveBuiltInSubagentPromptReference } from "./subagent-prompts";
 
 interface PromptFileCacheEntry {
   readonly mtimeMs: number;
@@ -89,24 +92,51 @@ async function resolveScaffoldPrompt(
   };
 }
 
+async function resolveExecutionPrompt(input: {
+  readonly subagentId: string;
+  readonly modelPattern: string | undefined;
+  readonly configuredPrompt: string | undefined;
+  readonly cwd: string;
+}): Promise<{
+  readonly text: string;
+  readonly source?: string;
+}> {
+  const prompt =
+    input.configuredPrompt ??
+    resolveBuiltInSubagentPromptReference({
+      subagentId: input.subagentId,
+      modelPattern: input.modelPattern,
+    }) ??
+    `You are '${input.subagentId}'. Complete the delegated task and return concrete findings.`;
+
+  return resolveScaffoldPrompt(prompt, input.cwd);
+}
+
 export async function buildStartPrompt(input: TaskBackendStartInput): Promise<string> {
-  const resolvedScaffoldPrompt = await resolveScaffoldPrompt(
-    input.subagent.scaffoldPrompt,
-    input.cwd,
-  );
-  const scaffoldHeading = resolvedScaffoldPrompt.source
-    ? `Profile scaffold guidance (source: ${resolvedScaffoldPrompt.source}):`
-    : "Profile scaffold guidance:";
+  const resolvedProfile = resolveSubagentProfileRuntimeConfig({
+    config: input.config,
+    subagentId: input.subagent.id,
+    modelPattern: input.modelPattern,
+  });
+  const resolvedExecutionPrompt = await resolveExecutionPrompt({
+    subagentId: input.subagent.id,
+    modelPattern: input.modelPattern,
+    configuredPrompt: resolvedProfile?.prompt,
+    cwd: input.cwd,
+  });
+  const executionHeading = resolvedExecutionPrompt.source
+    ? `Subagent execution prompt (source: ${resolvedExecutionPrompt.source}):`
+    : "Subagent execution prompt:";
 
   return [
     `You are the ${input.subagent.name} subagent in Pi OHM.`,
     "",
-    `Subagent summary: ${input.subagent.summary}`,
+    `Subagent description: ${getSubagentDescription(input.subagent)}`,
     "When to use:",
     ...input.subagent.whenToUse.map((line) => `- ${line}`),
     "",
-    scaffoldHeading,
-    resolvedScaffoldPrompt.text,
+    executionHeading,
+    resolvedExecutionPrompt.text,
     "",
     `Task description: ${input.description}`,
     "",

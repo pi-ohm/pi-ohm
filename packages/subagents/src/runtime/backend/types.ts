@@ -14,6 +14,7 @@ export interface TaskBackendStartInput {
   readonly subagent: OhmSubagentDefinition;
   readonly description: string;
   readonly prompt: string;
+  readonly modelPattern?: string;
   readonly config: OhmRuntimeConfig;
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;

@@ -137,8 +137,8 @@ defineTest("buildSubagentDetailText preserves detailed subagent view", () => {
   assert.match(text, /Subagent: Librarian/);
   assert.match(text, /model: runtime default/);
   assert.match(text, /thinking: runtime default/);
+  assert.match(text, /description:/);
   assert.match(text, /When to use:/);
-  assert.match(text, /Scaffold prompt:/);
 });
 
 defineTest("buildSubagentDetailText shows configured model + thinking override", () => {
