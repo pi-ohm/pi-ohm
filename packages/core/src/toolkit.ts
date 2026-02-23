@@ -46,7 +46,7 @@ export function resolveLookupSnapshot<TSnapshot, TError>(
   lookup: LookupWithSnapshot<TSnapshot> | undefined,
   onMissing: (input: MissingLookupDetails) => TError,
 ): Result<TSnapshot, TError> {
-  if (!lookup || !lookup.found || !lookup.snapshot) {
+  if (!lookup || !lookup.found || lookup.snapshot === undefined) {
     const id = lookup?.id ?? "unknown";
     const code = lookup?.errorCode ?? "unknown_task_id";
     const message = lookup?.errorMessage ?? `Unknown task id '${id}'`;
