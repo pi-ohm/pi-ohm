@@ -2294,7 +2294,8 @@ defineTest("runTaskToolMvp batch start emits per-item model payload content", as
   }
 
   const plainText = stripAnsi(textBlock.text);
-  assert.match(plainText, /^task_id:\s+batch_2$/m);
+  assert.match(plainText, /^task_id:\s+task_test_0001$/m);
+  assert.match(plainText, /^task_ids:\s+task_test_0001,\s+task_test_0002$/m);
   assert.match(plainText, /^result:$/m);
   assert.match(plainText, /Completed batch tasks: 2\/2 succeeded/);
   assert.match(plainText, /^items:$/m);

@@ -134,13 +134,27 @@ function resolveModelResultText(details: TaskToolResultDetails): string {
   return details.summary;
 }
 
-function resolveModelTaskId(details: TaskToolResultDetails): string {
-  if (details.task_id && details.task_id.length > 0) return details.task_id;
-  if (details.items && details.items.length > 1) return `batch_${details.items.length}`;
-  if (details.items && details.items.length === 1) {
-    const [item] = details.items;
-    if (item && item.id.length > 0) return item.id;
+function resolveModelTaskIds(details: TaskToolResultDetails): readonly string[] {
+  const seen = new Set<string>();
+
+  const append = (value: string | undefined): void => {
+    if (!value) return;
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return;
+    seen.add(trimmed);
+  };
+
+  append(details.task_id);
+  for (const item of details.items ?? []) {
+    append(item.id);
   }
+
+  return [...seen];
+}
+
+function resolveModelTaskId(details: TaskToolResultDetails): string {
+  const [primaryId] = resolveModelTaskIds(details);
+  if (primaryId) return primaryId;
   return "unavailable";
 }
 
@@ -199,11 +213,13 @@ function toModelBatchItemLines(item: TaskToolItemDetails, index: number): readon
 }
 
 function toModelFacingContent(details: TaskToolResultDetails): string {
+  const taskIds = resolveModelTaskIds(details);
   const taskId = resolveModelTaskId(details);
   const timestamp = resolveModelTimestamp(details);
   const result = resolveModelResultText(details);
   const lines = [
     `task_id: ${taskId}`,
+    ...(taskIds.length > 1 ? [`task_ids: ${taskIds.join(", ")}`] : []),
     `status: ${details.status}`,
     ...(details.subagent_type ? [`subagent: ${details.subagent_type}`] : []),
     `backend: ${details.backend}`,
