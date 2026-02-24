@@ -1,0 +1,7 @@
+{
+  "title": "Handoff",
+  "description": "Cross-session handoff and handoff visualization.",
+  "icon": "ArrowLeftRight",
+  "root": true,
+  "pages": ["index"]
+}

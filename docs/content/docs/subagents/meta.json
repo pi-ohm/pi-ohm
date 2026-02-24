@@ -1,0 +1,7 @@
+{
+  "title": "Subagents",
+  "description": "Multi-agent delegation, catalog selection, and runtime behavior.",
+  "icon": "Bot",
+  "root": true,
+  "pages": ["index"]
+}

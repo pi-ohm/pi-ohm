@@ -1,0 +1,7 @@
+{
+  "title": "Painter",
+  "description": "Image generation providers and model routing.",
+  "icon": "Palette",
+  "root": true,
+  "pages": ["index"]
+}

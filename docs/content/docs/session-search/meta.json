@@ -1,0 +1,7 @@
+{
+  "title": "Session Search",
+  "description": "Session and thread search capabilities.",
+  "icon": "Search",
+  "root": true,
+  "pages": ["index"]
+}
