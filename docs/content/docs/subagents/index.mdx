@@ -19,8 +19,18 @@ pi -e npm:@pi-ohm/subagents
 
 ## Configuration
 
-```json title="ohm.json"
+```json title=".pi/ohm.json"
 {
-  "subagents": {}
+  "subagents": {
+    "librarian": {
+      "model": "openai/gpt-5.3-codex:medium",
+    },
+    "oracle": {
+      "model": "openai/gpt-5.2:high",
+    },
+    "finder": {
+      "model": "openai/gpt-5.3-codex:medium",
+    },
+  }
 }
 ```

@@ -2202,10 +2202,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@fontsource/iosevka-aile@npm:^5.2.5":
+"@fontsource/iosevka-curly@npm:^5.2.5":
   version: 5.2.5
-  resolution: "@fontsource/iosevka-aile@npm:5.2.5"
-  checksum: 10c0/8abda173a0c08af05168feea191c47d3f5f57e8e4cf220cb673c49b75a2e025920fd0fc5d54506dcfc4a484be4a37a9acb27084188847eb2719d11a7e4bb48f5
+  resolution: "@fontsource/iosevka-curly@npm:5.2.5"
+  checksum: 10c0/9603a355b710afa5ec6f37f6391e06fa6868c2d5181b6ea29090a12fcf88c61ec0eb26a25159b314ccc03cff5f7529d383c61376107fbdb882a0e16a491b7169
   languageName: node
   linkType: hard
 
@@ -7753,7 +7753,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "docs@workspace:docs"
   dependencies:
-    "@fontsource/iosevka-aile": "npm:^5.2.5"
+    "@fontsource/iosevka-curly": "npm:^5.2.5"
     "@fontsource/sorts-mill-goudy": "npm:^5.2.8"
     "@orama/orama": "npm:^3.1.18"
     "@radix-ui/react-collapsible": "npm:^1.1.12"
