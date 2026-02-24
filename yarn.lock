@@ -2202,6 +2202,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@fontsource/iosevka@npm:^5.2.5":
+  version: 5.2.5
+  resolution: "@fontsource/iosevka@npm:5.2.5"
+  checksum: 10c0/b2b48cb2323a1fb9b269957a456e2da9d6997289b958e5d98aebf4e9057689add669b8b9ad205019cee928434a849258d81f6cb2cd068d900e44af257974bb14
+  languageName: node
+  linkType: hard
+
+"@fontsource/sorts-mill-goudy@npm:^5.2.8":
+  version: 5.2.8
+  resolution: "@fontsource/sorts-mill-goudy@npm:5.2.8"
+  checksum: 10c0/72d2a33294359d574c2d2f7612f683d31749ad340d8020560fd3ebb8fb2f4b390b5940deb1c0557b268097963368cbd38c9abefc4495d89fc626ff0b741005f4
+  languageName: node
+  linkType: hard
+
 "@formatjs/fast-memoize@npm:3.1.0":
   version: 3.1.0
   resolution: "@formatjs/fast-memoize@npm:3.1.0"
@@ -7739,6 +7753,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "docs@workspace:docs"
   dependencies:
+    "@fontsource/iosevka": "npm:^5.2.5"
+    "@fontsource/sorts-mill-goudy": "npm:^5.2.8"
     "@orama/orama": "npm:^3.1.18"
     "@radix-ui/react-collapsible": "npm:^1.1.12"
     "@radix-ui/react-popover": "npm:^1.1.15"
