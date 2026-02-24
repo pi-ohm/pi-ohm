@@ -15,7 +15,7 @@ export const Route = createRootRoute({
         content: "width=device-width, initial-scale=1",
       },
       {
-        title: "Fumadocs on TanStack Start",
+        title: "pi-ohm docs",
       },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
