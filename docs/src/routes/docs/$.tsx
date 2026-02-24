@@ -1,9 +1,9 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { DocsLayout } from "fumadocs-ui/layouts/docs";
+import { DocsLayout } from "@/components/layout/flux";
 import { createServerFn } from "@tanstack/react-start";
 import { source } from "@/lib/source";
 import browserCollections from "fumadocs-mdx:collections/browser";
-import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
+import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "@/components/layout/flux/page";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { baseOptions, gitConfig } from "@/lib/layout.shared";
 import { staticFunctionMiddleware } from "@tanstack/start-static-server-functions";
