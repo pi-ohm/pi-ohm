@@ -1,13 +1,26 @@
 ---
 title: Subagents
 description: Multi-agent delegation, catalog selection, and runtime behavior.
-icon: Bot
+icon: Superscript
 ---
 
-This section is the most complete right now.
+Currently, subagents are the most complete part of **pi-ohm**. However, it's expected that subagents will continue to evolve, especially with Amp's upcoming release. As such, we are baking in functionality for "agent teams" which will behave similarly to OpenAI's Codex CLI.
 
-Use it for subagent cataloging, prompting, runtime orchestration, and delegation strategy.
+Agent teams are not special in any way. They simply make subagents more interoperable by default.
 
-## Package
+## Installation
 
-- `@pi-ohm/subagents`
+```bash tab="Persistent"
+pi install npm:@pi-ohm/subagents
+```
+```bash tab="Temporary"
+pi -e npm:@pi-ohm/subagents
+```
+
+## Configuration
+
+```json title="ohm.json"
+{
+  "subagents": {}
+}
+```

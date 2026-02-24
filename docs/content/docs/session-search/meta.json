@@ -1,6 +1,6 @@
 {
   "title": "Session Search",
-  "description": "Session and thread search capabilities.",
+  "description": "",
   "icon": "Search",
   "root": true,
   "pages": ["index"]

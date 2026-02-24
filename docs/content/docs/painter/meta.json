@@ -1,7 +1,7 @@
 {
   "title": "Painter",
-  "description": "Image generation providers and model routing.",
-  "icon": "Palette",
+  "description": "",
+  "icon": "PaintRoller",
   "root": true,
   "pages": ["index"]
 }
