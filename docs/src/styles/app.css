@@ -1,16 +1,19 @@
 @import "tailwindcss";
 @import "@fontsource/sorts-mill-goudy/400.css";
 @import "@fontsource/sorts-mill-goudy/400-italic.css";
-@import "@fontsource/iosevka-aile/400.css";
-@import "@fontsource/iosevka-aile/500.css";
-@import "@fontsource/iosevka-aile/700.css";
+@import "@fontsource/iosevka-curly/400.css";
+@import "@fontsource/iosevka-curly/500.css";
+@import "@fontsource/iosevka-curly/700.css";
 @import "fumadocs-ui/css/aspen.css";
 @import "fumadocs-ui/css/preset.css";
 
 :root {
-  --font-heading: "Sorts Mill Goudy", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "Iosevka Aile", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
+  --font-heading:
+    "Sorts Mill Goudy", ui-serif, Georgia, Cambria, "Times New Roman", Times,
+    serif;
+  --font-mono:
+    "Iosevka Curly", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
   --default-mono-font-family: var(--font-mono);
 }
 
