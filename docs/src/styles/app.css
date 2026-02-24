@@ -29,3 +29,7 @@ samp,
 pre code {
   font-size: 1.05em;
 }
+
+.shiki > div:first-child > figcaption {
+  font-family: var(--font-mono);
+}
