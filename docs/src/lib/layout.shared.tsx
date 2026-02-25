@@ -13,16 +13,12 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: (
         <>
-          <span className="relative size-6 overflow-hidden rounded-sm">
+          <span className="inline-flex items-center overflow-hidden rounded-sm">
+            <img src={lightLogo} alt="pi-ohm" className="h-5 w-auto object-contain dark:hidden" />
             <img
               src={darkLogo}
               alt="pi-ohm"
-              className="absolute inset-0 h-full w-full object-cover dark:hidden"
-            />
-            <img
-              src={lightLogo}
-              alt="pi-ohm"
-              className="absolute inset-0 hidden h-full w-full object-cover dark:block"
+              className="hidden h-5 w-auto object-contain dark:block"
             />
           </span>
           <span className="sr-only">pi-ohm</span>
