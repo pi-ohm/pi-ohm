@@ -23,19 +23,12 @@ function resolveDomain(stage: string): string | undefined {
   return undefined;
 }
 
-function readFlag(name: string): boolean {
-  const value = readNonEmptyEnv(name);
-  if (!value) return false;
-  return ["1", "true", "yes", "on"].includes(value.toLowerCase());
-}
-
 const stage = resolveStage();
 const domain = resolveDomain(stage);
-const useSchemaWorkerDemo = readFlag("DOCS_ENABLE_SCHEMA_WORKER_DEMO");
 
 const docsRoute = domain ? `${domain}/*` : undefined;
 const schemaRoute = domain ? `${domain}/api/schema*` : undefined;
-const useRouteMode = useSchemaWorkerDemo && docsRoute !== undefined && schemaRoute !== undefined;
+const useRouteMode = docsRoute !== undefined && schemaRoute !== undefined;
 
 const app = await alchemy("pi-ohm-docs", {
   stage,
@@ -69,7 +62,6 @@ console.log({
   schemaUrl: schema.url,
   schemaRoute: useRouteMode ? schemaRoute : undefined,
   routeMode: useRouteMode,
-  routeModeEnv: "DOCS_ENABLE_SCHEMA_WORKER_DEMO",
 });
 
 await app.finalize();
