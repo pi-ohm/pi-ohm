@@ -1,0 +1,36 @@
+{
+  "name": "@pi-ohm/db",
+  "version": "0.6.4",
+  "private": true,
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/db#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/db"
+  },
+  "files": [
+    "drizzle/",
+    "src/",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate --config drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "catalog:",
+    "@pi-ohm/core": "workspace:*",
+    "better-result": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "drizzle-kit": "catalog:"
+  }
+}

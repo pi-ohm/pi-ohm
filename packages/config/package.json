@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/config",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/config#readme",
   "repository": {
     "type": "git",
@@ -8,14 +8,33 @@
     "directory": "packages/config"
   },
   "files": [
-    "src/",
+    "dist/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./subagents": {
+      "types": "./dist/subagents.d.ts",
+      "default": "./dist/subagents.js"
+    },
+    "./features": {
+      "types": "./dist/features.d.ts",
+      "default": "./dist/features.js"
+    },
+    "./modes": {
+      "types": "./dist/modes.d.ts",
+      "default": "./dist/modes.js"
+    },
+    "./painter": {
+      "types": "./dist/painter.d.ts",
+      "default": "./dist/painter.js"
+    }
   },
   "publishConfig": {
     "access": "public",
@@ -24,10 +43,20 @@
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.5.0",
     "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@mariozechner/pi-tui": "catalog:pi",
+    "@sinclair/typebox": "^0.34.41"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
+  },
+  "tsdown": {
+    "entry": [
+      "src/index.ts",
+      "src/subagents.ts",
+      "src/features.ts",
+      "src/modes.ts",
+      "src/painter.ts"
+    ]
   }
 }

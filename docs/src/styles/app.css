@@ -1,0 +1,45 @@
+@import "tailwindcss";
+@import "@fontsource/kanit/400.css";
+@import "@fontsource/kanit/500.css";
+@import "@fontsource/kanit/600.css";
+@import "@fontsource/kanit/700.css";
+@import "@fontsource/kanit/400-italic.css";
+@import "@fontsource/sorts-mill-goudy/400.css";
+@import "@fontsource/sorts-mill-goudy/400-italic.css";
+@import "@fontsource/iosevka-curly/400.css";
+@import "@fontsource/iosevka-curly/500.css";
+@import "@fontsource/iosevka-curly/700.css";
+@import "fumadocs-ui/css/aspen.css";
+@import "fumadocs-ui/css/preset.css";
+
+:root {
+  --font-sans:
+    "Kanit", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --default-font-family: var(--font-sans);
+  --font-heading: "Sorts Mill Goudy", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono:
+    "Iosevka Curly", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  --default-mono-font-family: var(--font-mono);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+}
+
+code,
+kbd,
+samp,
+pre code {
+  font-size: 1.05em;
+}
+
+.shiki > div:first-child > figcaption {
+  font-family: var(--font-mono);
+}

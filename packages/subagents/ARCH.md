@@ -1,274 +1,164 @@
-## `@pi-ohm/subagents` Architecture
-
-## Objectives
-
-- Mirror OpenCode-style subagents with a **Task tool** async lifecycle.
-- Support a `primary: true` option so selected agents are exposed as direct top-level tools.
-- Provide strong live UX feedback while tasks are running.
-- Use `@mariozechner/pi-tui` as the standard UI layer for subagent task visuals.
-- Keep default runtime self-contained (no third-party extension dependency).
-
-## Constraints
-
-- **No `interactive_shell` dependency** for core behavior.
-  - It is third-party and should not be required for default package functionality.
-- Runtime must work in plain Pi extension environments with only core extension APIs.
-- Recoverable errors must use **`better-result`** typed Result flows (no ad-hoc try/catch propagation).
-
----
-
-## Invocation Model
-
-1. **Task-routed path** (`primary: false`, default)
-   - Invoked through the `task` orchestration tool.
-   - Runs in isolated task context with resumable task IDs.
-
-2. **Primary-tool path** (`primary: true`)
-   - Agent is also exposed as direct top-level tool entrypoint.
-   - No delegation handoff required for invocation.
-
-Default profile intent:
-
-- `librarian`: `primary: true`
-- `finder`: task-routed
-- `oracle`: task-routed
-
----
-
-## Config Resolution
-
-Resolution order:
-
-1. package defaults
-2. global `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
-3. project `.pi/ohm.json`
-
-Merge policy:
-
-- scalar fields: last writer wins (`model`, `primary`, `reasoningEffort`, etc.)
-- list metadata fields: additive merge where explicitly intended
-
----
-
-## Task Tool Contract
-
-OpenCode-style payload + Codex-style async lifecycle.
-
-```jsonc
-// start one
-{
-  "op": "start",
-  "subagent_type": "finder",
-  "description": "auth flow scan",
-  "prompt": "Find token validation + refresh call paths",
-  "async": true
-}
-
-// start many in one call
-{
-  "op": "start",
-  "tasks": [
-    { "subagent_type": "finder", "description": "scan", "prompt": "Locate auth endpoints" },
-    { "subagent_type": "oracle", "description": "review", "prompt": "Review auth risk areas" }
-  ],
-  "parallel": true
-}
-
-// lifecycle
-{ "op": "status", "ids": ["task_1", "task_2"] }
-{ "op": "wait", "ids": ["task_1", "task_2"], "timeout_ms": 120000 }
-{ "op": "send", "id": "task_1", "prompt": "Now check tests" }
-{ "op": "cancel", "id": "task_1" }
-```
-
----
-
-## Pi-mono Findings to Reuse
-
-Inspected references:
-
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/subagent/index.ts`
-- `node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
-- `node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/status-line.ts`
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/plan-mode/index.ts`
-
-Useful patterns:
-
-1. **Streaming progress from tools**
-   - Use `execute(..., onUpdate, ctx)` and emit partial states frequently.
-   - Include running/done counters in `onUpdate` content.
-
-2. **Rich tool visualization**
-   - Implement `renderCall` + `renderResult` for compact vs expanded views.
-   - Display per-task summaries and tool-call snippets.
-
-3. **Live status/footer feedback**
-   - Use `ctx.ui.setStatus("ohm-subagents", text)` for persistent counters.
-
-4. **Widget-based task panel**
-   - Use `ctx.ui.setWidget("ohm-subagents", lines, { placement: "belowEditor" })`
-   - Show running tasks + descriptions + quick status icons.
-
-5. **Tool lifecycle events**
-   - Use `tool_execution_start/update/end` where available to track in-flight tool calls.
-
-6. **`@mariozechner/pi-tui` components for consistent rendering**
-   - Use pi-tui primitives/components for spinner-like activity indicators and stable text layout.
-   - Keep status output simple and deterministic so model/user can read progress at a glance.
-
----
-
-## Visual Feedback Requirements (must-have)
-
-While task orchestration is running, show:
-
-- number of task-tool jobs running/completed/failed
-- **live number of tool calls currently in-flight**
-- short task descriptors (`description`, `subagent_type`, status icon)
-- elapsed time for each running task (or orchestration group)
-
-Planned surfaces:
-
-1. **Footer status (`setStatus`)**
-   - Example: `subagents 1 running · tools 3 active · elapsed 00:18`
-
-2. **Widget (`setWidget`)**
-   - Top N running tasks with spinner/check/error indicators, descriptions, tool counts, and elapsed time.
-   - Each task entry renders as a compact two-line block.
-
-3. **Tool renderer (`renderCall` / `renderResult`)**
-   - Collapsed summary by default, expanded drilldown for details.
-
-4. **Streaming text updates (`onUpdate`)**
-   - Emit deterministic periodic snapshots during execution.
-
----
-
-## TUI Runtime Requirements (`@mariozechner/pi-tui`)
-
-Required baseline for every running task surfaced in UI:
-
-- spinner indicator
-- source `description` from task `start` payload
-- active tool-call count
-- elapsed time (`mm:ss`)
-
-Minimal target line format:
-
-```bash
-⠋ [finder] Auth flow scan
-  Tools 3/3 · Elapsed 00:18
-```
-
-Terminal state line format examples:
-
-```bash
-✓ [finder] Auth flow scan
-  Tools 5/5 · Elapsed 00:42
-
-✕ [finder] Auth flow scan
-  Tools 2/3 · Elapsed 00:11
-```
-
-Behavior requirements:
-
-- Spinner animates only for non-terminal task states.
-- Elapsed time starts at task `start` acceptance and stops at terminal state.
-- Tool-call count reflects in-flight calls for that task scope.
-- If TUI is unavailable, provide equivalent plain-text progress in `onUpdate`.
-
----
-
-## Schema Strategy (Zod + Pi tool API)
-
-Pi extension tool registration currently expects **TypeBox** for `parameters`.
-
-Therefore:
-
-1. **External tool input schema**
-   - Use TypeBox for `pi.registerTool({ parameters })` compatibility.
-
-2. **Internal runtime/domain schemas**
-   - Use **Zod v4** (`zod@^4`) for:
-     - config normalization
-     - persisted task records
-     - internal message/result validation
-
-Version baseline:
-
-- pi-ohm root already pins `zod: ^4`
-- inspected pi-mono environment has `zod` **4.1.13** installed
-
-Rule: standardize internal schemas on Zod v4 APIs only.
-
----
-
-## Error Handling Strategy (`better-result`)
-
-Core requirement: use `better-result` for recoverable errors across task runtime and tool routing.
-
-Rules:
-
-1. **No thrown recoverable errors across module boundaries**
-   - Runtime modules return `Result<T, E>`.
-   - Recoverable failures are represented as typed errors, not exceptions.
-
-2. **Typed error taxonomy via `TaggedError`**
-   - Define explicit error categories for at least:
-     - validation/config
-     - policy/permissions
-     - runtime/execution
-     - persistence/state
-
-3. **Use boundary wrappers for throw-prone operations**
-   - `Result.try` / `Result.tryPromise` at I/O boundaries (filesystem, provider calls, parsing).
-
-4. **Tool boundary maps Result to stable tool output**
-   - `task` tool responses expose deterministic machine-parseable error codes/details.
-   - Do not hide failures with broad catches or silent fallbacks.
-
-5. **Bug-class failures**
-   - Defects should fail loudly for diagnosis; do not reclassify programming bugs as domain success.
-
----
-
-## Parallelization Approach
-
-Core package behavior (required):
-
-- single task-tool execution
-- batched parallel task-tool execution in one tool call
-- async lifecycle (`start/status/wait/send/cancel`)
-
-Implementation approach:
-
-- in-process task runtime with bounded concurrency pool
-- deterministic result ordering in aggregate responses
-- persistent task registry for resumability across turns
-
-Harness-level multi-tool parallel wrappers are optional accelerators, not correctness dependencies.
-
----
-
-## Suggested Module Layout
-
-- `src/schema.ts` — Zod internal schemas + TypeBox parameter schemas
-- `@pi-ohm/core/errors` — shared `better-result` TaggedError definitions + error unions
-- `src/runtime/tasks.ts` — task registry + lifecycle state machine
-- `src/runtime/executor.ts` — task execution engine + concurrency control
-- `src/runtime/ui.ts` — status/widget snapshot formatter
-- `src/tools/task.ts` — task tool registration + op routing
-- `src/tools/primary/*.ts` — direct tools generated for `primary: true` agents
-- `src/extension.ts` — wiring + events + status synchronization
-
----
-
-## Testing Expectations
-
-- parser/config merge tests
-- lifecycle tests (`start/status/wait/send/cancel`)
-- parallel determinism + bounded concurrency tests
-- renderer/status snapshot tests (for visual feedback correctness)
-- regression tests for `primary: true` routing vs task-routed execution
-- `better-result` error-path tests (typed errors + Result mapping at tool boundary)
+# `@pi-ohm/subagents` — Architecture
+
+## 1) Purpose
+
+`@pi-ohm/subagents` provides Pi-native subagent orchestration with a lifecycle `task` tool (`start|status|wait|send|cancel`), optional direct primary tools, typed recoverable errors, and inline-first UX.
+
+## 2) Hard constraints
+
+- Strict type safety + illegal-state prevention at boundaries.
+- `better-result` for recoverable failures.
+- TypeBox for tool registration payloads.
+- Zod v4 for domain/runtime parsing.
+- Behavior parity during refactor (no user-facing contract breaks).
+
+## 3) Current status (implemented)
+
+- Lifecycle + batch + wait/cancel semantics shipped.
+- SDK backend default (`interactive-sdk`), CLI fallback retained.
+- adaptive backend timeout policy (global + per-subagent override, elevated defaults for oracle/librarian).
+- Structured event timeline persisted with bounded retention.
+- Shared transcript parser extracted (`src/runtime/task-transcript.ts`) and consumed by task/runtime UI paths.
+- Task tool file layout decomposed under `src/tools/task/*` with `operations.ts` as registration/dispatch entry.
+- Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
+- Task runtime store layout decomposed under `src/runtime/tasks/*` with explicit type/store/persistence/state-machine modules.
+- Schema layout decomposed under `src/schema/*` with explicit per-schema modules (`task-tool`, `task-record`, `runtime-config`, `shared`).
+- Runtime UI slimmed to presentation assembly with transcript parsing delegated to `runtime/task-transcript.ts`.
+- Task execution runtime split into op-focused modules under `src/tools/task/execution/*` with compatibility export surface retained.
+- Task tool operation kernel adapter (`src/tools/task/execution/kernel.ts`) now delegates generic primitives to `@pi-ohm/core/toolkit` while keeping task-specific detail mapping colocated.
+- Hot-path runtime perf tightened: cached event projection (`tool_rows`/`assistant_text`), chunked streamed-event flush, single-pass batch aggregation/hydration, and hybrid wait strategy (execution-promise + bounded poll).
+- Scoped model ingestion added for prompt routing: `settings.json` `enabledModels` are parsed via deterministic path precedence with mtime-aware cache.
+- Prompt profile resolution now enforces precedence (active runtime model → explicit pattern → scoped catalog → generic fallback) and emits structured source/reason diagnostics for debug-safe introspection.
+- Provider/profile routing rules are now config-driven from `ohm.providers.json` (`subagents.promptProfiles.rules`) with typed parsing, validation diagnostics, and default-rule fallback.
+- System prompt authoring is now modularized into typed composition + provider packs (`system-prompt-authoring.ts`, `system-prompt-packs.ts`) with deterministic golden coverage.
+- Prompt profile observability is threaded through task runtime details (`prompt_profile`, source/reason), shown in debug mode (`OHM_DEBUG=true`) with no system-prompt text leakage.
+- Inline tree rendering + optional live widget modes.
+- Dual invocation model (`task-routed` + `primary-tool`) active.
+
+## 4) Known architecture debt
+
+- `src/tools/task/operations.ts` still carries operation-specific dispatch complexity and can move to declarative op registry over time.
+- `src/tools/task/execution/send.ts` still has dense lifecycle/event plumbing and can be split further into dedicated stage helpers.
+- Store-to-db migration is in progress, so task runtime persistence responsibilities are still split between in-memory store orchestration and file persistence adapters.
+
+## 5) Target module map (incremental split)
+
+### 5.1 Task tool
+
+- `src/tools/task/contracts.ts`
+- `src/tools/task/defaults.ts`
+- `src/tools/task/operations.ts` (registration + parse/config/dispatch pipeline)
+- `src/tools/task/render.ts`
+- `src/tools/task/updates.ts`
+- `src/tools/task/execution/kernel.ts` (task adapter over `@pi-ohm/core/toolkit`)
+- `src/tools/task/execution/start.ts`
+- `src/tools/task/execution/status.ts`
+- `src/tools/task/execution/wait.ts`
+- `src/tools/task/execution/send.ts`
+- `src/tools/task/execution/cancel.ts`
+- `src/tools/task/execution/batch.ts`
+- `src/tools/task/execution/lifecycle.ts`
+- `src/tools/task/execution/projection.ts`
+- `src/tools/task/execution/shared.ts`
+
+### 5.2 Shared transcript parsing
+
+- `src/runtime/task-transcript.ts` (single owner for transcript normalization + tool-row synthesis)
+
+### 5.3 Backend runtime
+
+- `src/runtime/backend/index.ts`
+- `src/runtime/backend/types.ts`
+- `src/runtime/backend/model-selection.ts`
+- `src/runtime/backend/model-scope.ts`
+- `src/runtime/backend/prompt-profile-rules.ts`
+- `src/runtime/backend/system-prompt-authoring.ts`
+- `src/runtime/backend/system-prompt-packs.ts`
+- `src/runtime/backend/sdk-stream-capture.ts`
+- `src/runtime/backend/prompts.ts`
+- `src/runtime/backend/runners.ts`
+- `src/runtime/backend/scaffold-backend.ts`
+- `src/runtime/backend/pi-sdk-backend.ts`
+- `src/runtime/backend/pi-cli-backend.ts`
+
+### 5.4 Task store runtime
+
+- `src/runtime/tasks/types.ts`
+- `src/runtime/tasks/state-machine.ts`
+- `src/runtime/tasks/persistence.ts`
+- `src/runtime/tasks/store.ts`
+
+### 5.5 Schemas
+
+- `src/schema/shared.ts`
+- `src/schema/task-tool.ts`
+- `src/schema/task-record.ts`
+- `src/schema/runtime-config.ts`
+
+## 6) Epic/sprint execution model
+
+- Epic A: shared transcript parser (`src/runtime/task-transcript.ts` + parser-test consolidation).
+- Epic B: `src/tools/task/*` decomposition + test monolith split.
+- Epic C: `src/runtime/backend/*` decomposition + backend test split.
+- Epic D: `src/runtime/tasks/*` decomposition + store/persistence/policy test split.
+- Epic E: `src/schema/*` decomposition + schema test split.
+- Epic F: `src/runtime/ui.ts` slimdown to presentation-only.
+- Planning format rule: all future plan items are tracked as explicit checkbox tickets in `TODO.md` (no non-ticket sprint prose).
+
+(Full sprint checklist lives in `TODO.md`.)
+
+## 7) Testing expectations per sprint
+
+- Preserve behavior parity before removing legacy monolith files/tests.
+- Add/port focused tests per new module.
+- Global gate each sprint:
+  - `yarn test:subagents`
+  - `yarn typecheck`
+  - `yarn lint`
+
+## 8) Old outstanding work (pre-refactor)
+
+- SDK session boot profile completion.
+- Async/background running-state minimal UX.
+- Terminal expansion UX polish.
+- Ensure bottom widget remains fully optional/no hidden reactivation.
+
+## 9) Non-goals
+
+- Removing CLI backend fallback now.
+- Changing external task tool contract during decomposition.
+- Moving task-domain contracts (`TaskToolResultDetails`, task projection semantics, subagent policy mapping) into `@pi-ohm/core`.
+
+## 10) Prompt-profile routing contract (rollout hardening)
+
+- Selection precedence is fixed and deterministic:
+  1. active runtime model
+  2. explicit subagent model override (`ohm.json`)
+  3. scoped model catalog (`settings.json` `enabledModels`)
+  4. generic fallback
+- Provider/profile matching is rule-driven from `ohm.providers.json`
+  (`subagents.promptProfiles.rules`) with fail-soft fallback to default rules.
+- Config-only provider additions are supported by mapping new provider/model tokens to existing
+  profile packs (`anthropic|openai|google|moonshot`) without router changes.
+- Runtime task payloads may include debug-safe profile observability fields:
+  `prompt_profile`, `prompt_profile_source`, `prompt_profile_reason`.
+- Prompt-profile trace rendering is opt-in (`OHM_DEBUG=true`) and never emits full system prompt text.
+
+### Migration direction
+
+- Prefer config-driven prompt profile rules over static/env matcher logic.
+- Keep model truth sourced from runtime session + Pi settings catalog.
+- Treat provider onboarding as:
+  1. add rule(s) in `ohm.providers.json`,
+  2. verify selection diagnostics,
+  3. only then consider new code-level profile packs.
+
+## 11) Task toolkit contract
+
+- Keep operation handlers focused on domain decisions and task-store transitions.
+- Keep generic transport concerns in `@pi-ohm/core/toolkit`, then adapt them in subagents:
+  - lookup normalization (`TaskRuntimeLookup -> Result<TaskRuntimeSnapshot, TaskToolResultDetails>`)
+  - result materialization (`TaskToolResultDetails -> AgentToolResult<TaskToolResultDetails>`)
+  - runtime/UI emission (`emitTaskRuntimeUpdate`)
+- Continue to model recoverable failures as `better-result` values end-to-end.
+- Keep task-specific error/detail shaping in subagents so cross-package kernel APIs remain domain-agnostic.

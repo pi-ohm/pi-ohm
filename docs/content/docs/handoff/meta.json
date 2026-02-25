@@ -1,0 +1,7 @@
+{
+  "title": "Handoff",
+  "description": "",
+  "icon": "Handshake",
+  "root": true,
+  "pages": ["index"]
+}

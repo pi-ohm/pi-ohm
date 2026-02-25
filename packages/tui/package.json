@@ -1,0 +1,46 @@
+{
+  "name": "@pi-ohm/tui",
+  "version": "0.6.4",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/tui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/tui"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "catalog:pi",
+    "@mariozechner/pi-tui": "catalog:pi"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
+  },
+  "tsdown": {
+    "entry": {
+      "extension": "src/extension.ts",
+      "index": "src/index.ts"
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  }
+}

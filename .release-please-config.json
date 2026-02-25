@@ -15,9 +15,11 @@
       "groupName": "pi-ohm-lockstep",
       "components": [
         "config",
+        "core",
         "modes",
         "handoff",
         "subagents",
+        "tui",
         "session-search",
         "painter",
         "pi-ohm"
@@ -28,6 +30,11 @@
     "packages/config": {
       "component": "config",
       "package-name": "@pi-ohm/config",
+      "skip-github-release": true
+    },
+    "packages/core": {
+      "component": "core",
+      "package-name": "@pi-ohm/core",
       "skip-github-release": true
     },
     "packages/modes": {
@@ -43,6 +50,11 @@
     "packages/subagents": {
       "component": "subagents",
       "package-name": "@pi-ohm/subagents",
+      "skip-github-release": true
+    },
+    "packages/tui": {
+      "component": "tui",
+      "package-name": "@pi-ohm/tui",
       "skip-github-release": true
     },
     "packages/session-search": {

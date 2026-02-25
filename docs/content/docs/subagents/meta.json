@@ -1,0 +1,7 @@
+{
+  "title": "Subagents",
+  "description": "",
+  "icon": "Superscript",
+  "root": true,
+  "pages": ["index"]
+}

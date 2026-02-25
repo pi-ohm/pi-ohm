@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/subagents",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/subagents#readme",
   "repository": {
     "type": "git",
@@ -8,26 +8,50 @@
     "directory": "packages/subagents"
   },
   "files": [
-    "src/",
+    "dist/",
+    "src/runtime/backend/prompts/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/extension.ts",
-  "types": "src/extension.ts",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/config": "workspace:*",
+    "@pi-ohm/core": "workspace:*",
+    "@pi-ohm/tui": "workspace:*",
+    "better-result": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@mariozechner/pi-tui": {
+      "optional": true
+    },
+    "@sinclair/typebox": {
+      "optional": true
+    }
+  },
+  "tsdown": {
+    "entry": "src/extension.ts"
   },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./dist/extension.js"
     ]
   }
 }

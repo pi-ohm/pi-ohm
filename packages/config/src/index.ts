@@ -7,42 +7,28 @@ import {
   setSetting,
   type SettingDefinition,
 } from "@juanibiapina/pi-extension-settings";
+import { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
+import { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
+import {
+  DEFAULT_OHM_PAINTER_PROVIDERS,
+  mergeOhmPainterProviders,
+  type OhmPainterProviders,
+} from "./painter";
+import {
+  DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
+  mergeSubagentRuntimeConfig,
+  type OhmSubagentRuntimeConfig,
+} from "./subagents";
 
 export const OHM_EXTENSION_NAME = "pi-ohm";
-
-export type OhmMode = "rush" | "smart" | "deep";
-export type OhmSubagentBackend = "none" | "interactive-shell" | "custom-plugin";
-
-export interface OhmFeatureFlags {
-  handoff: boolean;
-  subagents: boolean;
-  sessionThreadSearch: boolean;
-  handoffVisualizer: boolean;
-  painterImagegen: boolean;
-}
-
-export interface OhmPainterProviders {
-  googleNanoBanana: {
-    enabled: boolean;
-    model: string;
-  };
-  openai: {
-    enabled: boolean;
-    model: string;
-  };
-  azureOpenai: {
-    enabled: boolean;
-    deployment: string;
-    endpoint: string;
-    apiVersion: string;
-  };
-}
+export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
 
 export interface OhmRuntimeConfig {
   defaultMode: OhmMode;
   subagentBackend: OhmSubagentBackend;
   features: OhmFeatureFlags;
   painter: OhmPainterProviders;
+  subagents?: OhmSubagentRuntimeConfig;
 }
 
 export interface OhmConfigPaths {
@@ -59,34 +45,18 @@ export interface LoadedOhmRuntimeConfig {
 }
 
 const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
-  defaultMode: "smart",
-  subagentBackend: "interactive-shell",
-  features: {
-    handoff: true,
-    subagents: true,
-    sessionThreadSearch: true,
-    handoffVisualizer: true,
-    painterImagegen: true,
-  },
-  painter: {
-    googleNanoBanana: {
-      enabled: true,
-      model: "gemini-2.5-flash-image-preview",
-    },
-    openai: {
-      enabled: true,
-      model: "gpt-image-1",
-    },
-    azureOpenai: {
-      enabled: false,
-      deployment: "",
-      endpoint: "",
-      apiVersion: "2025-04-01-preview",
-    },
-  },
+  defaultMode: DEFAULT_OHM_MODE,
+  subagentBackend: "interactive-sdk",
+  features: DEFAULT_OHM_FEATURE_FLAGS,
+  painter: DEFAULT_OHM_PAINTER_PROVIDERS,
+  subagents: DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
 };
 
 type JsonMap = Record<string, unknown>;
+
+function isJsonMap(value: unknown): value is JsonMap {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function expandHome(value: string): string {
   if (value === "~") return os.homedir();
@@ -118,11 +88,9 @@ export function resolveOhmConfigPaths(cwd: string): OhmConfigPaths {
 async function readJsonFile(filePath: string): Promise<JsonMap | null> {
   try {
     const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return null;
-    }
-    return parsed as JsonMap;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isJsonMap(parsed)) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -138,16 +106,18 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-function normalizeMode(value: unknown, fallback: OhmMode): OhmMode {
-  if (value === "rush" || value === "smart" || value === "deep") return value;
-  return fallback;
-}
-
 function normalizeSubagentBackend(
   value: unknown,
   fallback: OhmSubagentBackend,
 ): OhmSubagentBackend {
-  if (value === "none" || value === "interactive-shell" || value === "custom-plugin") return value;
+  if (
+    value === "none" ||
+    value === "interactive-shell" ||
+    value === "interactive-sdk" ||
+    value === "custom-plugin"
+  ) {
+    return value;
+  }
   return fallback;
 }
 
@@ -159,78 +129,16 @@ function normalizeString(value: unknown, fallback: string): string {
 function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
   const next: OhmRuntimeConfig = structuredClone(base);
 
-  next.defaultMode = normalizeMode(patch.defaultMode, next.defaultMode);
+  next.defaultMode = normalizeOhmMode(patch.defaultMode, next.defaultMode);
   next.subagentBackend = normalizeSubagentBackend(patch.subagentBackend, next.subagentBackend);
 
-  const featurePatch = (
-    patch.features && typeof patch.features === "object" ? (patch.features as JsonMap) : {}
-  ) as JsonMap;
+  next.features = mergeOhmFeatureFlags(next.features, patch.features);
+  next.painter = mergeOhmPainterProviders(next.painter, patch.painter);
 
-  next.features.handoff = normalizeBoolean(featurePatch.handoff, next.features.handoff);
-  next.features.subagents = normalizeBoolean(featurePatch.subagents, next.features.subagents);
-  next.features.sessionThreadSearch = normalizeBoolean(
-    featurePatch.sessionThreadSearch,
-    next.features.sessionThreadSearch,
-  );
-  next.features.handoffVisualizer = normalizeBoolean(
-    featurePatch.handoffVisualizer,
-    next.features.handoffVisualizer,
-  );
-  next.features.painterImagegen = normalizeBoolean(
-    featurePatch.painterImagegen,
-    next.features.painterImagegen,
-  );
-
-  const painterPatch = (
-    patch.painter && typeof patch.painter === "object" ? (patch.painter as JsonMap) : {}
-  ) as JsonMap;
-
-  const googlePatch = (
-    painterPatch.googleNanoBanana && typeof painterPatch.googleNanoBanana === "object"
-      ? (painterPatch.googleNanoBanana as JsonMap)
-      : {}
-  ) as JsonMap;
-
-  const openaiPatch = (
-    painterPatch.openai && typeof painterPatch.openai === "object"
-      ? (painterPatch.openai as JsonMap)
-      : {}
-  ) as JsonMap;
-
-  const azurePatch = (
-    painterPatch.azureOpenai && typeof painterPatch.azureOpenai === "object"
-      ? (painterPatch.azureOpenai as JsonMap)
-      : {}
-  ) as JsonMap;
-
-  next.painter.googleNanoBanana.enabled = normalizeBoolean(
-    googlePatch.enabled,
-    next.painter.googleNanoBanana.enabled,
-  );
-  next.painter.googleNanoBanana.model = normalizeString(
-    googlePatch.model,
-    next.painter.googleNanoBanana.model,
-  );
-
-  next.painter.openai.enabled = normalizeBoolean(openaiPatch.enabled, next.painter.openai.enabled);
-  next.painter.openai.model = normalizeString(openaiPatch.model, next.painter.openai.model);
-
-  next.painter.azureOpenai.enabled = normalizeBoolean(
-    azurePatch.enabled,
-    next.painter.azureOpenai.enabled,
-  );
-  next.painter.azureOpenai.deployment = normalizeString(
-    azurePatch.deployment,
-    next.painter.azureOpenai.deployment,
-  );
-  next.painter.azureOpenai.endpoint = normalizeString(
-    azurePatch.endpoint,
-    next.painter.azureOpenai.endpoint,
-  );
-  next.painter.azureOpenai.apiVersion = normalizeString(
-    azurePatch.apiVersion,
-    next.painter.azureOpenai.apiVersion,
-  );
+  next.subagents = mergeSubagentRuntimeConfig({
+    current: next.subagents,
+    patch: patch.subagents,
+  });
 
   return next;
 }
@@ -238,7 +146,7 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
 function applyExtensionSettings(config: OhmRuntimeConfig): OhmRuntimeConfig {
   const next = structuredClone(config);
 
-  next.defaultMode = normalizeMode(
+  next.defaultMode = normalizeOhmMode(
     getSetting(OHM_EXTENSION_NAME, "default-mode", next.defaultMode),
     next.defaultMode,
   );
@@ -395,7 +303,7 @@ export function registerOhmSettings(pi: ExtensionAPI): void {
       label: "Subagent Backend",
       description: "How Pi Ohm should delegate subagents",
       defaultValue: DEFAULT_OHM_CONFIG.subagentBackend,
-      values: ["interactive-shell", "custom-plugin", "none"],
+      values: ["interactive-shell", "interactive-sdk", "custom-plugin", "none"],
     },
     {
       id: "feature-handoff",
@@ -489,3 +397,38 @@ export function setOhmSetting(settingId: string, value: string): void {
 export function getDefaultOhmConfig(): OhmRuntimeConfig {
   return structuredClone(DEFAULT_OHM_CONFIG);
 }
+
+export { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
+export { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
+export {
+  DEFAULT_OHM_PAINTER_PROVIDERS,
+  mergeOhmPainterProviders,
+  type OhmPainterProviders,
+} from "./painter";
+
+export {
+  DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
+  getSubagentConfiguredModel,
+  getSubagentProfileRuntimeConfig,
+  mergeSubagentRuntimeConfig,
+  resolveSubagentProfileRuntimeConfig,
+  resolveSubagentVariantPattern,
+  type OhmSubagentProfileRuntimeConfig,
+  type OhmSubagentProfileVariantRuntimeConfig,
+  type OhmSubagentRuntimeConfig,
+  type OhmSubagentToolPermissionDecision,
+  type ResolvedOhmSubagentProfileRuntimeConfig,
+} from "./subagents";
+
+export {
+  parseSubagentProfilePatch,
+  parseSubagentProfileVariantPatch,
+  SubagentProfilePatchSchema,
+  SubagentProfileVariantMapPatchSchema,
+  SubagentProfileVariantPatchSchema,
+  SubagentToolPermissionDecisionSchema,
+  SubagentToolPermissionMapSchema,
+  type SubagentProfilePatch,
+  type SubagentProfileVariantPatch,
+  type SubagentToolPermissionDecisionPatch,
+} from "./subagents";

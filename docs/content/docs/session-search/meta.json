@@ -1,0 +1,7 @@
+{
+  "title": "Session Search",
+  "description": "",
+  "icon": "Search",
+  "root": true,
+  "pages": ["index"]
+}

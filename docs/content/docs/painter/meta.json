@@ -1,0 +1,7 @@
+{
+  "title": "Painter",
+  "description": "",
+  "icon": "PaintRoller",
+  "root": true,
+  "pages": ["index"]
+}

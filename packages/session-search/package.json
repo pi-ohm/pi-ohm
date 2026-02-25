@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/session-search",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/session-search#readme",
   "repository": {
     "type": "git",
@@ -8,12 +8,18 @@
     "directory": "packages/session-search"
   },
   "files": [
-    "src/",
+    "dist/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/extension.ts",
-  "types": "src/extension.ts",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -25,9 +31,12 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
+  "tsdown": {
+    "entry": "src/extension.ts"
+  },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./dist/extension.js"
     ]
   }
 }

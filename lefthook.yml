@@ -16,6 +16,9 @@ pre-commit:
       run: yarn oxlint -- --fix {staged_files}
       stage_fixed: true
 
+    typecheck:
+      run: yarn typecheck
+
 pre-push:
   parallel: true
   commands:
