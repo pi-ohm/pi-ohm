@@ -20,23 +20,82 @@ pi -e npm:@pi-ohm/subagents
 
 ## Configuration
 
+```json title=".pi/ohm.json" tab="Custom agents"
+{
+  "$schema": "https://ohm.moe/schema/subagents.json",
+  "subagents": {
+    "my-agent": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/my-custom-agent.general.txt}", // inherits unless overridden
+      "permissions": {
+        "bash": "deny",
+      },
+      "whenToUse": [
+        "...",
+        "..."
+      ],
+      "whenNotToUse": [
+        "...",
+        "..."
+      ],
+      "examples": [
+        "...",
+        "..."
+      ]
+    }
+  }
+}
+```
+```json title=".pi/ohm.json" tab="Variants"
+{
+  "$schema": "https://ohm.moe/schema/subagents.json",
+  "subagents": {
+    "my-agent": {
+      "model": "openai/gpt-5.3-codex:medium",
+      "prompt": "{file:./prompts/my-agent.general.txt}",
+      "variants": {
+        "*gemini*": {
+          "model": "github-copilot/gemini-3.1-pro-preview:high",
+          "prompt": "{file:./prompts/my-agent.gemini.txt}",
+          "description": "...",
+          "permissions": {
+            "bash": "deny",
+            "edit": "deny",
+            "apply_patch": "deny",
+          },
+          "whenToUse": ["...", "..."],
+        },
+        "*claude*": {
+          "model": "anthropic/claude-2",
+          "prompt": "{file:./prompts/my-agent.claude.txt}",
+          "description": "...",
+          "permissions": {
+            "bash": "allow",
+            "edit": "deny",
+            "apply_patch": "deny",
+          },
+          "permissions": {
+            "bash": "deny",
+          },
+          "whenToUse": ["...", "..."],
+        }
+      }
+    }
+  }
+}
+```
 ```json title=".pi/ohm.json" tab="Built-ins"
 {
   "$schema": "https://ohm.moe/schema/subagents.json",
   "subagents": {
     "librarian": {
       "model": "openai/gpt-5.3-codex:medium",
-      "prompt": "{file:/path/to/prompt.txt}" // optional fields:
     },
     "oracle": {
       "model": "openai/gpt-5.2:high",
-      // optional fields:
-      "prompt": "{file:/path/to/prompt.txt}"
     },
     "finder": {
       "model": "google/gemini-3-flash-preview",
-      // optional fields:
-      "prompt": "{file:/path/to/prompt.txt}"
     }
   }
 }

@@ -13,8 +13,8 @@ export default defineConfig({
   mdxOptions: {
     rehypeCodeOptions: {
       themes: {
-        light: "everforest-light",
-        dark: "everforest-dark",
+        light: "vitesse-light",
+        dark: "vitesse-dark",
       },
     },
   },
