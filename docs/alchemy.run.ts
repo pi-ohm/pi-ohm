@@ -27,7 +27,7 @@ const stage = resolveStage();
 const domain = resolveDomain(stage);
 
 const docsRoute = domain ? `${domain}/*` : undefined;
-const schemaRoute = domain ? `${domain}/api/schema*` : undefined;
+const schemaRoute = domain ? `${domain}/schema*` : undefined;
 const useRouteMode = docsRoute !== undefined && schemaRoute !== undefined;
 
 const app = await alchemy("pi-ohm-docs", {

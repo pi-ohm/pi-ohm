@@ -102,14 +102,13 @@ function toKey(value: string): Key | undefined {
   return undefined;
 }
 
-function parse(value: string | null): { keys: Key[] } | { error: string } {
-  if (value === null) return { error: "missing schema query param" };
+function parseList(value: string): { keys: Key[] } | { error: string } {
   const list = value
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter((item) => item.length > 0);
 
-  if (list.length === 0) return { error: "empty schema query param" };
+  if (list.length === 0) return { error: "empty schema selector" };
   if (list.includes("all")) return { keys: [...keys] };
 
   const values = list.reduce<Key[] | undefined>((acc, item) => {
@@ -120,8 +119,28 @@ function parse(value: string | null): { keys: Key[] } | { error: string } {
     return [...acc, key];
   }, []);
 
-  if (!values) return { error: "invalid schema query param value" };
+  if (!values) return { error: "invalid schema selector value" };
   return { keys: values };
+}
+
+function parsePath(pathname: string): { keys: Key[] } | { error: string } {
+  const path = pathname.trim().toLowerCase();
+
+  if (path === "/schema" || path === "/schema/" || path === "/schema.json") {
+    return { keys: [...keys] };
+  }
+
+  if (!path.startsWith("/schema/")) {
+    return { error: "invalid path" };
+  }
+
+  const raw = path.slice("/schema/".length).trim();
+  if (raw.length === 0) return { keys: [...keys] };
+
+  const value = raw.endsWith(".json") ? raw.slice(0, -".json".length) : raw;
+  if (value === "all") return { keys: [...keys] };
+
+  return parseList(value);
 }
 
 function corsHeaders(): Headers {
@@ -176,12 +195,12 @@ export default {
     }
 
     const url = new URL(request.url);
-    const parsed = parse(url.searchParams.get("schema"));
+    const parsed = parsePath(url.pathname);
     if ("error" in parsed) {
       return json(
         {
           error: parsed.error,
-          usage: "/api/schema?schema=subagents,modes or /api/schema?schema=all",
+          usage: "/schema/subagents,modes or /schema/all or /schema.json",
           available: [...keys],
         },
         { status: 400 },
