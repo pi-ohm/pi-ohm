@@ -138,9 +138,10 @@ function parsePath(pathname: string): { keys: Key[] } | { error: string } {
   if (raw.length === 0) return { keys: [...keys] };
 
   const value = raw.endsWith(".json") ? raw.slice(0, -".json".length) : raw;
-  if (value === "all") return { keys: [...keys] };
+  const decoded = value.replaceAll("%2c", ",");
+  if (decoded === "all") return { keys: [...keys] };
 
-  return parseList(value);
+  return parseList(decoded);
 }
 
 function corsHeaders(): Headers {

@@ -25,10 +25,7 @@ function resolveDomain(stage: string): string | undefined {
 
 const stage = resolveStage();
 const domain = resolveDomain(stage);
-
-const docsRoute = domain ? `${domain}/*` : undefined;
 const schemaRoute = domain ? `${domain}/schema*` : undefined;
-const useRouteMode = docsRoute !== undefined && schemaRoute !== undefined;
 
 const app = await alchemy("pi-ohm-docs", {
   stage,
@@ -41,7 +38,7 @@ export const schema = await Worker("schema", {
   entrypoint: "src/workers/schema.ts",
   compatibility: "node",
   url: true,
-  routes: useRouteMode && schemaRoute ? [schemaRoute] : undefined,
+  routes: schemaRoute ? [schemaRoute] : undefined,
 });
 
 export const docs = await Vite("docs", {
@@ -50,8 +47,7 @@ export const docs = await Vite("docs", {
   assets: ".output/public",
   compatibility: "node",
   spa: true,
-  domains: useRouteMode ? undefined : domain ? [domain] : undefined,
-  routes: useRouteMode && docsRoute ? [docsRoute] : undefined,
+  domains: domain ? [domain] : undefined,
   url: domain ? false : true,
 });
 
@@ -60,8 +56,7 @@ console.log({
   domain: domain ?? "workers.dev",
   docsUrl: docs.url,
   schemaUrl: schema.url,
-  schemaRoute: useRouteMode ? schemaRoute : undefined,
-  routeMode: useRouteMode,
+  schemaRoute: schemaRoute ?? undefined,
 });
 
 await app.finalize();
