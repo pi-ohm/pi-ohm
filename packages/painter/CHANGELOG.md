@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.6.5](https://github.com/pi-ohm/pi-ohm/compare/painter-v0.6.4...painter-v0.6.5) (2026-02-25)
+
+
+### Features
+
+* changesets/publishing ([b82da81](https://github.com/pi-ohm/pi-ohm/commit/b82da81f08f4060ad9cd729af47b15c4117e4ab1))
+* rename packages ([b00bb7a](https://github.com/pi-ohm/pi-ohm/commit/b00bb7a9206ac72b401a2eb32723adda59b9b847))
+* **repo,core,config,modes,handoff,subagents,session-search,painter,tui,pi-ohm:** migrate publish pipeline to tsdown dist artifacts ([0e8e307](https://github.com/pi-ohm/pi-ohm/commit/0e8e307ed19938965d1e5bd535eb8eccf7aa9b98))
+
+
+### Bug Fixes
+
+* add repository metadata to publishable packages ([9e7bb43](https://github.com/pi-ohm/pi-ohm/commit/9e7bb435ccaa14fdd0e70326e9b000b7222e3c6b))
+* add repository metadata to publishable packages ([dc791ad](https://github.com/pi-ohm/pi-ohm/commit/dc791ade07e565fc297e398b367cd1cb4b13f2d8))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.5
+
 ## [0.6.4](https://github.com/pi-ohm/pi-ohm/compare/painter-v0.6.3...painter-v0.6.4) (2026-02-18)
 
 ### Features
