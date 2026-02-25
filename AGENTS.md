@@ -10,80 +10,49 @@
 
 This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
 
-- `packages/config` → shared tui, mostly composites from @mariozechner/pi-tui / https://github.com/badlogic/pi-mono/tree/main/packages/tui
-- `packages/config` → shared config/settings helpers
-- `packages/core` → shared runtime primitives (errors, grammar, paths)
-- `packages/db` → internal sqlite/turso-backed state + subagent session storage
-- `packages/modes` → `@pi-ohm/modes` (rush/smart/deep controls)
-- `packages/handoff` → handoff + handoff visualizer
-- `packages/subagents` → subagent delegation
-- `packages/session-search` → session/thread search
-- `packages/painter` → image generation providers
-- `packages/extension` → `pi-ohm` bundle package registering all features
-- `scripts/publish-packages.ts` → publish helper used by CI workflows
-- `src_legacy` → preserved full catalog/reference (**do not delete**)
+## Writing code in this repo
+
+you should uphold these standards whenever you write code in this repo:
+
+```
+**Why pi-ohm?**
+
+1. opinionated: you're always using the good parts of pi-ohm. If we don't use and love a feature, we kill it.
+2. on the frontier: pi-ohm goes where the models take it. no backcompat, no legacy features.
+```
 
 ## Rules
 
-1. Keep `src_legacy` intact as historical/reference material.
-2. New work goes in `packages/*` (feature package per capability).
-3. Keep command namespace under `ohm-*`.
-4. Register settings via `@juanibiapina/pi-extension-settings`.
-5. Support config in:
+1. New work goes in `packages/*` (feature package per capability).
+2. Keep command namespace under `ohm-*`.
+3. Register settings via `@juanibiapina/pi-extension-settings`.
+4. Support config in:
    - `.pi/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
-6. Use Yarn commands (`yarn install`, `yarn typecheck`) instead of npm.
-7. Branch model: `dev` is integration + release-prep; `prod` is promotion/stable publish branch.
-8. Versioning/changelog automation is release-please (not changesets).
-9. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).
-10. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
-
-## Conventional Commits
-
-- Scope is required for all conventional commits.
-- Multiple scopes are allowed with commas, e.g. `fix(session,subagents): ...`.
-- Commit messages must be technical and descriptive: avoid planning labels/terminology (for example, avoid references to "sprint" in commit titles/bodies).
-- Commit messages must include a non-empty body that explains the concrete implementation details, major file/module changes, and verification performed.
-- Prefer longer, explicit commit bodies over terse one-line summaries.
-
-### Scope usage guide
-
-**Allowed scopes:**
-
-- `config`: changes in `packages/config` (settings, config loading, path/env resolution).
-- `modes`: changes in `packages/modes` (rush/smart/deep behavior, mode commands).
-- `handoff`: changes in `packages/handoff` (handoff commands, visualizer logic).
-- `subagents`: changes in `packages/subagents` (catalog, selection, delegation behavior).
-- `session-search` / `session`: changes in `packages/session-search`.
-- `painter`: changes in `packages/painter` (image providers, model routing, painter commands).
-- `pi-ohm`: changes in `packages/extension` (bundle wiring/manifest).
-- `extension`: alias for `pi-ohm` scope (same meaning; bundle wiring/manifest).
-- `ohm`: cross-feature user-facing behavior affecting multiple feature packages.
-- `docs`: documentation-only changes (README, AGENTS, contributing/release docs).
-- `deps`: dependency-only updates (versions, lockfile, dependency policy).
-- `release`: release automation/config/versioning process changes.
-- `repo`: CI/workflows, release automation, scripts, tooling, non-package infra.
-- `root`: broad repo-level refactors when no better scope fits.
-
-### Multi-scope commits
-
-- Use comma-separated scopes for cross-package commits: `fix(session,subagents): ...`.
-- Prefer explicit package scopes over `repo`/`root` when possible.
-- For changelog attribution, commit scope should match touched package paths.
+5. Use Yarn commands (`yarn install`, `yarn test`) instead of npm.
+6. Branch model: `dev` is integration + release-prep; `prod` is promotion/stable publish branch.
+7. Versioning/changelog automation is release-please (not changesets).
+8. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).
+9. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
 
 ## Packaging goal
 
-Each feature package should be installable by itself through npm:
+Each feature package should be installable by itself through npm, which is the Pi's means of distribution:
+
+amp features:
 
 - `@pi-ohm/handoff`
-- `@pi-ohm/core`
 - `@pi-ohm/subagents`
 - `@pi-ohm/session-search`
 - `@pi-ohm/painter`
 - `@pi-ohm/modes`
-- `@pi-ohm/config`
+
+helpers:
+
 - `@pi-ohm/tui`
+- `@pi-ohm/config`
+- `@pi-ohm/core`
 
 Full bundle package:
 
@@ -91,11 +60,9 @@ Full bundle package:
 
 ## Testing Framework
 
-You should often write failing tests for implementations prior to actually implementing them.
-
-If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
-
-Tests should live in test files alongside the files that you're testing.
+1. **You should write failing tests before implementing features.**
+2. If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
+3. Tests should live in test folders alongside the files that you're testing (e.g., `packages/tui/src/extension.ts` has tests in `packages/tui/src/tests/extension.test.ts`).
 
 ## TODO.md & ARCH.md
 
