@@ -14,11 +14,11 @@ export function baseOptions(): BaseLayoutProps {
       title: (
         <>
           <span className="inline-flex items-center overflow-hidden rounded-sm">
-            <img src={lightLogo} alt="pi-ohm" className="h-6 w-auto object-contain dark:hidden" />
+            <img src={lightLogo} alt="pi-ohm" className="h-9 w-auto object-contain dark:hidden" />
             <img
               src={darkLogo}
               alt="pi-ohm"
-              className="hidden h-6 w-auto object-contain dark:block"
+              className="hidden h-9 w-auto object-contain dark:block"
             />
           </span>
           <span className="sr-only">pi-ohm</span>
