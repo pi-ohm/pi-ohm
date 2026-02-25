@@ -28,24 +28,16 @@ pi -e npm:@pi-ohm/subagents
       "model": "openai/gpt-5.3-codex:medium",
       "prompt": "{file:./prompts/my-custom-agent.general.txt}", // inherits unless overridden
       "permissions": {
-        "bash": "deny",
+        "bash": "deny"
       },
-      "whenToUse": [
-        "...",
-        "..."
-      ],
-      "whenNotToUse": [
-        "...",
-        "..."
-      ],
-      "examples": [
-        "...",
-        "..."
-      ]
+      "whenToUse": ["...", "..."],
+      "whenNotToUse": ["...", "..."],
+      "examples": ["...", "..."]
     }
   }
 }
 ```
+
 ```json title=".pi/ohm.json" tab="Variants"
 {
   "$schema": "https://ohm.moe/schema/subagents.json",
@@ -61,9 +53,9 @@ pi -e npm:@pi-ohm/subagents
           "permissions": {
             "bash": "deny",
             "edit": "deny",
-            "apply_patch": "deny",
+            "apply_patch": "deny"
           },
-          "whenToUse": ["...", "..."],
+          "whenToUse": ["...", "..."]
         },
         "*claude*": {
           "model": "anthropic/claude-2",
@@ -72,30 +64,31 @@ pi -e npm:@pi-ohm/subagents
           "permissions": {
             "bash": "allow",
             "edit": "deny",
-            "apply_patch": "deny",
+            "apply_patch": "deny"
           },
           "permissions": {
-            "bash": "deny",
+            "bash": "deny"
           },
-          "whenToUse": ["...", "..."],
+          "whenToUse": ["...", "..."]
         }
       }
     }
   }
 }
 ```
+
 ```json title=".pi/ohm.json" tab="Built-ins"
 {
   "$schema": "https://ohm.moe/schema/subagents.json",
   "subagents": {
     "librarian": {
-      "model": "openai/gpt-5.3-codex:medium",
+      "model": "openai/gpt-5.3-codex:medium"
     },
     "oracle": {
-      "model": "openai/gpt-5.2:high",
+      "model": "openai/gpt-5.2:high"
     },
     "finder": {
-      "model": "google/gemini-3-flash-preview",
+      "model": "google/gemini-3-flash-preview"
     }
   }
 }
