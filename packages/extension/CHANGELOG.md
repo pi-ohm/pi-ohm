@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.5](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.4...pi-ohm-v0.6.5) (2026-02-25)
+
+
+### Features
+
+* **repo,core,config,modes,handoff,subagents,session-search,painter,tui,pi-ohm:** migrate publish pipeline to tsdown dist artifacts ([0e8e307](https://github.com/pi-ohm/pi-ohm/commit/0e8e307ed19938965d1e5bd535eb8eccf7aa9b98))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/config bumped to 0.6.5
+    * @pi-ohm/handoff bumped to 0.6.5
+    * @pi-ohm/modes bumped to 0.6.5
+    * @pi-ohm/painter bumped to 0.6.5
+    * @pi-ohm/session-search bumped to 0.6.5
+    * @pi-ohm/subagents bumped to 0.6.5
+
 ## [0.6.4](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.3...pi-ohm-v0.6.4) (2026-02-18)
 
 ### Miscellaneous Chores
