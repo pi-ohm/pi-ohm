@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "@fontsource/kanit/400.css";
+@import "@fontsource/kanit/500.css";
+@import "@fontsource/kanit/600.css";
+@import "@fontsource/kanit/700.css";
+@import "@fontsource/kanit/400-italic.css";
 @import "@fontsource/sorts-mill-goudy/400.css";
 @import "@fontsource/sorts-mill-goudy/400-italic.css";
 @import "@fontsource/iosevka-curly/400.css";
@@ -8,6 +13,10 @@
 @import "fumadocs-ui/css/preset.css";
 
 :root {
+  --font-sans:
+    "Kanit", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --default-font-family: var(--font-sans);
   --font-heading: "Sorts Mill Goudy", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
   --font-mono:
     "Iosevka Curly", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
