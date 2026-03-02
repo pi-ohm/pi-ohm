@@ -104,24 +104,24 @@ function resolveModelItemResultText(item: TaskToolItemDetails): string {
     return item.error_message ?? item.summary;
   }
 
-  const assistantText = item.assistant_text?.trim();
-  if (assistantText && assistantText.length > 0) return assistantText;
-
   const outputNarrative =
     item.output_available && item.output ? extractNarrativeResult(item.output) : undefined;
   if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
+
+  const assistantText = item.assistant_text?.trim();
+  if (assistantText && assistantText.length > 0) return assistantText;
 
   if (item.error_message && item.error_message.length > 0) return item.error_message;
   return item.summary;
 }
 
 function resolveModelResultText(details: TaskToolResultDetails): string {
-  const assistantText = details.assistant_text?.trim();
-  if (assistantText && assistantText.length > 0) return assistantText;
-
   const outputNarrative =
     details.output_available && details.output ? extractNarrativeResult(details.output) : undefined;
   if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
+
+  const assistantText = details.assistant_text?.trim();
+  if (assistantText && assistantText.length > 0) return assistantText;
 
   if (details.items && details.items.length === 1) {
     const [item] = details.items;
@@ -567,6 +567,18 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (details.error_code) lines.push(`error_code: ${details.error_code}`);
   if (details.error_category) lines.push(`error_category: ${details.error_category}`);
   if (details.error_message) lines.push(`error_message: ${details.error_message}`);
+  if (typeof details.result_chars_total === "number") {
+    lines.push(`result_chars_total: ${details.result_chars_total}`);
+  }
+  if (typeof details.result_chars_to_agent === "number") {
+    lines.push(`result_chars_to_agent: ${details.result_chars_to_agent}`);
+  }
+  if (typeof details.result_chars_to_ui === "number") {
+    lines.push(`result_chars_to_ui: ${details.result_chars_to_ui}`);
+  }
+  if (typeof details.ui_truncated === "boolean") {
+    lines.push(`ui_truncated: ${details.ui_truncated ? "true" : "false"}`);
+  }
   if (typeof details.event_count === "number") lines.push(`event_count: ${details.event_count}`);
   if (details.assistant_text) lines.push(`assistant_text: ${details.assistant_text}`);
   if (details.timed_out) lines.push("timed_out: true");
@@ -817,10 +829,22 @@ export function toAgentToolResult(
       items: normalizedItems,
     }),
   );
+  const modelContent = formatTaskToolModelContent(normalizedDetails);
+  const uiContent = detailsToText(normalizedDetails, false);
+  const resultCharsTotal = modelContent.length;
+  const resultCharsToAgent = modelContent.length;
+  const resultCharsToUi = uiContent.length;
+  const detailsWithTelemetry: TaskToolResultDetails = {
+    ...normalizedDetails,
+    result_chars_total: resultCharsTotal,
+    result_chars_to_agent: resultCharsToAgent,
+    result_chars_to_ui: resultCharsToUi,
+    ui_truncated: resultCharsToUi < resultCharsTotal,
+  };
 
   return {
-    content: [{ type: "text", text: formatTaskToolModelContent(normalizedDetails) }],
-    details: normalizedDetails,
+    content: [{ type: "text", text: modelContent }],
+    details: detailsWithTelemetry,
   };
 }
 

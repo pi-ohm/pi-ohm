@@ -39,6 +39,23 @@ function stripAnsi(value: string): string {
     .join("");
 }
 
+function buildLineRange(start: number, end: number): string {
+  return Array.from({ length: end - start + 1 }, (_unused, index) => {
+    const value = start + index;
+    return `LINE ${String(value).padStart(3, "0")}`;
+  }).join("\n");
+}
+
+function getToolResultText(result: AgentToolResult<TaskToolResultDetails>): string {
+  const textBlock = result.content.find((part) => part.type === "text");
+  assert.notEqual(textBlock, undefined);
+  if (!textBlock || textBlock.type !== "text") {
+    assert.fail("Expected text content block");
+  }
+
+  return textBlock.text;
+}
+
 interface RenderablePrimaryToolDefinition {
   readonly renderResult: (
     result: AgentToolResult<TaskToolResultDetails>,
@@ -235,6 +252,68 @@ defineTest("runPrimarySubagentTool librarian accepts query + context payload", a
   assert.match(result.details.output ?? "", /Context:/);
   assert.match(result.details.output ?? "", /monorepo boundaries/);
 });
+
+defineTest(
+  "runPrimarySubagentTool keeps full model payload when assistant events only include a tail fragment",
+  async () => {
+    const fullOutput = buildLineRange(1, 220);
+    const tailFragment = `${buildLineRange(191, 220)}\n\`\`\``;
+
+    const deps = makeTaskDeps({
+      backend: {
+        id: "primary-tail-fragment-backend",
+        async executeStart() {
+          const now = Date.now();
+          return Result.ok({
+            summary: "Librarian: long output",
+            output: fullOutput,
+            events: [
+              {
+                type: "assistant_text_delta",
+                delta: tailFragment,
+                atEpochMs: now,
+              },
+              {
+                type: "task_terminal",
+                terminal: "agent_end",
+                atEpochMs: now + 1,
+              },
+            ],
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Librarian follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const result = await runPrimarySubagentTool({
+      subagent: librarianFixture,
+      params: {
+        query: "Output LINE 001 through LINE 220",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      hasUI: false,
+      ui: undefined,
+      deps,
+    });
+
+    const text = getToolResultText(result);
+    const resultBlock = text.split("result:\n")[1] ?? "";
+    const firstResultLine = resultBlock.split("\n")[0] ?? "";
+
+    assert.equal(firstResultLine, "LINE 001");
+    assert.match(resultBlock, /LINE 220/);
+    assert.doesNotMatch(resultBlock, /```/);
+    assert.equal(Reflect.get(result.details, "assistant_text"), tailFragment);
+    assert.equal(Reflect.get(result.details, "result_chars_to_agent"), text.length);
+  },
+);
 
 defineTest("runPrimarySubagentTool oracle accepts task + context + files payload", async () => {
   const deps = makeTaskDeps();
@@ -501,6 +580,7 @@ defineTest("registerPrimarySubagentTools renderResult respects expanded toggle",
     content: [{ type: "text", text: "done" }],
     details,
   };
+  const modelPayloadBefore = getToolResultText(result);
 
   const collapsed = librarianToolDefinition.renderResult(
     result,
@@ -508,8 +588,10 @@ defineTest("registerPrimarySubagentTools renderResult respects expanded toggle",
     renderTheme,
   );
   const collapsedText = stripAnsi(collapsed.render(160).join("\n"));
+  const modelPayloadAfterCollapsed = getToolResultText(result);
   assert.equal(collapsedText.includes("Find c"), false);
   assert.equal(collapsedText.includes("ctrl+o to expand"), true);
+  assert.equal(modelPayloadAfterCollapsed, modelPayloadBefore);
 
   const expanded = librarianToolDefinition.renderResult(
     result,
@@ -517,6 +599,8 @@ defineTest("registerPrimarySubagentTools renderResult respects expanded toggle",
     renderTheme,
   );
   const expandedText = stripAnsi(expanded.render(160).join("\n"));
+  const modelPayloadAfterExpanded = getToolResultText(result);
   assert.equal(expandedText.includes("Find c"), true);
   assert.equal(expandedText.includes("ctrl+o to expand"), false);
+  assert.equal(modelPayloadAfterExpanded, modelPayloadBefore);
 });

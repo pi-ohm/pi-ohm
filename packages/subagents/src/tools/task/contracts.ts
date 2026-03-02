@@ -62,6 +62,10 @@ export interface TaskToolResultDetails {
   readonly output_truncated?: boolean;
   readonly output_total_chars?: number;
   readonly output_returned_chars?: number;
+  readonly result_chars_total?: number;
+  readonly result_chars_to_agent?: number;
+  readonly result_chars_to_ui?: number;
+  readonly ui_truncated?: boolean;
   readonly updated_at_epoch_ms?: number;
   readonly ended_at_epoch_ms?: number;
   readonly backend: string;

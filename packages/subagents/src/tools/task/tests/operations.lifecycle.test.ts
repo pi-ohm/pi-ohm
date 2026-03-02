@@ -44,6 +44,23 @@ function stripAnsi(value: string): string {
     .join("");
 }
 
+function buildLineRange(start: number, end: number): string {
+  return Array.from({ length: end - start + 1 }, (_unused, index) => {
+    const value = start + index;
+    return `LINE ${String(value).padStart(3, "0")}`;
+  }).join("\n");
+}
+
+function getResultText(result: Awaited<ReturnType<typeof runTaskToolMvp>>): string {
+  const textBlock = result.content.find((part) => part.type === "text");
+  assert.notEqual(textBlock, undefined);
+  if (!textBlock || textBlock.type !== "text") {
+    assert.fail("Expected text content block");
+  }
+
+  return textBlock.text;
+}
+
 function isRenderableWidget(value: unknown): value is { render(width: number): string[] } {
   if (!value || typeof value !== "object") {
     return false;
@@ -1516,6 +1533,114 @@ defineTest("runTaskToolMvp always returns full output for long payloads", async 
       process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS = previous;
     }
   }
+});
+
+defineTest(
+  "runTaskToolMvp model payload keeps full output even when assistant events only contain a tail fragment",
+  async () => {
+    const fullOutput = buildLineRange(1, 220);
+    const tailFragment = `${buildLineRange(191, 220)}\n\`\`\``;
+
+    const deps = makeDeps({
+      backend: {
+        id: "tail-fragment-backend",
+        async executeStart() {
+          const now = Date.now();
+          return Result.ok({
+            summary: "Finder: long output",
+            output: fullOutput,
+            events: [
+              {
+                type: "assistant_text_delta",
+                delta: tailFragment,
+                atEpochMs: now,
+              },
+              {
+                type: "task_terminal",
+                terminal: "agent_end",
+                atEpochMs: now + 1,
+              },
+            ],
+          });
+        },
+        async executeSend() {
+          return Result.ok({
+            summary: "Finder follow-up",
+            output: "follow-up",
+          });
+        },
+      },
+    });
+
+    const result = await runTask({
+      params: {
+        op: "start",
+        subagent_type: "finder",
+        description: "Long output with event tail",
+        prompt: "Output LINE 001 through LINE 220",
+      },
+      cwd: "/tmp/project",
+      signal: undefined,
+      onUpdate: undefined,
+      deps,
+    });
+
+    const text = getResultText(result);
+    const plainText = stripAnsi(text);
+    const resultBlock = plainText.split("result:\n")[1] ?? "";
+    const firstResultLine = resultBlock.split("\n")[0] ?? "";
+
+    assert.equal(firstResultLine, "LINE 001");
+    assert.match(resultBlock, /LINE 220/);
+    assert.doesNotMatch(resultBlock, /```/);
+    assert.equal(Reflect.get(result.details, "assistant_text"), tailFragment);
+    assert.equal(Reflect.get(result.details, "result_chars_total"), text.length);
+    assert.equal(Reflect.get(result.details, "result_chars_to_agent"), text.length);
+    assert.equal(typeof Reflect.get(result.details, "result_chars_to_ui"), "number");
+    assert.equal(typeof Reflect.get(result.details, "ui_truncated"), "boolean");
+  },
+);
+
+defineTest("runTaskToolMvp ui expand toggle does not mutate model payload", async () => {
+  const deps = makeDeps({
+    backend: {
+      id: "ui-toggle-backend",
+      async executeStart() {
+        return Result.ok({
+          summary: "Finder: ui toggle check",
+          output: buildLineRange(1, 220),
+        });
+      },
+      async executeSend() {
+        return Result.ok({
+          summary: "Finder follow-up",
+          output: "follow-up",
+        });
+      },
+    },
+  });
+
+  const result = await runTask({
+    params: {
+      op: "start",
+      subagent_type: "finder",
+      description: "UI expansion parity",
+      prompt: "Output LINE 001 through LINE 220",
+    },
+    cwd: "/tmp/project",
+    signal: undefined,
+    onUpdate: undefined,
+    deps,
+  });
+
+  const modelPayloadBefore = getResultText(result);
+  const compactUi = stripAnsi(formatTaskToolResult(result.details, false));
+  const expandedUi = stripAnsi(formatTaskToolResult(result.details, true));
+  const modelPayloadAfter = getResultText(result);
+
+  assert.equal(compactUi.includes("LINE 120"), false);
+  assert.equal(expandedUi.includes("LINE 120"), true);
+  assert.equal(modelPayloadAfter, modelPayloadBefore);
 });
 
 defineTest("runTaskToolMvp rejects async start lifecycle requests", async () => {
