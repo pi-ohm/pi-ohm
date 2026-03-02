@@ -56,6 +56,22 @@ function getToolResultText(result: AgentToolResult<TaskToolResultDetails>): stri
   return textBlock.text;
 }
 
+function assertTransportTelemetry(input: {
+  readonly details: TaskToolResultDetails;
+  readonly text: string;
+}): void {
+  assert.equal(input.details.result_chars_to_agent, input.text.length);
+  assert.equal(input.details.result_chars_total, input.text.length);
+  assert.equal(typeof input.details.result_chars_to_ui, "number");
+  assert.equal(typeof input.details.ui_truncated, "boolean");
+  const resultCharsToUi = input.details.result_chars_to_ui;
+  if (typeof resultCharsToUi !== "number") {
+    assert.fail("Expected result_chars_to_ui");
+  }
+
+  assert.equal(input.details.ui_truncated, resultCharsToUi < input.text.length);
+}
+
 interface RenderablePrimaryToolDefinition {
   readonly renderResult: (
     result: AgentToolResult<TaskToolResultDetails>,
@@ -207,6 +223,7 @@ defineTest("runPrimarySubagentTool routes through task runtime start semantics",
   assert.equal(result.details.description, "Auth architecture scan");
   assert.equal(result.details.backend, "primary-test-backend");
   assert.equal(result.details.status, "succeeded");
+  assert.equal(result.details.result_source, "output");
 });
 
 defineTest("runPrimarySubagentTool defaults description when omitted", async () => {
@@ -251,6 +268,12 @@ defineTest("runPrimarySubagentTool librarian accepts query + context payload", a
   assert.match(result.details.output ?? "", /Explain auth architecture/);
   assert.match(result.details.output ?? "", /Context:/);
   assert.match(result.details.output ?? "", /monorepo boundaries/);
+  const text = getToolResultText(result);
+  assert.equal(result.details.result_source, "output");
+  assertTransportTelemetry({
+    details: result.details,
+    text,
+  });
 });
 
 defineTest(
@@ -311,7 +334,11 @@ defineTest(
     assert.match(resultBlock, /LINE 220/);
     assert.doesNotMatch(resultBlock, /```/);
     assert.equal(Reflect.get(result.details, "assistant_text"), tailFragment);
-    assert.equal(Reflect.get(result.details, "result_chars_to_agent"), text.length);
+    assert.equal(result.details.result_source, "output");
+    assertTransportTelemetry({
+      details: result.details,
+      text,
+    });
   },
 );
 
@@ -405,6 +432,7 @@ defineTest("runPrimarySubagentTool keeps result contract parity with task tool p
   assert.equal(primary.details.runtime, task.details.runtime);
   assert.equal(primary.details.provider, task.details.provider);
   assert.equal(primary.details.model, task.details.model);
+  assert.equal(primary.details.result_source, task.details.result_source);
   assert.equal(primary.details.error_code, task.details.error_code);
 });
 

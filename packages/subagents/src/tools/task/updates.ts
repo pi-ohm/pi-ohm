@@ -7,7 +7,8 @@ import {
 } from "../../runtime/live-ui";
 import type { TaskRuntimeSnapshot } from "../../runtime/tasks/types";
 import { resolveOnUpdateThrottleMs } from "./defaults";
-import { detailsToText, formatTaskToolModelContent } from "./render";
+import { detailsToText } from "./render";
+import { serializeTaskToolTransport } from "./transport";
 import type {
   RunTaskToolUiHandle,
   TaskToolDependencies,
@@ -300,9 +301,14 @@ export function emitTaskRuntimeUpdate(input: {
 
   const runtimeText = presentation.statusLine;
 
-  const body = input.hasUI
-    ? detailsToText(input.details, false)
-    : `${runtimeText}\n\n${formatTaskToolModelContent(input.details)}`;
+  const body = (() => {
+    if (input.hasUI) {
+      return detailsToText(input.details, false);
+    }
+
+    const transport = serializeTaskToolTransport(input.details);
+    return `${runtimeText}\n\n${transport.text}`;
+  })();
 
   input.onUpdate({
     content: [{ type: "text", text: body }],

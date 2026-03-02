@@ -20,6 +20,7 @@
 - Structured event timeline persisted with bounded retention.
 - Shared transcript parser extracted (`src/runtime/task-transcript.ts`) and consumed by task/runtime UI paths.
 - Task tool file layout decomposed under `src/tools/task/*` with `operations.ts` as registration/dispatch entry.
+- Final-answer transport is now isolated in `src/tools/task/transport.ts`; `toAgentToolResult` uses transport serializer only, while tree/compact/Ctrl+O rendering stays display-only.
 - Backend file layout decomposed under `src/runtime/backend/*` with `index.ts` export/factory surface.
 - Task runtime store layout decomposed under `src/runtime/tasks/*` with explicit type/store/persistence/state-machine modules.
 - Schema layout decomposed under `src/schema/*` with explicit per-schema modules (`task-tool`, `task-record`, `runtime-config`, `shared`).
@@ -48,6 +49,7 @@
 - `src/tools/task/contracts.ts`
 - `src/tools/task/defaults.ts`
 - `src/tools/task/operations.ts` (registration + parse/config/dispatch pipeline)
+- `src/tools/task/transport.ts` (canonical model-facing payload serialization + source invariants)
 - `src/tools/task/render.ts`
 - `src/tools/task/updates.ts`
 - `src/tools/task/execution/kernel.ts` (task adapter over `@pi-ohm/core/toolkit`)
@@ -162,3 +164,22 @@
   - runtime/UI emission (`emitTaskRuntimeUpdate`)
 - Continue to model recoverable failures as `better-result` values end-to-end.
 - Keep task-specific error/detail shaping in subagents so cross-package kernel APIs remain domain-agnostic.
+
+## 12) Final-answer transport contract
+
+- Transport payload and display payload are intentionally separate:
+  - transport: text sent back to main agent (`content[0].text`)
+  - display: compact/expanded tree rendering in UI
+- Canonical source order for transport:
+  1. `output` when `output_available === true`
+  2. `assistant_text` only when output is unavailable
+  3. `summary` last fallback
+- Runtime invariant: when `output_available === true`, transport source cannot downgrade to `assistant_text` or `summary`.
+- `Ctrl+O` and compact/expanded UI mode must never mutate transport payload.
+- Transport telemetry contract:
+  - `result_source: "output" | "assistant_text" | "summary"`
+  - `result_chars_total`
+  - `result_chars_to_agent`
+  - `result_chars_to_ui`
+  - `ui_truncated`
+- Primary tool route and task route must both pass through the same serializer path for payload parity.

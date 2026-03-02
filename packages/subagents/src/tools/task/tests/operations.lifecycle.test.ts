@@ -61,6 +61,22 @@ function getResultText(result: Awaited<ReturnType<typeof runTaskToolMvp>>): stri
   return textBlock.text;
 }
 
+function assertTransportTelemetry(input: {
+  readonly details: TaskToolResultDetails;
+  readonly text: string;
+}): void {
+  assert.equal(input.details.result_chars_to_agent, input.text.length);
+  assert.equal(input.details.result_chars_total, input.text.length);
+  assert.equal(typeof input.details.result_chars_to_ui, "number");
+  assert.equal(typeof input.details.ui_truncated, "boolean");
+  const resultCharsToUi = input.details.result_chars_to_ui;
+  if (typeof resultCharsToUi !== "number") {
+    assert.fail("Expected result_chars_to_ui");
+  }
+
+  assert.equal(input.details.ui_truncated, resultCharsToUi < input.text.length);
+}
+
 function isRenderableWidget(value: unknown): value is { render(width: number): string[] } {
   if (!value || typeof value !== "object") {
     return false;
@@ -1457,13 +1473,8 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
     deps,
   });
 
-  const textBlock = result.content.find((part) => part.type === "text");
-  assert.notEqual(textBlock, undefined);
-  if (!textBlock || textBlock.type !== "text") {
-    assert.fail("Expected text content block");
-  }
-
-  const plainText = stripAnsi(textBlock.text);
+  const text = getResultText(result);
+  const plainText = stripAnsi(text);
   assert.match(plainText, /^task_id:\s+task_/m);
   assert.match(plainText, /^timestamp:\s+\d{4}-\d{2}-\d{2}T/m);
   assert.match(plainText, /^result:$/m);
@@ -1471,6 +1482,11 @@ defineTest("runTaskToolMvp surfaces multiline output text in tool content", asyn
   assert.match(plainText, /beta/);
   assert.match(plainText, /gamma/);
   assert.doesNotMatch(plainText, /├──|╰──|✓|✕/);
+  assert.equal(result.details.result_source, "output");
+  assertTransportTelemetry({
+    details: result.details,
+    text,
+  });
 });
 
 defineTest("runTaskToolMvp always returns full output for long payloads", async () => {
@@ -1514,18 +1530,18 @@ defineTest("runTaskToolMvp always returns full output for long payloads", async 
     assert.equal(Reflect.get(result.details, "output_total_chars"), 36);
     assert.equal(Reflect.get(result.details, "output_returned_chars"), 36);
 
-    const textBlock = result.content.find((part) => part.type === "text");
-    assert.notEqual(textBlock, undefined);
-    if (!textBlock || textBlock.type !== "text") {
-      assert.fail("Expected text content block");
-    }
-
-    const plainText = stripAnsi(textBlock.text);
+    const text = getResultText(result);
+    const plainText = stripAnsi(text);
     assert.match(plainText, /^task_id:\s+task_/m);
     assert.match(plainText, /^timestamp:\s+\d{4}-\d{2}-\d{2}T/m);
     assert.match(plainText, /^result:$/m);
     assert.doesNotMatch(plainText, /truncated/);
     assert.match(plainText, /abcdefghijklmnopqrstuvwxyz0123456789/);
+    assert.equal(result.details.result_source, "output");
+    assertTransportTelemetry({
+      details: result.details,
+      text,
+    });
   } finally {
     if (previous === undefined) {
       delete process.env.OHM_SUBAGENTS_OUTPUT_MAX_CHARS;
@@ -1594,10 +1610,11 @@ defineTest(
     assert.match(resultBlock, /LINE 220/);
     assert.doesNotMatch(resultBlock, /```/);
     assert.equal(Reflect.get(result.details, "assistant_text"), tailFragment);
-    assert.equal(Reflect.get(result.details, "result_chars_total"), text.length);
-    assert.equal(Reflect.get(result.details, "result_chars_to_agent"), text.length);
-    assert.equal(typeof Reflect.get(result.details, "result_chars_to_ui"), "number");
-    assert.equal(typeof Reflect.get(result.details, "ui_truncated"), "boolean");
+    assert.equal(result.details.result_source, "output");
+    assertTransportTelemetry({
+      details: result.details,
+      text,
+    });
   },
 );
 
@@ -2850,6 +2867,11 @@ defineTest("runTaskToolMvp uses assistant_text from events for terminal result r
   assert.match(plainText, /^result:$/m);
   assert.match(plainText, /structured final answer/);
   assert.doesNotMatch(plainText, /tool_call:|├──|╰──|✓/);
+  assert.equal(started.details.result_source, "assistant_text");
+  assertTransportTelemetry({
+    details: started.details,
+    text: textBlock.text,
+  });
 });
 
 defineTest("runTaskToolMvp status aggregates runtime observability from task items", async () => {

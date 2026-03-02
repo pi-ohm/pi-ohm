@@ -11,7 +11,7 @@ import { getSubagentInvocationMode } from "../extension";
 import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
 import { createDefaultTaskToolDependencies } from "./task/defaults";
 import { runTaskToolMvp } from "./task/operations";
-import { formatTaskToolResult } from "./task/render";
+import { formatTaskToolResult, toAgentToolResult } from "./task/render";
 
 const PrimaryControlFieldsSchema = {
   description: Type.Optional(Type.String({ minLength: 1 })),
@@ -272,7 +272,7 @@ function toValidationFailure(input: {
   readonly subagent: OhmSubagentDefinition;
   readonly message: string;
 }): AgentToolResult<TaskToolResultDetails> {
-  const details: TaskToolResultDetails = {
+  return toAgentToolResult({
     contract_version: "task.v1",
     op: "start",
     status: "failed",
@@ -287,12 +287,7 @@ function toValidationFailure(input: {
     error_code: "invalid_primary_tool_payload",
     error_category: "validation",
     error_message: input.message,
-  };
-
-  return {
-    content: [{ type: "text", text: formatTaskToolResult(details, false) }],
-    details,
-  };
+  });
 }
 
 function resolvePrimaryToolParameterSchema(subagent: OhmSubagentDefinition) {

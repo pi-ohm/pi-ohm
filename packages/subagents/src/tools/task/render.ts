@@ -9,12 +9,15 @@ import {
 import { Result } from "better-result";
 import { parseTaskToolParameters, type TaskToolParameters } from "../../schema/task-tool";
 import { parseTaskTranscriptSections } from "../../runtime/task-transcript";
+import { serializeTaskToolTransport } from "./transport";
 import type {
   TaskErrorCategory,
   TaskToolItemDetails,
   TaskToolResultDetails,
   TaskToolStatus,
 } from "./contracts";
+
+export { formatTaskToolModelContent } from "./transport";
 
 function categorizeErrorCode(code: string): TaskErrorCategory {
   if (code === "unknown_task_id" || code === "task_expired" || code.includes("not_found")) {
@@ -83,167 +86,6 @@ function withItemObservabilityDefaults(item: TaskToolItemDetails): TaskToolItemD
     runtime: item.runtime ?? item.backend ?? "unavailable",
     route: item.route ?? item.backend ?? "unavailable",
   };
-}
-
-function toIsoTimestamp(epochMs: number | undefined): string | undefined {
-  if (typeof epochMs !== "number" || !Number.isFinite(epochMs)) return undefined;
-  const date = new Date(epochMs);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString();
-}
-
-function extractNarrativeResult(output: string | undefined): string | undefined {
-  if (!output) return undefined;
-  const sections = parseTaskTranscriptSections(output);
-  if (sections.narrativeLines.length === 0) return undefined;
-  return sections.narrativeLines.join("\n");
-}
-
-function resolveModelItemResultText(item: TaskToolItemDetails): string {
-  if (!item.found) {
-    return item.error_message ?? item.summary;
-  }
-
-  const outputNarrative =
-    item.output_available && item.output ? extractNarrativeResult(item.output) : undefined;
-  if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
-
-  const assistantText = item.assistant_text?.trim();
-  if (assistantText && assistantText.length > 0) return assistantText;
-
-  if (item.error_message && item.error_message.length > 0) return item.error_message;
-  return item.summary;
-}
-
-function resolveModelResultText(details: TaskToolResultDetails): string {
-  const outputNarrative =
-    details.output_available && details.output ? extractNarrativeResult(details.output) : undefined;
-  if (outputNarrative && outputNarrative.length > 0) return outputNarrative;
-
-  const assistantText = details.assistant_text?.trim();
-  if (assistantText && assistantText.length > 0) return assistantText;
-
-  if (details.items && details.items.length === 1) {
-    const [item] = details.items;
-    if (item && item.found) {
-      return resolveModelItemResultText(item);
-    }
-  }
-
-  if (details.error_message && details.error_message.length > 0) return details.error_message;
-  return details.summary;
-}
-
-function resolveModelTaskIds(details: TaskToolResultDetails): readonly string[] {
-  const seen = new Set<string>();
-
-  const append = (value: string | undefined): void => {
-    if (!value) return;
-    const trimmed = value.trim();
-    if (trimmed.length === 0) return;
-    seen.add(trimmed);
-  };
-
-  append(details.task_id);
-  for (const item of details.items ?? []) {
-    append(item.id);
-  }
-
-  return [...seen];
-}
-
-function resolveModelTaskId(details: TaskToolResultDetails): string {
-  const [primaryId] = resolveModelTaskIds(details);
-  if (primaryId) return primaryId;
-  return "unavailable";
-}
-
-function resolveBatchTimestamp(details: TaskToolResultDetails): string | undefined {
-  if (!details.items || details.items.length === 0) return undefined;
-
-  let latestEpochMs: number | undefined;
-  for (const item of details.items) {
-    const candidate =
-      item.ended_at_epoch_ms ?? item.updated_at_epoch_ms ?? details.ended_at_epoch_ms;
-    if (typeof candidate !== "number" || !Number.isFinite(candidate)) continue;
-    latestEpochMs = latestEpochMs === undefined ? candidate : Math.max(latestEpochMs, candidate);
-  }
-
-  return toIsoTimestamp(latestEpochMs);
-}
-
-function resolveModelTimestamp(details: TaskToolResultDetails): string {
-  const directTimestamp =
-    toIsoTimestamp(details.ended_at_epoch_ms) ?? toIsoTimestamp(details.updated_at_epoch_ms);
-  if (directTimestamp) return directTimestamp;
-
-  const batchTimestamp = resolveBatchTimestamp(details);
-  if (batchTimestamp) return batchTimestamp;
-
-  if (details.items && details.items.length === 1) {
-    const [item] = details.items;
-    if (item) {
-      const itemTimestamp =
-        toIsoTimestamp(item.ended_at_epoch_ms) ?? toIsoTimestamp(item.updated_at_epoch_ms);
-      if (itemTimestamp) return itemTimestamp;
-    }
-  }
-
-  return "unavailable";
-}
-
-function toModelBatchItemLines(item: TaskToolItemDetails, index: number): readonly string[] {
-  const status = item.found ? (item.status ?? "failed") : "failed";
-  const subagent = item.subagent_type ?? "unknown";
-  const description = item.description ? ` · ${item.description}` : "";
-  const result = resolveModelItemResultText(item);
-  const resultLines = result.split("\n");
-  const lines = [`- ${index + 1}. ${item.id} [${status}] ${subagent}${description}`];
-
-  if (resultLines.length <= 1) {
-    lines.push(`  result: ${resultLines[0] ?? ""}`);
-    return lines;
-  }
-
-  lines.push("  result:");
-  for (const line of resultLines) {
-    lines.push(`    ${line}`);
-  }
-  return lines;
-}
-
-function toModelFacingContent(details: TaskToolResultDetails): string {
-  const taskIds = resolveModelTaskIds(details);
-  const taskId = resolveModelTaskId(details);
-  const timestamp = resolveModelTimestamp(details);
-  const result = resolveModelResultText(details);
-  const lines = [
-    `task_id: ${taskId}`,
-    ...(taskIds.length > 1 ? [`task_ids: ${taskIds.join(", ")}`] : []),
-    `status: ${details.status}`,
-    ...(details.subagent_type ? [`subagent: ${details.subagent_type}`] : []),
-    `backend: ${details.backend}`,
-    `provider: ${details.provider ?? "unavailable"}`,
-    `model: ${details.model ?? "unavailable"}`,
-    `runtime: ${details.runtime ?? details.backend}`,
-    `route: ${details.route ?? details.backend}`,
-    `timestamp: ${timestamp}`,
-    "result:",
-    result,
-  ];
-
-  if (details.items && details.items.length > 1) {
-    lines.push("items:");
-    for (const [index, item] of details.items.entries()) {
-      lines.push(...toModelBatchItemLines(item, index));
-    }
-  }
-
-  return lines.join("\n");
-}
-
-export function formatTaskToolModelContent(details: TaskToolResultDetails): string {
-  return toModelFacingContent(details);
 }
 
 export function isOhmDebugEnabled(): boolean {
@@ -576,6 +418,9 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   if (typeof details.result_chars_to_ui === "number") {
     lines.push(`result_chars_to_ui: ${details.result_chars_to_ui}`);
   }
+  if (details.result_source) {
+    lines.push(`result_source: ${details.result_source}`);
+  }
   if (typeof details.ui_truncated === "boolean") {
     lines.push(`ui_truncated: ${details.ui_truncated ? "true" : "false"}`);
   }
@@ -829,7 +674,8 @@ export function toAgentToolResult(
       items: normalizedItems,
     }),
   );
-  const modelContent = formatTaskToolModelContent(normalizedDetails);
+  const transport = serializeTaskToolTransport(normalizedDetails);
+  const modelContent = transport.text;
   const uiContent = detailsToText(normalizedDetails, false);
   const resultCharsTotal = modelContent.length;
   const resultCharsToAgent = modelContent.length;
@@ -839,6 +685,7 @@ export function toAgentToolResult(
     result_chars_total: resultCharsTotal,
     result_chars_to_agent: resultCharsToAgent,
     result_chars_to_ui: resultCharsToUi,
+    result_source: transport.resultSource,
     ui_truncated: resultCharsToUi < resultCharsTotal,
   };
 

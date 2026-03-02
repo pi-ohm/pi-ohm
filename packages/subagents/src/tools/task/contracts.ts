@@ -12,6 +12,7 @@ import type { TaskToolParameters } from "../../schema/task-tool";
 
 export type TaskToolStatus = TaskLifecycleState;
 export type TaskErrorCategory = "validation" | "policy" | "runtime" | "persistence" | "not_found";
+export type TaskToolResultSource = "output" | "assistant_text" | "summary";
 
 export type TaskWaitStatus = "completed" | "timeout" | "aborted";
 export type TaskBatchStatus = "accepted" | "partial" | "completed" | "rejected";
@@ -66,6 +67,7 @@ export interface TaskToolResultDetails {
   readonly result_chars_to_agent?: number;
   readonly result_chars_to_ui?: number;
   readonly ui_truncated?: boolean;
+  readonly result_source?: TaskToolResultSource;
   readonly updated_at_epoch_ms?: number;
   readonly ended_at_epoch_ms?: number;
   readonly backend: string;
