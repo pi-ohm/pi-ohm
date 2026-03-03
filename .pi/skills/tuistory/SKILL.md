@@ -33,3 +33,10 @@ tuistory has **2 modes**:
 - **Use regex** in `waitForText` for dynamic content: `await session.waitForText(/version \d+/)`
 - **Close sessions** in test teardown to avoid leaked processes
 - **Use `--cols` and `--rows`** to control terminal size — affects TUI layout
+
+## References **important**
+
+| Reference               | Path                | Description                                           |
+| ----------------------- | ------------------- | ----------------------------------------------------- |
+| CLI Documentation       | ./references/cli.md | test TUIs/CLIs with the tuistory CLI                  |
+| JS/TS API Documentation | ./references/sdk.md | programmatically test TUIs/CLIs with the tuistory sdk |
