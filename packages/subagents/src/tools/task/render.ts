@@ -1,10 +1,12 @@
-import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, Theme } from "@mariozechner/pi-coding-agent";
 import { Text, truncateToWidth, type Component } from "@mariozechner/pi-tui";
 import {
   createSubagentTaskTreeComponent,
   renderSubagentTaskTreeLines,
   type SubagentTaskTreeEntry,
+  type SubagentTaskTreeRenderOptions,
   type SubagentTaskTreeStatus,
+  type SubagentTaskTreeStyler,
 } from "@pi-ohm/tui";
 import { Result } from "better-result";
 import { parseTaskToolParameters, type TaskToolParameters } from "../../schema/task-tool";
@@ -298,18 +300,17 @@ function buildTreeEntryFromItem(
   };
 }
 
-function treeRenderOptions(expanded: boolean): {
-  readonly compact: boolean;
-  readonly maxPromptLines: number;
-  readonly maxToolCalls: number;
-  readonly maxResultLines: number;
-} {
+function treeRenderOptions(
+  expanded: boolean,
+  styler?: SubagentTaskTreeStyler,
+): SubagentTaskTreeRenderOptions {
   if (expanded) {
     return {
       compact: false,
       maxPromptLines: 16,
       maxToolCalls: Number.MAX_SAFE_INTEGER,
       maxResultLines: Number.MAX_SAFE_INTEGER,
+      styler,
     };
   }
 
@@ -318,17 +319,58 @@ function treeRenderOptions(expanded: boolean): {
     maxPromptLines: 2,
     maxToolCalls: 2,
     maxResultLines: 2,
+    styler,
   };
 }
 
-function detailsToCompactText(details: TaskToolResultDetails, expanded: boolean): string {
+function styleWithThemeColor(
+  theme: Theme,
+  color: "success" | "error" | "muted",
+  text: string,
+): string {
+  if (text.length === 0) return text;
+
+  try {
+    return theme.fg(color, text);
+  } catch {
+    return text;
+  }
+}
+
+function styleWithThemeMethod(style: ((text: string) => string) | undefined, text: string): string {
+  if (!style || text.length === 0) return text;
+
+  try {
+    return style(text);
+  } catch {
+    return text;
+  }
+}
+
+export function toTaskTreeStyler(theme: Theme | undefined): SubagentTaskTreeStyler | undefined {
+  if (!theme) return undefined;
+
+  return {
+    success: (text) => styleWithThemeColor(theme, "success", text),
+    error: (text) => styleWithThemeColor(theme, "error", text),
+    muted: (text) => styleWithThemeColor(theme, "muted", text),
+    bold: (text) => styleWithThemeMethod(theme.bold.bind(theme), text),
+    underline: (text) => styleWithThemeMethod(theme.underline.bind(theme), text),
+  };
+}
+
+function detailsToCompactText(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+  styler?: SubagentTaskTreeStyler,
+): string {
   const entries = toTaskTreeEntries(details, expanded);
 
   const lines = [
     ...renderSubagentTaskTreeLines({
       entries,
       width: 120,
-      options: treeRenderOptions(expanded),
+      options: treeRenderOptions(expanded, styler),
     }),
   ];
 
@@ -362,10 +404,11 @@ function toTaskTreeEntries(
 export function createTaskToolResultTreeComponent(
   details: TaskToolResultDetails,
   expanded: boolean,
+  styler?: SubagentTaskTreeStyler,
 ): { render(width: number): string[]; invalidate(): void } {
   return createSubagentTaskTreeComponent({
     entries: toTaskTreeEntries(details, expanded),
-    options: treeRenderOptions(expanded),
+    options: treeRenderOptions(expanded, styler),
   });
 }
 
@@ -573,12 +616,16 @@ function detailsToDebugText(details: TaskToolResultDetails, expanded: boolean): 
   return lines.join("\n");
 }
 
-export function detailsToText(details: TaskToolResultDetails, expanded: boolean): string {
+export function detailsToText(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+  styler?: SubagentTaskTreeStyler,
+): string {
   if (isOhmDebugEnabled()) {
     return detailsToDebugText(details, expanded);
   }
 
-  return detailsToCompactText(details, expanded);
+  return detailsToCompactText(details, expanded, styler);
 }
 
 export function isTaskToolResultDetails(value: unknown): value is TaskToolResultDetails {
@@ -612,8 +659,12 @@ export function formatTaskToolCall(args: TaskToolParameters): string {
   return `task start ${args.subagent_type} · ${args.description}`;
 }
 
-export function formatTaskToolResult(details: TaskToolResultDetails, expanded: boolean): string {
-  return detailsToText(details, expanded);
+export function formatTaskToolResult(
+  details: TaskToolResultDetails,
+  expanded: boolean,
+  styler?: SubagentTaskTreeStyler,
+): string {
+  return detailsToText(details, expanded, styler);
 }
 
 export function createCollapsedTaskToolResultComponent(

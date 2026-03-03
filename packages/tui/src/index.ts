@@ -5,4 +5,5 @@ export {
   type SubagentTaskTreeEntry,
   type SubagentTaskTreeRenderOptions,
   type SubagentTaskTreeStatus,
+  type SubagentTaskTreeStyler,
 } from "./subagent-task-tree";
