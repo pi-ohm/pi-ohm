@@ -205,7 +205,7 @@ export function createTaskRuntimePresentation(input: {
     width: maxWidth,
     options: {
       compact: true,
-      maxPromptLines: Number.MAX_SAFE_INTEGER,
+      maxPromptLines: 2,
       maxToolCalls: 2,
       maxResultLines: 2,
     },

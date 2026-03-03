@@ -87,6 +87,50 @@ defineTest("renderSubagentTaskTreeLines applies compact limits", () => {
   assert.equal(raw.includes("\u001b[37mctrl+o\u001b[39m"), true);
 });
 
+defineTest("renderSubagentTaskTreeLines normalizes prompt indentation per line", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        prompt: "line one\n    line two\n\tline three",
+        toolCalls: [],
+      }),
+    ],
+    width: 120,
+    options: {
+      compact: true,
+      maxPromptLines: 3,
+      maxResultLines: 1,
+    },
+  });
+
+  const rendered = stripAnsi(lines.join("\n"));
+  assert.match(rendered, /├── line one/);
+  assert.match(rendered, /│   line two/);
+  assert.match(rendered, /│   line three/);
+  assert.doesNotMatch(rendered, /│\s{5,}line two/);
+});
+
+defineTest("renderSubagentTaskTreeLines compact mode limits prompt lines by default", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        prompt: "line one\nline two\nline three\nline four",
+        toolCalls: [],
+      }),
+    ],
+    width: 120,
+    options: {
+      compact: true,
+      maxResultLines: 1,
+    },
+  });
+
+  const rendered = stripAnsi(lines.join("\n"));
+  assert.match(rendered, /├── line one/);
+  assert.match(rendered, /│   line two…/);
+  assert.equal(rendered.includes("line three"), false);
+});
+
 defineTest("renderSubagentTaskTreeLines underlines path-like tool call tokens", () => {
   const lines = renderSubagentTaskTreeLines({
     entries: [

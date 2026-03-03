@@ -263,11 +263,13 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
       statusLine: "subagents 1 running · tools 1 active · done 0 · failed 0 · cancelled 0",
       widgetEntries: [
         makeEntry({
+          prompt: "Trace auth validation line one\nline two\nline three",
           toolCalls: ["Read path", "Grep value", "Find target", "Ls src", "Edit file"],
         }),
       ],
       compactWidgetEntries: [
         makeEntry({
+          prompt: "Trace auth validation line one\nline two\nline three",
           toolCalls: ["Read path", "Grep value", "Find target", "Ls src", "Edit file"],
         }),
       ],
@@ -282,6 +284,7 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
     const compactText = stripAnsi((compactFrame ?? []).join("\n"));
     assert.match(stripAnsi((compactFrame ?? [""])[0] ?? ""), /Finder/);
     assert.equal(compactText.includes("Find target"), false);
+    assert.equal(compactText.includes("line three"), false);
     assert.equal(compactText.includes("ctrl+o to expand"), true);
 
     toolsExpanded = true;
@@ -292,6 +295,7 @@ defineTest("live UI coordinator respects off/compact/verbose mode changes", asyn
     assert.notEqual(compactExpandedFrame, undefined);
     const compactExpandedText = stripAnsi((compactExpandedFrame ?? []).join("\n"));
     assert.equal(compactExpandedText.includes("Find target"), true);
+    assert.equal(compactExpandedText.includes("line three"), true);
     assert.equal(compactExpandedText.includes("ctrl+o to expand"), false);
 
     setTaskLiveUiMode("off");

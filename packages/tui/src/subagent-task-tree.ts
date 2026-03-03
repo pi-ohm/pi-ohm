@@ -250,14 +250,25 @@ function styleKeybindHint(input: string): string {
   return input.replaceAll("ctrl+o", `${ANSI_LIGHT_GREY_ON}ctrl+o${ANSI_FG_RESET}`);
 }
 
+function normalizePromptText(prompt: string): string {
+  const normalizedLines = prompt
+    .split(/\r?\n/u)
+    .map((line) => line.replaceAll("\t", "  ").trim())
+    .filter((line) => line.length > 0);
+
+  if (normalizedLines.length === 0) return "";
+  return normalizedLines.join("\n");
+}
+
 function formatEntryChildren(
   entry: SubagentTaskTreeEntry,
   options: SubagentTaskTreeRenderOptions,
 ): readonly { text: string; maxLines: number; kind: EntryChildKind }[] {
   const children: { text: string; maxLines: number; kind: EntryChildKind }[] = [];
+  const prompt = normalizePromptText(entry.prompt);
 
   children.push({
-    text: entry.prompt.trim(),
+    text: prompt,
     maxLines: resolvePromptLineLimit(options),
     kind: "default",
   });
