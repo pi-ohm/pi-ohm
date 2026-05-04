@@ -173,6 +173,149 @@ export class MemoryDb {
     return result;
   }
 
+  async getStage1(threadId: string): Promise<MemoryDbResult<Stage1Output | undefined>> {
+    const result = await Result.tryPromise({
+      try: async () =>
+        this.client.execute({
+          sql: "SELECT * FROM stage1_outputs WHERE thread_id = ?",
+          args: [threadId],
+        }),
+      catch: (cause) =>
+        new MemoryDbError({
+          code: "db_query_failed",
+          message: "Failed to get stage1 output",
+          cause,
+        }),
+    });
+    if (Result.isError(result)) return result;
+    const rows = parseRows(stage1Row, result.value.rows);
+    if (Result.isError(rows)) return rows;
+    const row = rows.value[0];
+    return Result.ok(row ? toStage1(row) : undefined);
+  }
+
+  async deleteStage1(threadId: string): Promise<MemoryDbResult<true>> {
+    return Result.tryPromise({
+      try: async () => {
+        await this.client.execute({
+          sql: "DELETE FROM stage1_outputs WHERE thread_id = ?",
+          args: [threadId],
+        });
+        return true as const;
+      },
+      catch: (cause) =>
+        new MemoryDbError({
+          code: "db_query_failed",
+          message: "Failed to delete stage1 output",
+          cause,
+        }),
+    });
+  }
+
+  async getJobSuccessWatermark(
+    kind: string,
+    key: string,
+  ): Promise<MemoryDbResult<number | undefined>> {
+    const result = await Result.tryPromise({
+      try: async () =>
+        this.client.execute({
+          sql: "SELECT last_success_watermark FROM jobs WHERE kind = ? AND job_key = ? AND status = 'succeeded'",
+          args: [kind, key],
+        }),
+      catch: (cause) =>
+        new MemoryDbError({
+          code: "db_query_failed",
+          message: "Failed to get job success watermark",
+          cause,
+        }),
+    });
+    if (Result.isError(result)) return result;
+    const value = result.value.rows[0]?.last_success_watermark;
+    if (typeof value === "number") return Result.ok(value);
+    return Result.ok(undefined);
+  }
+
+  async claimJob(input: {
+    readonly kind: string;
+    readonly key: string;
+    readonly now: number;
+    readonly leaseUntil: number;
+    readonly inputWatermark?: number;
+  }): Promise<MemoryDbResult<boolean>> {
+    return Result.tryPromise({
+      try: async () => {
+        const current = await this.client.execute({
+          sql: "SELECT lease_until, retry_at, retry_remaining, input_watermark, last_success_watermark FROM jobs WHERE kind = ? AND job_key = ?",
+          args: [input.kind, input.key],
+        });
+        const row = current.rows[0];
+        const leaseUntil = typeof row?.lease_until === "number" ? row.lease_until : 0;
+        const retryAt = typeof row?.retry_at === "number" ? row.retry_at : 0;
+        const retryRemaining = typeof row?.retry_remaining === "number" ? row.retry_remaining : 3;
+        const success =
+          typeof row?.last_success_watermark === "number" ? row.last_success_watermark : undefined;
+        if (leaseUntil > input.now) return false;
+        if (retryAt > input.now) return false;
+        if (retryRemaining <= 0 && success === input.inputWatermark) return false;
+        await this.client.execute({
+          sql: `INSERT INTO jobs (kind, job_key, status, started_at, lease_until, retry_remaining, input_watermark)
+            VALUES (?, ?, 'running', ?, ?, 3, ?)
+            ON CONFLICT(kind, job_key) DO UPDATE SET
+              status = 'running', started_at = excluded.started_at, finished_at = NULL,
+              lease_until = excluded.lease_until, input_watermark = excluded.input_watermark,
+              last_error = NULL`,
+          args: [input.kind, input.key, input.now, input.leaseUntil, input.inputWatermark ?? null],
+        });
+        return true;
+      },
+      catch: (cause) =>
+        new MemoryDbError({ code: "db_query_failed", message: "Failed to claim job", cause }),
+    });
+  }
+
+  async markJobSucceeded(input: {
+    readonly kind: string;
+    readonly key: string;
+    readonly now: number;
+    readonly watermark?: number;
+  }): Promise<MemoryDbResult<true>> {
+    return Result.tryPromise({
+      try: async () => {
+        await this.client.execute({
+          sql: "UPDATE jobs SET status = 'succeeded', finished_at = ?, lease_until = NULL, retry_at = NULL, retry_remaining = 3, last_error = NULL, last_success_watermark = ? WHERE kind = ? AND job_key = ?",
+          args: [input.now, input.watermark ?? null, input.kind, input.key],
+        });
+        return true as const;
+      },
+      catch: (cause) =>
+        new MemoryDbError({
+          code: "db_query_failed",
+          message: "Failed to mark job succeeded",
+          cause,
+        }),
+    });
+  }
+
+  async markJobFailed(input: {
+    readonly kind: string;
+    readonly key: string;
+    readonly now: number;
+    readonly retryAt: number;
+    readonly error: string;
+  }): Promise<MemoryDbResult<true>> {
+    return Result.tryPromise({
+      try: async () => {
+        await this.client.execute({
+          sql: "UPDATE jobs SET status = 'failed', finished_at = ?, lease_until = NULL, retry_at = ?, retry_remaining = MAX(COALESCE(retry_remaining, 3) - 1, 0), last_error = ? WHERE kind = ? AND job_key = ?",
+          args: [input.now, input.retryAt, input.error, input.kind, input.key],
+        });
+        return true as const;
+      },
+      catch: (cause) =>
+        new MemoryDbError({ code: "db_query_failed", message: "Failed to mark job failed", cause }),
+    });
+  }
+
   async upsertStage1(input: Stage1Output): Promise<MemoryDbResult<true>> {
     return Result.tryPromise({
       try: async () => {

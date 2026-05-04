@@ -1,41 +1,67 @@
+import fs from "node:fs";
+import path from "node:path";
+import {
+  CODEX_CONSOLIDATION_TEMPLATE,
+  CODEX_MEMORY_EXTENSIONS_FOLDER_STRUCTURE,
+  CODEX_MEMORY_EXTENSIONS_PRIMARY_INPUTS,
+  CODEX_READ_PATH_TEMPLATE,
+  CODEX_STAGE_ONE_INPUT_TEMPLATE,
+} from "./codex-prompts";
 import type { MemoryPaths } from "./paths";
 
+function renderTemplate(template: string, values: ReadonlyMap<string, string>): string {
+  return [...values.entries()].reduce(
+    (rendered, [key, value]) => rendered.split(`{{ ${key} }}`).join(value),
+    template,
+  );
+}
+
 export function renderReadPathPrompt(paths: MemoryPaths, summary: string): string {
-  return [
-    "# Pi OHM Memory",
-    "",
-    `Memory root: ${paths.data}`,
-    "",
-    "A memory summary has already been injected below. Do not open memory_summary.md again unless the user explicitly asks to inspect that file.",
-    "",
-    "Memory layout:",
-    "- memory_summary.md: injected summary only",
-    "- MEMORY.md: searchable registry and routing layer",
-    "- raw_memories.md: raw extracted memories",
-    "- rollout_summaries/: per-session summaries",
-    "- extensions/ad_hoc/notes/: explicit user-requested update notes",
-    "",
-    "Quick memory pass:",
-    "1. Use the injected summary first.",
-    "2. If details matter, search MEMORY.md and then the referenced rollout_summaries files.",
-    "3. Verify stale memory against current repo files before acting on it.",
-    "4. Skip memory when it is irrelevant or would conflict with current user instructions.",
-    "",
-    "Citation contract:",
-    "If you use memory files, append exactly one hidden citation block as the last content of the final answer:",
-    "<oai-mem-citation>",
-    "<citation_entries>",
-    "MEMORY.md:1-3|note=[why this memory mattered]",
-    "</citation_entries>",
-    "<rollout_ids>",
-    "rollout UUIDs when known",
-    "</rollout_ids>",
-    "</oai-mem-citation>",
-    "",
-    "Only write ad-hoc memory update notes when the user explicitly asks you to remember something.",
-    "",
-    "========= MEMORY_SUMMARY BEGINS =========",
-    summary,
-    "========= MEMORY_SUMMARY ENDS =========",
-  ].join("\n");
+  return renderTemplate(
+    CODEX_READ_PATH_TEMPLATE,
+    new Map([
+      ["base_path", paths.data],
+      ["memory_summary", summary],
+    ]),
+  );
+}
+
+export function renderStageOneInputPrompt(input: {
+  readonly rolloutPath: string;
+  readonly rolloutCwd: string;
+  readonly rolloutContents: string;
+}): string {
+  return renderTemplate(
+    CODEX_STAGE_ONE_INPUT_TEMPLATE,
+    new Map([
+      ["rollout_path", input.rolloutPath],
+      ["rollout_cwd", input.rolloutCwd],
+      ["rollout_contents", input.rolloutContents],
+    ]),
+  );
+}
+
+function renderExtensionBlock(template: string, memoryExtensionsRoot: string): string {
+  return renderTemplate(template, new Map([["memory_extensions_root", memoryExtensionsRoot]]));
+}
+
+export function renderConsolidationPrompt(paths: MemoryPaths): string {
+  const memoryExtensionsRoot = paths.extensions;
+  const memoryExtensionsExist = fs.existsSync(memoryExtensionsRoot);
+  const memoryExtensionsFolderStructure = memoryExtensionsExist
+    ? renderExtensionBlock(CODEX_MEMORY_EXTENSIONS_FOLDER_STRUCTURE, memoryExtensionsRoot)
+    : "";
+  const memoryExtensionsPrimaryInputs = memoryExtensionsExist
+    ? renderExtensionBlock(CODEX_MEMORY_EXTENSIONS_PRIMARY_INPUTS, memoryExtensionsRoot)
+    : "";
+
+  return renderTemplate(
+    CODEX_CONSOLIDATION_TEMPLATE,
+    new Map([
+      ["memory_root", paths.data],
+      ["memory_extensions_folder_structure", memoryExtensionsFolderStructure],
+      ["memory_extensions_primary_inputs", memoryExtensionsPrimaryInputs],
+      ["phase2_workspace_diff_file", path.basename(paths.diff)],
+    ]),
+  );
 }

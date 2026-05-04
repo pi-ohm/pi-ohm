@@ -3,10 +3,10 @@ import { Result } from "better-result";
 import { isValidRolloutId, stripMemoryCitations } from "./citations";
 import { loadMemoriesConfig, registerMemoriesSettings } from "./config";
 import { MemoryDb } from "./db";
-import { buildStage1FromBranch } from "./extract";
-import { consolidateMemoryFiles, ensureMemoryLayout, readSummary } from "./layout";
+import { ensureMemoryLayout, readSummary } from "./layout";
 import { resolveMemoryPaths } from "./paths";
 import { renderReadPathPrompt } from "./prompt";
+import { runMemoryStartup, runPhase2 } from "./startup";
 
 const paths = resolveMemoryPaths();
 
@@ -38,70 +38,34 @@ async function openDb(ctx?: ExtensionContext): Promise<MemoryDb | undefined> {
   return db.value;
 }
 
-async function snapshotCurrentSession(ctx: ExtensionContext): Promise<boolean> {
-  const id = threadId(ctx);
-  if (!id) return false;
+let startupRunning = false;
 
-  const config = await loadMemoriesConfig(ctx.cwd);
-  if (!config.generateMemories) return false;
-
+async function runStartup(ctx: ExtensionContext): Promise<void> {
+  if (startupRunning) return;
+  startupRunning = true;
   const db = await openDb(ctx);
-  if (!db) return false;
-
-  const mode = await db.getMode(id);
-  if (Result.isError(mode)) {
-    ctx.ui.notify(errorText(mode.error), "error");
-    await db.close();
-    return false;
+  if (!db) {
+    startupRunning = false;
+    return;
   }
-  if (mode.value?.mode === "disabled" || mode.value?.mode === "polluted") {
+  try {
+    const config = await loadMemoriesConfig(ctx.cwd);
+    await runMemoryStartup({ ctx, db, paths, config });
+  } finally {
     await db.close();
-    return false;
+    startupRunning = false;
   }
-
-  const output = buildStage1FromBranch({
-    entries: ctx.sessionManager.getBranch(),
-    threadId: id,
-    cwd: ctx.cwd,
-    rolloutPath: ctx.sessionManager.getSessionFile(),
-    now: Date.now(),
-  });
-
-  if (!output) {
-    await db.close();
-    return false;
-  }
-
-  const saved = await db.upsertStage1(output);
-  if (Result.isError(saved)) {
-    ctx.ui.notify(errorText(saved.error), "error");
-    await db.close();
-    return false;
-  }
-
-  await db.close();
-  return true;
 }
 
-async function consolidate(ctx: ExtensionContext): Promise<number | undefined> {
-  const config = await loadMemoriesConfig(ctx.cwd);
+async function runLocalPhase2(ctx: ExtensionContext): Promise<void> {
   const db = await openDb(ctx);
-  if (!db) return undefined;
-  const outputs = await db.listStage1(config.maxRawMemoriesForConsolidation);
-  await db.close();
-
-  if (Result.isError(outputs)) {
-    ctx.ui.notify(errorText(outputs.error), "error");
-    return undefined;
+  if (!db) return;
+  try {
+    const config = await loadMemoriesConfig(ctx.cwd);
+    await runPhase2({ db, paths, config, now: Date.now() });
+  } finally {
+    await db.close();
   }
-
-  const written = await consolidateMemoryFiles(paths, outputs.value);
-  if (Result.isError(written)) {
-    ctx.ui.notify(errorText(written.error), "error");
-    return undefined;
-  }
-
-  return outputs.value.length;
 }
 
 export default function registerMemoriesExtension(pi: ExtensionAPI): void {
@@ -120,7 +84,8 @@ export default function registerMemoriesExtension(pi: ExtensionAPI): void {
 
     const existing = await readSummary(paths, config.maxSummaryChars);
     const summary =
-      existing ?? (await consolidate(ctx).then(() => readSummary(paths, config.maxSummaryChars)));
+      existing ??
+      (await runLocalPhase2(ctx).then(() => readSummary(paths, config.maxSummaryChars)));
     if (!summary) return;
 
     return {
@@ -130,10 +95,20 @@ ${renderReadPathPrompt(paths, summary)}`,
     };
   });
 
-  pi.on("agent_end", async (_event, ctx) => {
-    const changed = await snapshotCurrentSession(ctx);
-    if (!changed) return;
-    await consolidate(ctx);
+  pi.on("agent_start", async (_event, ctx) => {
+    void runStartup(ctx);
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    const config = await loadMemoriesConfig(ctx.cwd);
+    if (!config.disableOnExternalContext) return;
+    if (!/(web|search|mcp)/iu.test(event.toolName)) return;
+    const id = threadId(ctx);
+    if (!id) return;
+    const db = await openDb(ctx);
+    if (!db) return;
+    await db.setMode(id, "polluted", Date.now());
+    await db.close();
   });
 
   pi.on("message_end", async (event, ctx) => {

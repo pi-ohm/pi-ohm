@@ -1,18 +1,15 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import {
-  getSetting,
-  setSetting,
-  type SettingDefinition,
-} from "@juanibiapina/pi-extension-settings";
+import { getSetting, type SettingDefinition } from "@juanibiapina/pi-extension-settings";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 const EXTENSION = "pi-ohm-memories";
 
 export interface MemoriesConfig {
-  readonly useMemories: boolean;
+  readonly disableOnExternalContext: boolean;
   readonly generateMemories: boolean;
+  readonly useMemories: boolean;
   readonly maxSummaryChars: number;
   readonly maxRawMemoriesForConsolidation: number;
   readonly maxUnusedDays: number;
@@ -22,11 +19,14 @@ export interface MemoriesConfig {
   readonly minRateLimitRemainingPercent: number;
   readonly extractModel: string;
   readonly consolidationModel: string;
+  readonly subprocessTimeoutMs: number;
+  readonly phase2CooldownHours: number;
 }
 
 export const DEFAULT_MEMORIES_CONFIG: MemoriesConfig = {
-  useMemories: true,
+  disableOnExternalContext: false,
   generateMemories: true,
+  useMemories: true,
   maxSummaryChars: 20000,
   maxRawMemoriesForConsolidation: 256,
   maxUnusedDays: 30,
@@ -36,11 +36,15 @@ export const DEFAULT_MEMORIES_CONFIG: MemoriesConfig = {
   minRateLimitRemainingPercent: 25,
   extractModel: "openai/gpt-5.4-mini",
   consolidationModel: "openai/gpt-5.4",
+  subprocessTimeoutMs: 600000,
+  phase2CooldownHours: 6,
 };
 
 interface ConfigPaths {
-  readonly global: string;
-  readonly project: string;
+  readonly globalOhm: string;
+  readonly projectOhm: string;
+  readonly globalSettings: string;
+  readonly projectSettings: string;
 }
 
 type Json = Record<string, unknown>;
@@ -65,8 +69,10 @@ function resolveConfigDir(): string {
 function resolveConfigPaths(cwd: string): ConfigPaths {
   const dir = resolveConfigDir();
   return {
-    global: path.join(dir, "ohm.json"),
-    project: path.join(cwd, ".pi", "ohm.json"),
+    globalOhm: path.join(dir, "ohm.json"),
+    projectOhm: path.join(cwd, ".pi", "ohm.json"),
+    globalSettings: path.join(dir, "settings.json"),
+    projectSettings: path.join(cwd, ".pi", "settings.json"),
   };
 }
 
@@ -104,10 +110,12 @@ function str(value: unknown, fallback: string): string {
 
 export function mergeMemoriesConfig(base: MemoriesConfig, patch: unknown): MemoriesConfig {
   const source = isJson(patch) ? patch : {};
+  const disable = source.disableOnExternalContext ?? source.noMemoriesIfMcpOrWebSearch;
 
   return {
-    useMemories: bool(source.useMemories, base.useMemories),
+    disableOnExternalContext: bool(disable, base.disableOnExternalContext),
     generateMemories: bool(source.generateMemories, base.generateMemories),
+    useMemories: bool(source.useMemories, base.useMemories),
     maxSummaryChars: int(source.maxSummaryChars, base.maxSummaryChars, 1000, 200000),
     maxRawMemoriesForConsolidation: int(
       source.maxRawMemoriesForConsolidation,
@@ -127,6 +135,8 @@ export function mergeMemoriesConfig(base: MemoriesConfig, patch: unknown): Memor
     ),
     extractModel: str(source.extractModel, base.extractModel),
     consolidationModel: str(source.consolidationModel, base.consolidationModel),
+    subprocessTimeoutMs: int(source.subprocessTimeoutMs, base.subprocessTimeoutMs, 30000, 3600000),
+    phase2CooldownHours: int(source.phase2CooldownHours, base.phase2CooldownHours, 0, 168),
   };
 }
 
@@ -135,7 +145,7 @@ function memoriesPatch(config: Json | undefined): unknown {
   return config.memories;
 }
 
-function applySettings(config: MemoriesConfig): MemoriesConfig {
+function applyExtensionSettings(config: MemoriesConfig): MemoriesConfig {
   return {
     ...config,
     useMemories: bool(
@@ -151,13 +161,15 @@ function applySettings(config: MemoriesConfig): MemoriesConfig {
 
 export async function loadMemoriesConfig(cwd: string): Promise<MemoriesConfig> {
   const paths = resolveConfigPaths(cwd);
-  const global = await readJson(paths.global);
-  const project = await readJson(paths.project);
-  const merged = mergeMemoriesConfig(
-    mergeMemoriesConfig(DEFAULT_MEMORIES_CONFIG, memoriesPatch(global)),
-    memoriesPatch(project),
+  const globalOhm = await readJson(paths.globalOhm);
+  const projectOhm = await readJson(paths.projectOhm);
+  const globalSettings = await readJson(paths.globalSettings);
+  const projectSettings = await readJson(paths.projectSettings);
+  const merged = [globalOhm, globalSettings, projectOhm, projectSettings].reduce(
+    (config, source) => mergeMemoriesConfig(config, memoriesPatch(source)),
+    DEFAULT_MEMORIES_CONFIG,
   );
-  return applySettings(merged);
+  return applyExtensionSettings(merged);
 }
 
 let didRegister = false;
@@ -177,7 +189,7 @@ export function registerMemoriesSettings(pi: ExtensionAPI): void {
     {
       id: "generate-memories",
       label: "Generate Memories",
-      description: "Allow @pi-ohm/memories to store session memory snapshots.",
+      description: "Allow @pi-ohm/memories to generate durable memories from sessions.",
       defaultValue: "on",
       values: ["on", "off"],
     },
@@ -187,11 +199,4 @@ export function registerMemoriesSettings(pi: ExtensionAPI): void {
     name: EXTENSION,
     settings,
   });
-}
-
-export function setMemoriesSetting(
-  id: "use-memories" | "generate-memories",
-  value: "on" | "off",
-): void {
-  setSetting(EXTENSION, id, value);
 }
