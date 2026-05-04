@@ -50,7 +50,11 @@ async function runStartup(ctx: ExtensionContext): Promise<void> {
   }
   try {
     const config = await loadMemoriesConfig(ctx.cwd);
-    await runMemoryStartup({ ctx, db, paths, config });
+    if (Result.isError(config)) {
+      ctx.ui.notify(errorText(config.error), "error");
+      return;
+    }
+    await runMemoryStartup({ ctx, db, paths, config: config.value });
   } finally {
     await db.close();
     startupRunning = false;
@@ -62,7 +66,11 @@ async function runLocalPhase2(ctx: ExtensionContext): Promise<void> {
   if (!db) return;
   try {
     const config = await loadMemoriesConfig(ctx.cwd);
-    await runPhase2({ db, paths, config, now: Date.now() });
+    if (Result.isError(config)) {
+      ctx.ui.notify(errorText(config.error), "error");
+      return;
+    }
+    await runPhase2({ db, paths, config: config.value, now: Date.now() });
   } finally {
     await db.close();
   }
@@ -80,12 +88,25 @@ export default function registerMemoriesExtension(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", async (event, ctx) => {
     const config = await loadMemoriesConfig(ctx.cwd);
-    if (!config.useMemories) return;
+    if (Result.isError(config)) {
+      ctx.ui.notify(errorText(config.error), "error");
+      return;
+    }
+    if (!config.value.useMemories) return;
 
-    const existing = await readSummary(paths, config.maxSummaryChars);
-    const summary =
-      existing ??
-      (await runLocalPhase2(ctx).then(() => readSummary(paths, config.maxSummaryChars)));
+    const existing = await readSummary(paths, config.value.maxSummaryChars);
+    if (Result.isError(existing)) {
+      ctx.ui.notify(errorText(existing.error), "error");
+      return;
+    }
+    const generated = existing.value
+      ? existing
+      : await runLocalPhase2(ctx).then(() => readSummary(paths, config.value.maxSummaryChars));
+    if (Result.isError(generated)) {
+      ctx.ui.notify(errorText(generated.error), "error");
+      return;
+    }
+    const summary = generated.value;
     if (!summary) return;
 
     return {
@@ -101,7 +122,11 @@ ${renderReadPathPrompt(paths, summary)}`,
 
   pi.on("tool_call", async (event, ctx) => {
     const config = await loadMemoriesConfig(ctx.cwd);
-    if (!config.disableOnExternalContext) return;
+    if (Result.isError(config)) {
+      ctx.ui.notify(errorText(config.error), "error");
+      return;
+    }
+    if (!config.value.disableOnExternalContext) return;
     if (!/(web|search|mcp)/iu.test(event.toolName)) return;
     const id = threadId(ctx);
     if (!id) return;

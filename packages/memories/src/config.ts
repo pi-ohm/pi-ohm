@@ -3,8 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import { getSetting, type SettingDefinition } from "@juanibiapina/pi-extension-settings";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Result, TaggedError, type Result as BetterResult } from "better-result";
 
 const EXTENSION = "pi-ohm-memories";
+
+export class MemoryConfigError extends TaggedError("MemoryConfigError")<{
+  readonly code: "config_read_failed" | "config_parse_failed";
+  readonly message: string;
+  readonly path: string;
+  readonly cause?: unknown;
+}>() {}
+
+export type MemoryConfigResult<T> = BetterResult<T, MemoryConfigError>;
 
 export interface MemoriesConfig {
   readonly disableOnExternalContext: boolean;
@@ -49,6 +59,12 @@ interface ConfigPaths {
 
 type Json = Record<string, unknown>;
 
+function errorCode(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  if (!("code" in value)) return undefined;
+  return typeof value.code === "string" ? value.code : undefined;
+}
+
 function isJson(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -76,13 +92,43 @@ function resolveConfigPaths(cwd: string): ConfigPaths {
   };
 }
 
-async function readJson(file: string): Promise<Json | undefined> {
-  const result = await fs.readFile(file, "utf8").then(
-    (raw) => JSON.parse(raw),
-    () => undefined,
-  );
-  if (!isJson(result)) return undefined;
-  return result;
+async function readConfigJson(file: string): Promise<MemoryConfigResult<Json | undefined>> {
+  const raw = await Result.tryPromise({
+    try: async () => fs.readFile(file, "utf8"),
+    catch: (cause) =>
+      new MemoryConfigError({
+        code: "config_read_failed",
+        path: file,
+        message: `Failed to read memories config: ${file}`,
+        cause,
+      }),
+  });
+  if (Result.isError(raw)) {
+    if (errorCode(raw.error.cause) === "ENOENT") return Result.ok(undefined);
+    return raw;
+  }
+
+  const parsed = Result.try({
+    try: () => JSON.parse(raw.value),
+    catch: (cause) =>
+      new MemoryConfigError({
+        code: "config_parse_failed",
+        path: file,
+        message: `Failed to parse memories config JSON: ${file}`,
+        cause,
+      }),
+  });
+  if (Result.isError(parsed)) return parsed;
+  if (!isJson(parsed.value)) {
+    return Result.err(
+      new MemoryConfigError({
+        code: "config_parse_failed",
+        path: file,
+        message: `Memories config must be a JSON object: ${file}`,
+      }),
+    );
+  }
+  return Result.ok(parsed.value);
 }
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -159,17 +205,26 @@ function applyExtensionSettings(config: MemoriesConfig): MemoriesConfig {
   };
 }
 
-export async function loadMemoriesConfig(cwd: string): Promise<MemoriesConfig> {
+export async function loadMemoriesConfig(cwd: string): Promise<MemoryConfigResult<MemoriesConfig>> {
   const paths = resolveConfigPaths(cwd);
-  const globalOhm = await readJson(paths.globalOhm);
-  const projectOhm = await readJson(paths.projectOhm);
-  const globalSettings = await readJson(paths.globalSettings);
-  const projectSettings = await readJson(paths.projectSettings);
-  const merged = [globalOhm, globalSettings, projectOhm, projectSettings].reduce(
+  const globalOhm = await readConfigJson(paths.globalOhm);
+  if (Result.isError(globalOhm)) return globalOhm;
+  const projectOhm = await readConfigJson(paths.projectOhm);
+  if (Result.isError(projectOhm)) return projectOhm;
+  const globalSettings = await readConfigJson(paths.globalSettings);
+  if (Result.isError(globalSettings)) return globalSettings;
+  const projectSettings = await readConfigJson(paths.projectSettings);
+  if (Result.isError(projectSettings)) return projectSettings;
+  const merged = [
+    globalOhm.value,
+    globalSettings.value,
+    projectOhm.value,
+    projectSettings.value,
+  ].reduce(
     (config, source) => mergeMemoriesConfig(config, memoriesPatch(source)),
     DEFAULT_MEMORIES_CONFIG,
   );
-  return applyExtensionSettings(merged);
+  return Result.ok(applyExtensionSettings(merged));
 }
 
 let didRegister = false;

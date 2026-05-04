@@ -59,23 +59,23 @@ export async function runPiPrint(input: {
   readonly extraArgs?: readonly string[];
   readonly systemPrompt?: string;
 }): Promise<MemorySubprocessResult<string>> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-memory-"));
-  const promptPath = path.join(dir, "prompt.md");
-  await fs.writeFile(promptPath, input.prompt, "utf8");
+  const workspace = await Result.tryPromise({
+    try: async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-memory-"));
+      const promptPath = path.join(dir, "prompt.md");
+      await fs.writeFile(promptPath, input.prompt, "utf8");
+      return { dir, promptPath };
+    },
+    catch: (cause) =>
+      new MemorySubprocessError({
+        code: "process_failed",
+        message: "Failed to prepare Pi subprocess input",
+        cause,
+      }),
+  });
+  if (Result.isError(workspace)) return workspace;
 
-  const args = [
-    "-p",
-    "--no-session",
-    "--no-extensions",
-    "--no-skills",
-    "--no-prompt-templates",
-    "--no-context-files",
-    ...(input.systemPrompt ? ["--system-prompt", input.systemPrompt] : []),
-    ...(input.tools ? ["--tools", input.tools.join(",")] : ["--no-tools"]),
-    ...modelArgs(input.model),
-    ...(input.extraArgs ?? []),
-    `@${promptPath}`,
-  ];
+  const args = piPrintArgs(input, workspace.value.promptPath);
 
   const result = await Result.tryPromise({
     try: async () =>
@@ -112,8 +112,42 @@ export async function runPiPrint(input: {
         cause,
       }),
   });
-  await fs.rm(dir, { recursive: true, force: true });
+  const cleaned = await Result.tryPromise({
+    try: async () => fs.rm(workspace.value.dir, { recursive: true, force: true }),
+    catch: (cause) =>
+      new MemorySubprocessError({
+        code: "process_failed",
+        message: "Failed to clean Pi subprocess workspace",
+        cause,
+      }),
+  });
+  if (Result.isError(result)) return result;
+  if (Result.isError(cleaned)) return cleaned;
   return result;
+}
+
+function piPrintArgs(
+  input: {
+    readonly model: string;
+    readonly tools?: readonly string[];
+    readonly extraArgs?: readonly string[];
+    readonly systemPrompt?: string;
+  },
+  promptPath: string,
+): string[] {
+  return [
+    "-p",
+    "--no-session",
+    "--no-extensions",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-context-files",
+    ...(input.systemPrompt ? ["--system-prompt", input.systemPrompt] : []),
+    ...(input.tools ? ["--tools", input.tools.join(",")] : ["--no-tools"]),
+    ...modelArgs(input.model),
+    ...(input.extraArgs ?? []),
+    `@${promptPath}`,
+  ];
 }
 
 export async function runStage1Extractor(input: {

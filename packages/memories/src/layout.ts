@@ -6,7 +6,7 @@ import type { Stage1Output } from "./db";
 import type { MemoryPaths } from "./paths";
 
 export class MemoryLayoutError extends TaggedError("MemoryLayoutError")<{
-  readonly code: "layout_failed";
+  readonly code: "layout_failed" | "summary_read_failed";
   readonly message: string;
   readonly cause?: unknown;
 }>() {}
@@ -41,13 +41,29 @@ export async function ensureMemoryLayout(paths: MemoryPaths): Promise<MemoryLayo
 export async function readSummary(
   paths: MemoryPaths,
   maxChars: number,
-): Promise<string | undefined> {
-  const raw = await fs.readFile(paths.summary, "utf8").then(
-    (content) => content.trim(),
-    () => "",
-  );
-  if (raw.length === 0) return undefined;
-  return raw.slice(0, maxChars);
+): Promise<MemoryLayoutResult<string | undefined>> {
+  const result = await Result.tryPromise({
+    try: async () => fs.readFile(paths.summary, "utf8"),
+    catch: (cause) =>
+      new MemoryLayoutError({
+        code: "summary_read_failed",
+        message: "Failed to read memory summary",
+        cause,
+      }),
+  });
+  if (Result.isError(result)) {
+    if (errorCode(result.error.cause) === "ENOENT") return Result.ok(undefined);
+    return result;
+  }
+  const raw = result.value.trim();
+  if (raw.length === 0) return Result.ok(undefined);
+  return Result.ok(raw.slice(0, maxChars));
+}
+
+function errorCode(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  if (!("code" in value)) return undefined;
+  return typeof value.code === "string" ? value.code : undefined;
 }
 
 function stamp(value: number): string {
@@ -191,10 +207,7 @@ async function git(
   const child = await import("node:child_process");
   return new Promise((resolve) => {
     child.execFile("git", [...args], { cwd: paths.data }, (error, stdout, stderr) => {
-      const code =
-        typeof (error as { code?: unknown } | null)?.code === "number"
-          ? (error as { code: number }).code
-          : 0;
+      const code = typeof error?.code === "number" ? error.code : 0;
       resolve({ code, stdout, stderr });
     });
   });
