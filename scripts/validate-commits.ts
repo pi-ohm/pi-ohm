@@ -14,6 +14,7 @@ const ALLOWED_TYPES = new Set([
   "docs",
   "style",
   "refactor",
+  "refac",
   "perf",
   "test",
   "build",
