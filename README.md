@@ -22,7 +22,7 @@
 
 Monorepo for modular, [Amp Code](https://ampcode.com)-inspired Pi workflows. All extensions are packaged under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
 
-Current features include: modes, subagents (librarian, finder, oracle, painter), session search, handoff. More on these in their respective package (see highlights below).
+Current features include: modes, subagents (librarian, finder, oracle, painter), session search, handoff, memories. More on these in their respective package (see highlights below).
 
 Docs coming soon at [ohm.moe](https://ohm.moe).
 
@@ -39,6 +39,7 @@ Coming soon
   pi install npm:@pi-ohm/subagents
   pi install npm:@pi-ohm/session-search
   pi install npm:@pi-ohm/painter
+  pi install npm:@pi-ohm/memories
   ```
 - Install full bundle (recommended):
   ```bash
@@ -94,6 +95,7 @@ pi-ohm/
 │   ├── subagents/                  # @pi-ohm/subagents
 │   ├── session-search/             # @pi-ohm/session-search
 │   ├── painter/                    # @pi-ohm/painter
+│   ├── memories/                   # @pi-ohm/memories
 │   └── extension/                  # pi-ohm (bundle package)
 ├── scripts/
 │   └── publish-packages.ts

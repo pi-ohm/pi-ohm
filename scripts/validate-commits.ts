@@ -26,6 +26,7 @@ const ALLOWED_SCOPES = new Set([
   "config",
   "modes",
   "handoff",
+  "memories",
   "subagents",
   "session-search",
   "session",

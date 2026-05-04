@@ -1,5 +1,6 @@
 export const OHM_FEATURE_PACKAGES = [
   "@pi-ohm/modes",
+  "@pi-ohm/memories",
   "@pi-ohm/handoff",
   "@pi-ohm/subagents",
   "@pi-ohm/session-search",

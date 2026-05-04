@@ -36,10 +36,6 @@ export default function registerHandoffExtension(pi: ExtensionAPI): void {
     await refreshStatus(ctx);
   });
 
-  pi.on("session_switch", async (_event, ctx) => {
-    await refreshStatus(ctx);
-  });
-
   pi.registerCommand("ohm-handoff", {
     description: "Show handoff + visualizer config and status",
     handler: async (_args, ctx) => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Value } from "@sinclair/typebox/value";
+import { Value } from "typebox/value";
 import { Result } from "better-result";
 import { ensureZodV4 } from "../shared";
 import {

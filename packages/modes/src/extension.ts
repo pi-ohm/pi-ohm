@@ -57,10 +57,6 @@ export default function registerModesExtension(pi: ExtensionAPI): void {
     await refreshModeStatus(ctx);
   });
 
-  pi.on("session_switch", async (_event, ctx) => {
-    await refreshModeStatus(ctx);
-  });
-
   pi.registerCommand("ohm-modes", {
     description: "Show available modes and current default mode",
     handler: async (_args, ctx) => {

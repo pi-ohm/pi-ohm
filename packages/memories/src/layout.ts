@@ -1,0 +1,212 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import type { Stage1Output } from "./db";
+import type { MemoryPaths } from "./paths";
+
+export class MemoryLayoutError extends TaggedError("MemoryLayoutError")<{
+  readonly code: "layout_failed";
+  readonly message: string;
+  readonly cause?: unknown;
+}>() {}
+
+export type MemoryLayoutResult<T> = BetterResult<T, MemoryLayoutError>;
+
+export async function ensureMemoryLayout(paths: MemoryPaths): Promise<MemoryLayoutResult<true>> {
+  return Result.tryPromise({
+    try: async () => {
+      await fs.mkdir(paths.data, { recursive: true });
+      await fs.mkdir(paths.rollouts, { recursive: true });
+      await fs.mkdir(paths.skills, { recursive: true });
+      await fs.mkdir(paths.extensions, { recursive: true });
+      await fs.mkdir(paths.adhoc, { recursive: true });
+      await fs.mkdir(paths.notes, { recursive: true });
+      await fs.writeFile(
+        path.join(paths.adhoc, "instructions.md"),
+        "# Ad-hoc Memory Notes\n\nOnly add notes here when the user explicitly asks.\n",
+        { flag: "a" },
+      );
+      return true as const;
+    },
+    catch: (cause) =>
+      new MemoryLayoutError({
+        code: "layout_failed",
+        message: "Failed to create memory layout",
+        cause,
+      }),
+  });
+}
+
+export async function readSummary(
+  paths: MemoryPaths,
+  maxChars: number,
+): Promise<string | undefined> {
+  const raw = await fs.readFile(paths.summary, "utf8").then(
+    (content) => content.trim(),
+    () => "",
+  );
+  if (raw.length === 0) return undefined;
+  return raw.slice(0, maxChars);
+}
+
+function stamp(value: number): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return new Date(0).toISOString();
+  return date.toISOString();
+}
+
+function slug(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "_")
+    .replace(/^_+/u, "")
+    .replace(/_+$/u, "")
+    .slice(0, 60);
+  if (normalized.length > 0) return normalized;
+  return "memory";
+}
+
+function summaryFile(output: Stage1Output): string {
+  return `${stamp(output.sourceUpdatedAt).replace(/[:.]/gu, "-")}-${output.threadId.slice(0, 8)}-${slug(output.rolloutSlug ?? output.threadId)}.md`;
+}
+
+export async function consolidateMemoryFiles(
+  paths: MemoryPaths,
+  outputs: readonly Stage1Output[],
+): Promise<MemoryLayoutResult<true>> {
+  return Result.tryPromise({
+    try: async () => {
+      await ensureMemoryLayout(paths);
+      const files = outputs.map((output) => ({ output, file: summaryFile(output) }));
+      const raw =
+        outputs.length === 0
+          ? "# Raw Memories\n\nNo raw memories yet.\n"
+          : [
+              "# Raw Memories",
+              "",
+              "Merged stage-1 raw memories (stable ascending thread-id order):",
+              "",
+              ...files.flatMap((item) => [
+                `## Thread \`${item.output.threadId}\``,
+                `updated_at: ${stamp(item.output.sourceUpdatedAt)}`,
+                `cwd: ${item.output.cwd ?? ""}`,
+                `rollout_path: ${item.output.rolloutPath ?? ""}`,
+                `rollout_summary_file: ${item.file}`,
+                "",
+                item.output.rawMemory,
+                "",
+              ]),
+            ].join("\n");
+
+      await fs.writeFile(paths.raw, raw, "utf8");
+
+      const existing = await fs.readdir(paths.rollouts).then(
+        (entries) => entries.filter((entry) => entry.endsWith(".md")),
+        () => [],
+      );
+      const expected = files.map((item) => item.file);
+      await Promise.all(
+        existing
+          .filter((entry) => !expected.includes(entry))
+          .map((entry) => fs.rm(path.join(paths.rollouts, entry), { force: true })),
+      );
+
+      await Promise.all(
+        files.map((item) =>
+          fs.writeFile(
+            path.join(paths.rollouts, item.file),
+            [
+              `thread_id: ${item.output.threadId}`,
+              `updated_at: ${stamp(item.output.sourceUpdatedAt)}`,
+              `rollout_path: ${item.output.rolloutPath ?? ""}`,
+              `cwd: ${item.output.cwd ?? ""}`,
+              "",
+              item.output.rolloutSummary,
+              "",
+            ].join("\n"),
+            "utf8",
+          ),
+        ),
+      );
+
+      const registry = [
+        "# MEMORY",
+        "",
+        "Search this file first to route memory lookups.",
+        "",
+        ...files.map(
+          (item) =>
+            `- ${item.file}: thread ${item.output.threadId} - ${item.output.rolloutSummary.split(/\r?\n/u)[0] ?? "memory"}`,
+        ),
+        "",
+      ].join("\n");
+      await fs.writeFile(paths.registry, registry, "utf8");
+
+      const summary = [
+        "# Memory Summary",
+        "",
+        "This summary is generated by @pi-ohm/memories MVP from stored session snapshots.",
+        "",
+        ...outputs
+          .slice(0, 20)
+          .flatMap((output) => [
+            `## ${output.rolloutSlug ?? output.threadId}`,
+            "",
+            output.rolloutSummary,
+            "",
+          ]),
+      ].join("\n");
+      await fs.writeFile(paths.summary, summary, "utf8");
+      return true as const;
+    },
+    catch: (cause) =>
+      new MemoryLayoutError({
+        code: "layout_failed",
+        message: "Failed to consolidate memory files",
+        cause,
+      }),
+  });
+}
+
+export async function resetMemoryFiles(paths: MemoryPaths): Promise<MemoryLayoutResult<true>> {
+  return Result.tryPromise({
+    try: async () => {
+      await fs.rm(paths.summary, { force: true });
+      await fs.rm(paths.registry, { force: true });
+      await fs.rm(paths.raw, { force: true });
+      await fs.rm(paths.diff, { force: true });
+      await fs.rm(paths.rollouts, { recursive: true, force: true });
+      await fs.rm(paths.extensions, { recursive: true, force: true });
+      await ensureMemoryLayout(paths);
+      return true as const;
+    },
+    catch: (cause) =>
+      new MemoryLayoutError({
+        code: "layout_failed",
+        message: "Failed to reset memory files",
+        cause,
+      }),
+  });
+}
+
+export async function writeAdhocNote(
+  paths: MemoryPaths,
+  text: string,
+  now: number,
+): Promise<MemoryLayoutResult<string>> {
+  return Result.tryPromise({
+    try: async () => {
+      await ensureMemoryLayout(paths);
+      const file = `${new Date(now).toISOString().replace(/[:.]/gu, "-")}-note.md`;
+      const target = path.join(paths.notes, file);
+      await fs.writeFile(target, `${text.trim()}\n`, "utf8");
+      return target;
+    },
+    catch: (cause) =>
+      new MemoryLayoutError({
+        code: "layout_failed",
+        message: "Failed to write memory note",
+        cause,
+      }),
+  });
+}

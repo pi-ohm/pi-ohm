@@ -5,6 +5,7 @@ import registerSubagentsExtension from "@pi-ohm/subagents";
 import registerSessionSearchExtension from "@pi-ohm/session-search";
 import registerPainterExtension from "@pi-ohm/painter";
 import registerModesExtension from "@pi-ohm/modes";
+import registerMemoriesExtension from "@pi-ohm/memories";
 import { OHM_FEATURE_PACKAGES, OHM_RECOMMENDED_NEXT } from "./manifest";
 
 export default function registerPiOhmExtension(pi: ExtensionAPI): void {
@@ -15,6 +16,7 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   registerSessionSearchExtension(pi);
   registerPainterExtension(pi);
   registerModesExtension(pi);
+  registerMemoriesExtension(pi);
 
   pi.registerCommand("ohm-features", {
     description: "Show installed pi-ohm feature packages and feature flags",

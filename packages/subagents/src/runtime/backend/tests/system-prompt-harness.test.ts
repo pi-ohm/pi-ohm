@@ -5,11 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   createAgentSession,
-  createBashTool,
-  createEditTool,
   createExtensionRuntime,
-  createReadTool,
-  createWriteTool,
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
@@ -145,7 +141,6 @@ function createStaticResourceLoader(systemPrompt: string): ResourceLoader {
     }),
     getSystemPrompt: () => systemPrompt,
     getAppendSystemPrompt: () => [],
-    getPathMetadata: () => new Map(),
     extendResources: () => {},
     reload: async () => {},
   };
@@ -216,7 +211,7 @@ defineTest("golden - full subagent sdk system prompt + tool placement", async ()
           modelPattern: "openai/gpt-5",
         }),
       ),
-      tools: [createReadTool(cwd), createBashTool(cwd), createEditTool(cwd), createWriteTool(cwd)],
+      tools: ["read", "bash", "edit", "write"],
       sessionManager: SessionManager.inMemory(),
       settingsManager,
     });

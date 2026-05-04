@@ -1,6 +1,6 @@
 import { Result } from "better-result";
-import { type Static, Type } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
+import { type Static, Type } from "typebox";
+import { Value } from "typebox/value";
 import type { SubagentResult } from "../errors";
 import { SubagentValidationError } from "../errors";
 import { normalizeTypeBoxPath } from "./shared";
@@ -224,16 +224,16 @@ function normalizeTaskToolPayload(input: unknown): unknown {
 }
 
 function firstTypeBoxPathOrUndefined(input: unknown): string | undefined {
-  const firstError = Value.Errors(TaskToolParametersSchema, input).First();
-  const directPath = normalizeTypeBoxPath(firstError?.path);
+  const firstError = Value.Errors(TaskToolParametersSchema, input)[0];
+  const directPath = normalizeTypeBoxPath(firstError?.instancePath);
   if (directPath) return directPath;
 
   let bestPath: string | undefined;
   let bestDepth = -1;
 
   for (const schema of TaskOperationSchemas) {
-    const error = Value.Errors(schema, input).First();
-    const path = normalizeTypeBoxPath(error?.path);
+    const error = Value.Errors(schema, input)[0];
+    const path = normalizeTypeBoxPath(error?.instancePath);
     if (!path) continue;
 
     const depth = path.split(".").length;

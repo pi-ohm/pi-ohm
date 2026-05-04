@@ -6,6 +6,7 @@
   "keywords": [
     "handoff",
     "imagegen",
+    "memories",
     "ohm",
     "pi",
     "pi-coding-agent",
@@ -50,10 +51,11 @@
     "format": "yarn oxfmt -- .",
     "format:check": "yarn oxfmt -- --check .",
     "hooks:install": "lefthook install",
-    "postinstall": "sh -c 'if [ -d .git ]; then lefthook install; fi'"
+    "postinstall": "sh -c 'if [ -d .git ]; then lefthook install; fi'",
+    "test:memories": "tsx --test \"packages/memories/src/**/*.test.ts\""
   },
   "dependencies": {
-    "@juanibiapina/pi-extension-settings": "^0.5.0",
+    "@juanibiapina/pi-extension-settings": "^0.6.1",
     "zod": "catalog:"
   },
   "devDependencies": {

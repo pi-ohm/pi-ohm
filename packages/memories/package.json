@@ -1,16 +1,17 @@
 {
-  "name": "@pi-ohm/subagents",
+  "name": "@pi-ohm/memories",
   "version": "0.6.4",
-  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/subagents#readme",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/memories#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pi-ohm/pi-ohm.git",
-    "directory": "packages/subagents"
+    "directory": "packages/memories"
   },
   "files": [
     "dist/",
-    "src/runtime/backend/prompts/",
-    "README.md"
+    "README.md",
+    "ARCH.md",
+    "TODO.md"
   ],
   "type": "module",
   "main": "dist/extension.js",
@@ -26,25 +27,16 @@
     "provenance": true
   },
   "dependencies": {
+    "@juanibiapina/pi-extension-settings": "^0.6.1",
+    "@libsql/client": "catalog:",
     "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*",
-    "@pi-ohm/core": "workspace:*",
-    "@pi-ohm/tui": "workspace:*",
+    "@mariozechner/pi-tui": "catalog:pi",
     "better-result": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*",
-    "typebox": "*"
-  },
-  "peerDependenciesMeta": {
-    "@mariozechner/pi-tui": {
-      "optional": true
-    },
-    "typebox": {
-      "optional": true
-    }
+    "@mariozechner/pi-tui": "*"
   },
   "tsdown": {
     "entry": "src/extension.ts"

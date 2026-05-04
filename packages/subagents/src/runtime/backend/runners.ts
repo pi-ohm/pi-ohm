@@ -1,11 +1,7 @@
 import { spawn } from "node:child_process";
 import {
   createAgentSession,
-  createBashTool,
-  createEditTool,
   createExtensionRuntime,
-  createReadTool,
-  createWriteTool,
   SessionManager,
   SettingsManager,
   type ResourceLoader,
@@ -126,7 +122,6 @@ function createSdkResourceLoader(systemPrompt: string): ResourceLoader {
     }),
     getSystemPrompt: () => systemPrompt,
     getAppendSystemPrompt: () => [],
-    getPathMetadata: () => new Map(),
     extendResources: () => {},
     reload: async () => {},
   };
@@ -209,12 +204,7 @@ export const runPiSdkPrompt: PiSdkRunner = async (
     const created = await createAgentSession({
       cwd: input.cwd,
       resourceLoader: createSdkResourceLoader(bootstrapSystemPrompt),
-      tools: [
-        createReadTool(input.cwd),
-        createBashTool(input.cwd),
-        createEditTool(input.cwd),
-        createWriteTool(input.cwd),
-      ],
+      tools: ["read", "bash", "edit", "write"],
       sessionManager: SessionManager.inMemory(),
       settingsManager: SettingsManager.inMemory({
         compaction: { enabled: false },
@@ -283,16 +273,6 @@ export const runPiSdkPrompt: PiSdkRunner = async (
       resolvedModelProvider = activeModel.provider;
       resolvedModelId = activeModel.id;
     }
-
-    activeSession.agent.setSystemPrompt(
-      buildSubagentSdkSystemPrompt({
-        provider: resolvedModelProvider,
-        modelId: resolvedModelId,
-        modelPattern: input.modelPattern,
-        scopedModels: scopedModelCatalog.models,
-        profileRules: promptProfileRules.rules,
-      }),
-    );
 
     const selection = resolveSubagentPromptProfileSelection({
       provider: resolvedModelProvider,

@@ -28,6 +28,7 @@
     "@mariozechner/pi-coding-agent": "catalog:pi",
     "@pi-ohm/config": "workspace:*",
     "@pi-ohm/handoff": "workspace:*",
+    "@pi-ohm/memories": "workspace:*",
     "@pi-ohm/modes": "workspace:*",
     "@pi-ohm/painter": "workspace:*",
     "@pi-ohm/session-search": "workspace:*",
