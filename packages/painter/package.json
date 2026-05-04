@@ -24,6 +24,9 @@
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/extension.ts"
+  },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "catalog:pi",
     "@mariozechner/pi-tui": "catalog:pi",
@@ -31,9 +34,6 @@
   },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
-  },
-  "tsdown": {
-    "entry": "src/extension.ts"
   },
   "pi": {
     "extensions": [

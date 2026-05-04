@@ -26,6 +26,9 @@
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/extension.ts"
+  },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.6.1",
     "@libsql/client": "catalog:",
@@ -37,9 +40,6 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
-  },
-  "tsdown": {
-    "entry": "src/extension.ts"
   },
   "pi": {
     "extensions": [

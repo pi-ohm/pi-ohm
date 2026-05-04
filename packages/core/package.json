@@ -35,15 +35,10 @@
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts"
+  },
   "dependencies": {
     "better-result": "catalog:"
-  },
-  "tsdown": {
-    "entry": {
-      "errors": "src/errors.ts",
-      "grammar": "src/grammar.ts",
-      "paths": "src/paths.ts",
-      "toolkit": "src/toolkit.ts"
-    }
   }
 }

@@ -40,6 +40,9 @@
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/index.ts src/subagents.ts src/features.ts src/modes.ts src/painter.ts"
+  },
   "dependencies": {
     "@juanibiapina/pi-extension-settings": "^0.6.1",
     "@mariozechner/pi-coding-agent": "catalog:pi",
@@ -49,14 +52,5 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*",
     "@mariozechner/pi-tui": "*"
-  },
-  "tsdown": {
-    "entry": [
-      "src/index.ts",
-      "src/subagents.ts",
-      "src/features.ts",
-      "src/modes.ts",
-      "src/painter.ts"
-    ]
   }
 }

@@ -25,6 +25,9 @@
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/extension.ts"
+  },
   "dependencies": {
     "@mariozechner/pi-coding-agent": "catalog:pi",
     "@pi-ohm/config": "workspace:*",
@@ -45,9 +48,6 @@
     "typebox": {
       "optional": true
     }
-  },
-  "tsdown": {
-    "entry": "src/extension.ts"
   },
   "pi": {
     "extensions": [

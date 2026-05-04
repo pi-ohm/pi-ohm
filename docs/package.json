@@ -4,12 +4,12 @@
   "type": "module",
   "sideEffects": false,
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build && rm -rf .output/public/__tsr && cp -R .output/dist/client/__tsr .output/public/__tsr && cp .output/public/_shell.html .output/public/index.html",
+    "dev": "vp dev",
+    "build": "vp build && rm -rf .output/public/__tsr && cp -R .output/dist/client/__tsr .output/public/__tsr && cp .output/public/_shell.html .output/public/index.html",
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "start": "serve .output/public --config ../../serve.json",
-    "preview": "vite preview",
+    "preview": "vp preview",
     "types:check": "fumadocs-mdx && tsc --noEmit",
     "postinstall": "fumadocs-mdx"
   },
@@ -39,7 +39,7 @@
     "react-remove-scroll": "^2.7.2",
     "scroll-into-view-if-needed": "^3.1.0",
     "tailwind-merge": "^3.4.1",
-    "vite": "^7.3.1"
+    "vite": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -53,6 +53,7 @@
     "srvx": "^0.11.5",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
+    "vite-plus": "catalog:",
     "vite-tsconfig-paths": "^6.1.1",
     "wrangler": "^4.65.0"
   }

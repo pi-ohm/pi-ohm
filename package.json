@@ -32,10 +32,10 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsdown --config tsdown.config.ts",
+    "build": "for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build); done",
     "build:docs": "yarn workspace docs build",
     "dev:docs": "yarn workspace docs dev",
-    "build:watch": "tsdown --config tsdown.config.ts --watch",
+    "build:watch": "for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build -- --watch) & done; wait",
     "release:dev": "node --experimental-strip-types ./scripts/publish-packages.ts --channel dev",
     "release:latest": "node --experimental-strip-types ./scripts/publish-packages.ts --channel latest",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
@@ -44,10 +44,11 @@
     "test:subagents:dist": "yarn build && tsx --test \"packages/subagents/tests-dist/**/*.test.ts\"",
     "test:subagents:golden": "tsx --test packages/subagents/src/runtime/backend/tests/system-prompt-harness.test.ts",
     "test:subagents:golden:update": "UPDATE_PROMPTS=1 yarn test:subagents:golden",
-    "oxlint": "oxlint --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\"",
+    "test": "vp test",
+    "oxlint": "vp lint --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\"",
     "lint": "yarn oxlint -- .",
     "lint:fix": "yarn oxlint -- --fix .",
-    "oxfmt": "oxfmt --write",
+    "oxfmt": "vp fmt --write",
     "format": "yarn oxfmt -- .",
     "format:check": "yarn oxfmt -- --check .",
     "hooks:install": "lefthook install",
@@ -64,12 +65,13 @@
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
-    "oxlint-tsgolint": "^0.14.0",
-    "tsdown": "^0.15.4",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vite-plus": "catalog:"
+  },
+  "resolutions": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
   },
   "packageManager": "yarn@4.12.0",
   "pi": {
