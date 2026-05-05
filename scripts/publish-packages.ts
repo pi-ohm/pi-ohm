@@ -540,7 +540,7 @@ async function main(): Promise<void> {
       console.log(`Publishing ${name}@${targetVersion} from ${item.relDir}`);
       run("npm", publishArgs, { cwd: tempPkgDir });
       if (name.startsWith("@")) {
-        run("npm", ["access", "public", name], { cwd: tempPkgDir });
+        run("npm", ["access", "set", "status=public", name], { cwd: tempPkgDir });
       }
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
