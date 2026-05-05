@@ -122,6 +122,7 @@ const PACKAGE_DIRS = [
   "packages/core",
   "packages/modes",
   "packages/handoff",
+  "packages/memories",
   "packages/subagents",
   "packages/tui",
   "packages/session-search",

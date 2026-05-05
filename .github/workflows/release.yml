@@ -24,6 +24,7 @@ on:
           - core
           - modes
           - handoff
+          - memories
           - subagents
           - session-search
           - painter
@@ -241,6 +242,9 @@ jobs:
               ;;
             handoff)
               only="@pi-ohm/handoff"
+              ;;
+            memories)
+              only="@pi-ohm/memories"
               ;;
             subagents)
               only="@pi-ohm/subagents"
