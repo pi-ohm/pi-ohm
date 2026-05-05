@@ -19,6 +19,7 @@ import {
   isOhmDebugEnabled,
   isTaskToolResultDetails,
   toAgentToolResult,
+  toTaskTreeStyler,
 } from "./render";
 import { resolveBackendId, operationNotSupportedDetails } from "./execution/shared";
 import { runTaskCancel } from "./execution/cancel";
@@ -246,13 +247,15 @@ export function registerTaskTool(
       });
     },
     renderCall: (args, _theme) => new Text(formatTaskToolCallFromRegistrationArgs(args), 0, 0),
-    renderResult: (result, options, _theme) => {
+    renderResult: (result, options, theme) => {
+      const styler = toTaskTreeStyler(theme);
+
       if (isTaskToolResultDetails(result.details) && !isOhmDebugEnabled()) {
-        return createTaskToolResultTreeComponent(result.details, options.expanded);
+        return createTaskToolResultTreeComponent(result.details, options.expanded, styler);
       }
 
       const text = isTaskToolResultDetails(result.details)
-        ? detailsToText(result.details, options.expanded)
+        ? detailsToText(result.details, options.expanded, styler)
         : result.content
             .filter(
               (part): part is { readonly type: "text"; readonly text: string } =>

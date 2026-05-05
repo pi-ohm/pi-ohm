@@ -24,12 +24,21 @@ export interface SubagentTaskTreeEntry {
   readonly spinnerFrame?: number;
 }
 
+export interface SubagentTaskTreeStyler {
+  readonly success?: (text: string) => string;
+  readonly error?: (text: string) => string;
+  readonly muted?: (text: string) => string;
+  readonly bold?: (text: string) => string;
+  readonly underline?: (text: string) => string;
+}
+
 export interface SubagentTaskTreeRenderOptions {
   readonly compact?: boolean;
   readonly maxPromptLines?: number;
   readonly maxToolCalls?: number;
   readonly maxResultLines?: number;
   readonly includeSpacerBetweenEntries?: boolean;
+  readonly styler?: SubagentTaskTreeStyler;
 }
 
 function markerForStatus(entry: SubagentTaskTreeEntry): string {
@@ -44,47 +53,75 @@ function clampPositive(value: number | undefined, fallback: number): number {
   return Math.floor(value);
 }
 
-function bold(text: string): string {
+function defaultBold(text: string): string {
   if (text.length === 0) return text;
   return `${ANSI_BOLD_ON}${text}${ANSI_BOLD_OFF}`;
 }
 
-function styleStatusMarker(marker: string): string {
+function defaultUnderline(text: string): string {
+  if (text.length === 0) return text;
+  return `\x1b[4m${text}\x1b[24m`;
+}
+
+function withColor(code: string, text: string): string {
+  if (text.length === 0) return text;
+  return `${code}${text}${ANSI_FG_RESET}`;
+}
+
+const DEFAULT_STYLER: Required<SubagentTaskTreeStyler> = {
+  success: (text) => withColor(ANSI_GREEN_ON, text),
+  error: (text) => withColor(ANSI_RED_ON, text),
+  muted: (text) => withColor(ANSI_LIGHT_GREY_ON, text),
+  bold: defaultBold,
+  underline: defaultUnderline,
+};
+
+function resolveStyler(options: SubagentTaskTreeRenderOptions): Required<SubagentTaskTreeStyler> {
+  return {
+    success: options.styler?.success ?? DEFAULT_STYLER.success,
+    error: options.styler?.error ?? DEFAULT_STYLER.error,
+    muted: options.styler?.muted ?? DEFAULT_STYLER.muted,
+    bold: options.styler?.bold ?? DEFAULT_STYLER.bold,
+    underline: options.styler?.underline ?? DEFAULT_STYLER.underline,
+  };
+}
+
+function styleStatusMarker(marker: string, styler: Required<SubagentTaskTreeStyler>): string {
   if (marker === "✓") {
-    return `${ANSI_GREEN_ON}${marker}${ANSI_FG_RESET}`;
+    return styler.success(marker);
   }
 
   if (marker === "✕") {
-    return `${ANSI_RED_ON}${marker}${ANSI_FG_RESET}`;
+    return styler.error(marker);
   }
 
   return marker;
 }
 
-function styleEntryTitle(title: string): string {
+function styleEntryTitle(title: string, styler: Required<SubagentTaskTreeStyler>): string {
   const separator = " · ";
   const separatorIndex = title.indexOf(separator);
-  if (separatorIndex <= 0) return bold(title);
+  if (separatorIndex <= 0) return styler.bold(title);
 
   const subagentName = title.slice(0, separatorIndex);
   const rest = title.slice(separatorIndex + separator.length);
-  return `${bold(subagentName)}${separator}${rest}`;
+  return `${styler.bold(subagentName)}${separator}${rest}`;
 }
 
-function styleToolPrefix(prefix: string): string {
+function styleToolPrefix(prefix: string, styler: Required<SubagentTaskTreeStyler>): string {
   const withMarker = /^([✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]\s+)(\S+)$/u.exec(prefix);
   if (withMarker) {
     const markerWithSpace = withMarker[1] ?? "";
     const toolName = withMarker[2] ?? "";
     const marker = markerWithSpace.trim();
     const space = markerWithSpace.slice(marker.length);
-    return `${styleStatusMarker(marker)}${space}${bold(toolName)}`;
+    return `${styleStatusMarker(marker, styler)}${space}${styler.bold(toolName)}`;
   }
 
-  return bold(prefix);
+  return styler.bold(prefix);
 }
 
-function normalizeToolCall(line: string): string {
+function normalizeToolCall(line: string, styler: Required<SubagentTaskTreeStyler>): string {
   const trimmed = line.trim();
   if (trimmed.length === 0) return "✓ (empty tool line)";
 
@@ -94,14 +131,14 @@ function normalizeToolCall(line: string): string {
 
   const prefix = markerPrefix[1] ?? "";
   const suffix = markerPrefix[2] ?? "";
-  const normalized = `${styleToolPrefix(prefix)}${underlinePathTokens(suffix)}`;
+  const normalized = `${styleToolPrefix(prefix, styler)}${underlinePathTokens(suffix, styler)}`;
   if (/^[✓✕○•…⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/u.test(trimmed)) {
     return normalized;
   }
-  return `${styleStatusMarker("✓")} ${normalized}`;
+  return `${styleStatusMarker("✓", styler)} ${normalized}`;
 }
 
-function underlinePathTokens(input: string): string {
+function underlinePathTokens(input: string, styler: Required<SubagentTaskTreeStyler>): string {
   if (input.trim().length === 0) return input;
 
   return input
@@ -112,7 +149,7 @@ function underlinePathTokens(input: string): string {
       const extracted = extractTokenAffixes(segment);
       if (!extracted) return segment;
       if (!isLikelyFilePath(extracted.core)) return segment;
-      return `${extracted.prefix}\x1b[4m${extracted.core}\x1b[24m${extracted.suffix}`;
+      return `${extracted.prefix}${styler.underline(extracted.core)}${extracted.suffix}`;
     })
     .join("");
 }
@@ -246,8 +283,8 @@ function pluralSuffix(count: number): string {
 
 type EntryChildKind = "default" | "compact-overflow";
 
-function styleKeybindHint(input: string): string {
-  return input.replaceAll("ctrl+o", `${ANSI_LIGHT_GREY_ON}ctrl+o${ANSI_FG_RESET}`);
+function styleKeybindHint(input: string, styler: Required<SubagentTaskTreeStyler>): string {
+  return input.replaceAll("ctrl+o", styler.muted("ctrl+o"));
 }
 
 function normalizePromptText(prompt: string): string {
@@ -263,6 +300,7 @@ function normalizePromptText(prompt: string): string {
 function formatEntryChildren(
   entry: SubagentTaskTreeEntry,
   options: SubagentTaskTreeRenderOptions,
+  styler: Required<SubagentTaskTreeStyler>,
 ): readonly { text: string; maxLines: number; kind: EntryChildKind }[] {
   const children: { text: string; maxLines: number; kind: EntryChildKind }[] = [];
   const prompt = normalizePromptText(entry.prompt);
@@ -273,7 +311,7 @@ function formatEntryChildren(
     kind: "default",
   });
 
-  const normalizedToolCalls = entry.toolCalls.map((line) => normalizeToolCall(line));
+  const normalizedToolCalls = entry.toolCalls.map((line) => normalizeToolCall(line, styler));
   const toolCallLimit = resolveToolCallLimit(options);
   const shouldCompactToolCalls = options.compact === true && normalizedToolCalls.length >= 3;
 
@@ -298,6 +336,7 @@ function formatEntryChildren(
       children.push({
         text: styleKeybindHint(
           `(${hiddenCount} more tool call${pluralSuffix(hiddenCount)}, ctrl+o to expand)`,
+          styler,
         ),
         maxLines: 1,
         kind: "compact-overflow",
@@ -323,16 +362,20 @@ export function renderSubagentTaskTreeLines(input: {
   readonly options?: SubagentTaskTreeRenderOptions;
 }): readonly string[] {
   const options = input.options ?? {};
+  const styler = resolveStyler(options);
   const safeWidth = Math.max(16, input.width);
   const lines: string[] = [];
 
   for (const [entryIndex, entry] of input.entries.entries()) {
     const marker = markerForStatus(entry);
     lines.push(
-      truncateToWidth(`  ${styleStatusMarker(marker)} ${styleEntryTitle(entry.title)}`, safeWidth),
+      truncateToWidth(
+        `  ${styleStatusMarker(marker, styler)} ${styleEntryTitle(entry.title, styler)}`,
+        safeWidth,
+      ),
     );
 
-    const children = formatEntryChildren(entry, options);
+    const children = formatEntryChildren(entry, options, styler);
     for (const [childIndex, child] of children.entries()) {
       const isLast = childIndex === children.length - 1;
       const firstPrefix =

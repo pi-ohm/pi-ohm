@@ -171,6 +171,43 @@ defineTest("renderSubagentTaskTreeLines colors success and failure markers", () 
   assert.equal(rendered.includes("\u001b[31m✕\u001b[39m"), true);
 });
 
+defineTest("renderSubagentTaskTreeLines supports custom styling hooks", () => {
+  const lines = renderSubagentTaskTreeLines({
+    entries: [
+      makeEntry({
+        status: "succeeded",
+        title: "Finder · Style hooks",
+        toolCalls: [
+          "✕ Bash exit 1",
+          "✓ Read packages/subagents/src/extension.ts",
+          "✓ Grep packages/subagents/src",
+        ],
+      }),
+    ],
+    width: 120,
+    options: {
+      compact: true,
+      maxPromptLines: 1,
+      maxToolCalls: 2,
+      maxResultLines: 1,
+      styler: {
+        success: (text) => `<S>${text}</S>`,
+        error: (text) => `<E>${text}</E>`,
+        muted: (text) => `<M>${text}</M>`,
+        bold: (text) => `<B>${text}</B>`,
+        underline: (text) => `<U>${text}</U>`,
+      },
+    },
+  });
+
+  const rendered = lines.join("\n");
+  assert.match(rendered, /<S>✓<\/S>/);
+  assert.match(rendered, /<E>✕<\/E>/);
+  assert.match(rendered, /<M>ctrl\+o<\/M>/);
+  assert.match(rendered, /<B>Finder<\/B> · Style hooks/);
+  assert.match(rendered, /<U>packages\/subagents\/src<\/U>/);
+});
+
 defineTest("SubagentTaskTreeComponent caches by width and invalidates", () => {
   const component = createSubagentTaskTreeComponent({
     entries: [makeEntry()],

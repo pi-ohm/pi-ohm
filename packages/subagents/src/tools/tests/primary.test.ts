@@ -632,3 +632,72 @@ defineTest("registerPrimarySubagentTools renderResult respects expanded toggle",
   assert.equal(expandedText.includes("ctrl+o to expand"), false);
   assert.equal(modelPayloadAfterExpanded, modelPayloadBefore);
 });
+
+defineTest("registerPrimarySubagentTools renderResult applies provided theme colors", () => {
+  let librarianToolDefinition: unknown;
+  const renderTheme = {
+    fg(color: string, text: string) {
+      if (color === "success") return `<SUCCESS>${text}</SUCCESS>`;
+      if (color === "error") return `<ERROR>${text}</ERROR>`;
+      if (color === "muted") return `<MUTED>${text}</MUTED>`;
+      return `<FG:${color}>${text}</FG:${color}>`;
+    },
+    bold(text: string) {
+      return `<BOLD>${text}</BOLD>`;
+    },
+    underline(text: string) {
+      return `<UNDERLINE>${text}</UNDERLINE>`;
+    },
+  } as unknown as Theme;
+
+  const pi: Pick<ExtensionAPI, "registerTool"> = {
+    registerTool(definition) {
+      if (definition.name === "librarian") {
+        librarianToolDefinition = definition;
+      }
+    },
+  };
+
+  registerPrimarySubagentTools(pi, {
+    taskDeps: makeTaskDeps(),
+    catalog: [librarianFixture],
+  });
+
+  if (!isRenderablePrimaryToolDefinition(librarianToolDefinition)) {
+    assert.fail("expected librarian primary tool renderResult to be registered");
+  }
+
+  const details: TaskToolResultDetails = {
+    op: "start",
+    status: "succeeded",
+    backend: "task",
+    summary: "done",
+    subagent_type: "librarian",
+    description: "inspect wiring",
+    prompt: "inspect wiring",
+    tool_rows: [
+      "✕ Bash exit 1",
+      "✓ Read packages/subagents/src/tools/primary.ts",
+      "✓ Grep renderResult",
+      "✓ Ls packages/subagents/src",
+    ],
+    assistant_text: "done",
+    output_available: false,
+  };
+
+  const result: AgentToolResult<TaskToolResultDetails> = {
+    content: [{ type: "text", text: "done" }],
+    details,
+  };
+
+  const collapsed = librarianToolDefinition.renderResult(
+    result,
+    { expanded: false, isPartial: false },
+    renderTheme,
+  );
+  const rendered = collapsed.render(160).join("\n");
+
+  assert.equal(rendered.includes("<SUCCESS>✓</SUCCESS>"), true);
+  assert.equal(rendered.includes("<ERROR>✕</ERROR>"), true);
+  assert.equal(rendered.includes("<MUTED>ctrl+o</MUTED>"), true);
+});

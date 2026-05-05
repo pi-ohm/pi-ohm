@@ -11,7 +11,13 @@ import { getSubagentInvocationMode } from "../extension";
 import type { TaskToolDependencies, TaskToolResultDetails } from "./task/contracts";
 import { createDefaultTaskToolDependencies } from "./task/defaults";
 import { runTaskToolMvp } from "./task/operations";
-import { formatTaskToolResult, toAgentToolResult } from "./task/render";
+import {
+  createTaskToolResultTreeComponent,
+  formatTaskToolResult,
+  isOhmDebugEnabled,
+  toAgentToolResult,
+  toTaskTreeStyler,
+} from "./task/render";
 
 const PrimaryControlFieldsSchema = {
   description: Type.Optional(Type.String({ minLength: 1 })),
@@ -304,9 +310,13 @@ function toPrimaryToolCallText(subagent: OhmSubagentDefinition, params: unknown)
   return `${subagent.id} · ${normalized.description}`;
 }
 
-function toResultText(result: AgentToolResult<unknown>, expanded: boolean): string {
+function toResultText(
+  result: AgentToolResult<unknown>,
+  expanded: boolean,
+  styler: ReturnType<typeof toTaskTreeStyler> = undefined,
+): string {
   if (isTaskToolResultDetails(result.details)) {
-    return formatTaskToolResult(result.details, expanded);
+    return formatTaskToolResult(result.details, expanded, styler);
   }
 
   const textBlocks = result.content.filter(
@@ -423,8 +433,14 @@ export function registerPrimarySubagentTools(
       renderCall: (args, _theme) => {
         return new Text(toPrimaryToolCallText(subagent, args), 0, 0);
       },
-      renderResult: (result, options, _theme) => {
-        return new Text(toResultText(result, options.expanded), 0, 0);
+      renderResult: (result, options, theme) => {
+        const styler = toTaskTreeStyler(theme);
+
+        if (isTaskToolResultDetails(result.details) && !isOhmDebugEnabled()) {
+          return createTaskToolResultTreeComponent(result.details, options.expanded, styler);
+        }
+
+        return new Text(toResultText(result, options.expanded, styler), 0, 0);
       },
     });
 
