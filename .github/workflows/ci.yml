@@ -62,14 +62,14 @@ jobs:
       - name: Install
         run: vp install --frozen-lockfile
 
+      - name: Build
+        run: vp run build
+
       - name: Check
         run: vp check
 
       - name: Test
         run: vp test
-
-      - name: Build
-        run: vp run build
 
       - name: Typecheck
         run: vp run typecheck

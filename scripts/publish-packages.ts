@@ -247,13 +247,14 @@ function runAndCapture(command: string, args: string[], cwd: string): string {
 }
 
 function readYarnConfigJson(key: string): unknown {
-  const output = runAndCapture("yarn", ["config", "get", key, "--json"], repoRoot);
+  const output = runAndCapture("vp", ["pm", "config", "get", key, "--json"], repoRoot);
   if (output.length === 0 || output === "undefined" || output === "null") {
     return null;
   }
 
   try {
-    return JSON.parse(output) as unknown;
+    const parsed: unknown = JSON.parse(output);
+    return parsed;
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to parse Yarn config '${key}' JSON: ${reason}`);

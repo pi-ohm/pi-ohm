@@ -13,7 +13,7 @@ pre-commit:
 
     oxlint-fix:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs}"
-      run: vp lint {staged_files} --tsconfig tsconfig.json --type-aware --fix
+      run: vp lint {staged_files} --fix
       stage_fixed: true
 
     typecheck:
