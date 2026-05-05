@@ -14,8 +14,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
 
@@ -53,28 +53,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
+          cache: true
 
       - name: Install
-        run: yarn install --immutable
+        run: vp install --frozen-lockfile
 
-      - name: Format check
-        run: yarn format:check
+      - name: Check
+        run: vp check
 
-      - name: Lint
-        run: yarn lint
+      - name: Test
+        run: vp test
 
       - name: Build
-        run: yarn build
+        run: vp run build
 
       - name: Typecheck
-        run: yarn typecheck
+        run: vp run typecheck

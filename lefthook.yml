@@ -8,12 +8,12 @@ pre-commit:
   commands:
     oxfmt-write:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs,json,yml,yaml,md}"
-      run: yarn oxfmt {staged_files}
+      run: vp fmt {staged_files} --write
       stage_fixed: true
 
     oxlint-fix:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs}"
-      run: yarn oxlint -- --fix {staged_files}
+      run: vp lint {staged_files} --tsconfig tsconfig.json --type-aware --fix
       stage_fixed: true
 
     typecheck:

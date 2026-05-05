@@ -47,23 +47,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
+          cache: true
 
       - name: Install
-        run: yarn install --immutable
+        run: vp install --frozen-lockfile
 
       - name: Build distributables
-        run: yarn build
+        run: vp run build
 
       - name: Publish all packages to npm @dev
         env:
@@ -76,6 +70,7 @@ jobs:
             exit 1
           fi
 
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
           node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
 
   release-dev:
@@ -109,23 +104,17 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
+          cache: true
 
       - name: Install
-        run: yarn install --immutable
+        run: vp install --frozen-lockfile
 
       - name: Build distributables
-        run: yarn build
+        run: vp run build
 
       - name: Publish released package versions to npm @latest
         env:
@@ -138,6 +127,7 @@ jobs:
             exit 1
           fi
 
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
       - name: Resolve release version
@@ -211,23 +201,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
+          cache: true
 
       - name: Install
-        run: yarn install --immutable
+        run: vp install --frozen-lockfile
 
       - name: Build distributables
-        run: yarn build
+        run: vp run build
 
       - name: Publish selected package(s)
         env:
@@ -242,6 +226,8 @@ jobs:
             echo "NPM_TOKEN secret is required for manual publishing."
             exit 1
           fi
+
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
 
           case "${{ inputs.package }}" in
             config)
