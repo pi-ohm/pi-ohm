@@ -1,5 +1,5 @@
-import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
-import { Text, truncateToWidth, type Component } from "@mariozechner/pi-tui";
+import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import {
   createSubagentTaskTreeComponent,
   renderSubagentTaskTreeLines,

@@ -28,7 +28,7 @@
     "build": "vp pack src/extension.ts"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
     "@pi-ohm/config": "workspace:*",
     "@pi-ohm/handoff": "workspace:*",
     "@pi-ohm/memories": "workspace:*",
@@ -38,7 +38,7 @@
     "@pi-ohm/subagents": "workspace:*"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "0.74.0"
   },
   "pi": {
     "extensions": [

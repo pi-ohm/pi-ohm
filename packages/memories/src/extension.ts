@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import { isValidRolloutId, stripMemoryCitations } from "./citations";
 import { loadMemoriesConfig, registerMemoriesSettings } from "./config";

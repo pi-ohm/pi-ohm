@@ -1,11 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { getSetting, type SettingDefinition } from "@juanibiapina/pi-extension-settings";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
-
-const EXTENSION = "pi-ohm-memories";
 
 export class MemoryConfigError extends TaggedError("MemoryConfigError")<{
   readonly code: "config_read_failed" | "config_parse_failed";
@@ -192,17 +189,7 @@ function memoriesPatch(config: Json | undefined): unknown {
 }
 
 function applyExtensionSettings(config: MemoriesConfig): MemoriesConfig {
-  return {
-    ...config,
-    useMemories: bool(
-      getSetting(EXTENSION, "use-memories", config.useMemories ? "on" : "off"),
-      config.useMemories,
-    ),
-    generateMemories: bool(
-      getSetting(EXTENSION, "generate-memories", config.generateMemories ? "on" : "off"),
-      config.generateMemories,
-    ),
-  };
+  return config;
 }
 
 export async function loadMemoriesConfig(cwd: string): Promise<MemoryConfigResult<MemoriesConfig>> {
@@ -227,31 +214,4 @@ export async function loadMemoriesConfig(cwd: string): Promise<MemoryConfigResul
   return Result.ok(applyExtensionSettings(merged));
 }
 
-let didRegister = false;
-
-export function registerMemoriesSettings(pi: ExtensionAPI): void {
-  if (didRegister) return;
-  didRegister = true;
-
-  const settings: SettingDefinition[] = [
-    {
-      id: "use-memories",
-      label: "Use Memories",
-      description: "Inject memory_summary.md into future Pi turns.",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "generate-memories",
-      label: "Generate Memories",
-      description: "Allow @pi-ohm/memories to generate durable memories from sessions.",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-  ];
-
-  pi.events.emit("pi-extension-settings:register", {
-    name: EXTENSION,
-    settings,
-  });
-}
+export function registerMemoriesSettings(_pi: ExtensionAPI): void {}

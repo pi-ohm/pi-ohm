@@ -32,7 +32,7 @@ What makes this rather difficult is that it should be semi modular, such that di
 Task orchestration UX baseline:
 
 - use the `task` tool as the orchestration entrypoint
-- use `@mariozechner/pi-tui` for live task status rendering
+- use `@earendil-works/pi-tui` for live task status rendering
 - running state should include: spinner, description, active tool-call count, elapsed time
 - terminal state should replace spinner with success/failure indicator while keeping description/tool-count/elapsed summary
 - preferred compact display is two lines:

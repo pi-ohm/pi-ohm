@@ -28,12 +28,12 @@
     "build": "vp pack src/index.ts src/extension.ts"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-tui": "0.74.0"
   },
   "pi": {
     "extensions": [

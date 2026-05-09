@@ -19,16 +19,16 @@ Current runtime feedback is useful but noisy:
 
 ## Pi/TUI references reviewed
 
-### Direct `@mariozechner/pi-tui` package references (actual files)
+### Direct `@earendil-works/pi-tui` package references (actual files)
 
 Core exports/signatures:
 
-- `node_modules/@mariozechner/pi-tui/dist/index.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/index.d.ts`
   - confirms exported building blocks: `Text`, `TruncatedText`, `Container`, `Box`, `Loader`, `SelectList`, `SettingsList`, `matchesKey`, `Key`, `truncateToWidth`, `visibleWidth`
 
 TUI core + overlay/focus contracts:
 
-- `node_modules/@mariozechner/pi-tui/dist/tui.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/tui.d.ts`
   - `Component` contract (`render`, `handleInput`, `invalidate`)
   - `TUI.showOverlay(...)`, `hideOverlay()`, `hasOverlay()`
   - `Container` behavior
@@ -36,55 +36,55 @@ TUI core + overlay/focus contracts:
 
 Single-line + multiline render components:
 
-- `node_modules/@mariozechner/pi-tui/dist/components/truncated-text.js`
+- `node_modules/@earendil-works/pi-tui/dist/components/truncated-text.js`
   - one-line-safe rendering (first line only + truncation to viewport)
-- `node_modules/@mariozechner/pi-tui/dist/components/text.js`
+- `node_modules/@earendil-works/pi-tui/dist/components/text.js`
   - wrapped multiline rendering + internal cache invalidation pattern
 
 Width-safe helpers:
 
-- `node_modules/@mariozechner/pi-tui/dist/utils.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/utils.d.ts`
   - `truncateToWidth(...)`
   - `visibleWidth(...)`
   - `wrapTextWithAnsi(...)`
 
 Input/key handling:
 
-- `node_modules/@mariozechner/pi-tui/dist/keys.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/keys.d.ts`
   - `matchesKey(...)`, `Key.*`, kitty key event support
 
 Optional interactive list components (for future live panel toggles):
 
-- `node_modules/@mariozechner/pi-tui/dist/components/select-list.d.ts`
-- `node_modules/@mariozechner/pi-tui/dist/components/settings-list.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/components/select-list.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/components/settings-list.d.ts`
 
 Optional spinner component (if we promote to fully custom TUI component later):
 
-- `node_modules/@mariozechner/pi-tui/dist/components/loader.js`
-- `node_modules/@mariozechner/pi-tui/dist/components/cancellable-loader.d.ts`
+- `node_modules/@earendil-works/pi-tui/dist/components/loader.js`
+- `node_modules/@earendil-works/pi-tui/dist/components/cancellable-loader.d.ts`
 
 ### Docs
 
-- `node_modules/@mariozechner/pi-coding-agent/docs/tui.md`
+- `node_modules/@earendil-works/pi-coding-agent/docs/tui.md`
   - Persistent status pattern (`ctx.ui.setStatus`)
   - Widget pattern (`ctx.ui.setWidget`)
   - Custom footer (`ctx.ui.setFooter`) — use sparingly (replaces built-in footer)
   - Key rule: keep lines width-safe (`truncateToWidth`, `visibleWidth`) for custom components
-- `node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
+- `node_modules/@earendil-works/pi-coding-agent/docs/extensions.md`
   - Extension UI API behavior in interactive vs non-interactive modes
   - `ctx.hasUI` checks and runtime-safe usage
-- `node_modules/@mariozechner/pi-tui/README.md`
+- `node_modules/@earendil-works/pi-tui/README.md`
   - Component model, render/invalidate patterns, caching, truncation utilities
 
 ### Examples
 
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/status-line.ts`
+- `node_modules/@earendil-works/pi-coding-agent/examples/extensions/status-line.ts`
   - canonical sticky footer status pattern
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/widget-placement.ts`
+- `node_modules/@earendil-works/pi-coding-agent/examples/extensions/widget-placement.ts`
   - persistent widgets above/below editor
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/plan-mode/index.ts`
+- `node_modules/@earendil-works/pi-coding-agent/examples/extensions/plan-mode/index.ts`
   - real-world combined status + widget orchestration
-- `node_modules/@mariozechner/pi-coding-agent/examples/extensions/custom-footer.ts`
+- `node_modules/@earendil-works/pi-coding-agent/examples/extensions/custom-footer.ts`
   - custom footer replacement pattern (use only if absolutely needed)
 
 ### Current subagents implementation
@@ -283,19 +283,19 @@ Files:
 
 5. **Width-safe rendering for any custom component path**
    - APIs: `truncateToWidth`, `visibleWidth`
-   - Ref: `@mariozechner/pi-tui/README.md`
+   - Ref: `@earendil-works/pi-tui/README.md`
 
 6. **If we implement a custom sticky one-line component instead of plain status text**
    - Component to mirror: `TruncatedText`
-   - Ref: `node_modules/@mariozechner/pi-tui/dist/components/truncated-text.js`
+   - Ref: `node_modules/@earendil-works/pi-tui/dist/components/truncated-text.js`
 
 7. **If we need custom render loop/caching in a bespoke live panel**
    - Component cache pattern: `Text` implementation
-   - Ref: `node_modules/@mariozechner/pi-tui/dist/components/text.js`
+   - Ref: `node_modules/@earendil-works/pi-tui/dist/components/text.js`
 
 8. **If we need keyboard-toggle UI in-terminal (live mode switcher)**
-   - key matching: `node_modules/@mariozechner/pi-tui/dist/keys.d.ts`
-   - selection list: `node_modules/@mariozechner/pi-tui/dist/components/select-list.d.ts`
+   - key matching: `node_modules/@earendil-works/pi-tui/dist/keys.d.ts`
+   - selection list: `node_modules/@earendil-works/pi-tui/dist/components/select-list.d.ts`
 
 ---
 

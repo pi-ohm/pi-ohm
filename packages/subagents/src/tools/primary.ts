@@ -2,8 +2,8 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
   ExtensionAPI,
-} from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import type { OhmSubagentDefinition } from "../catalog";
 import { getSubagentDescription, OHM_SUBAGENT_CATALOG } from "../catalog";

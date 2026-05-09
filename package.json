@@ -32,10 +32,10 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build); done",
+    "build": "bash -lc 'for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build); done'",
     "build:docs": "yarn workspace docs build",
     "dev:docs": "yarn workspace docs dev",
-    "build:watch": "for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build -- --watch) & done; wait",
+    "build:watch": "bash -lc 'for p in packages/config packages/core packages/db packages/handoff packages/memories packages/modes packages/painter packages/session-search packages/subagents packages/tui packages/extension; do (cd \"$p\" && vp run build -- --watch) & done; wait'",
     "release:dev": "node --experimental-strip-types ./scripts/publish-packages.ts --channel dev",
     "release:latest": "node --experimental-strip-types ./scripts/publish-packages.ts --channel latest",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
@@ -56,12 +56,11 @@
     "test:memories": "tsx --test \"packages/memories/src/**/*.test.ts\""
   },
   "dependencies": {
-    "@juanibiapina/pi-extension-settings": "^0.6.1",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
@@ -76,7 +75,6 @@
   "packageManager": "yarn@4.12.0",
   "pi": {
     "extensions": [
-      "./node_modules/@juanibiapina/pi-extension-settings/dist/index.js",
       "./extensions"
     ]
   }

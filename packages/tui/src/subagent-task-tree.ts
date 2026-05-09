@@ -3,7 +3,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
   type Component,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 
 const ANSI_BOLD_ON = "\u001b[1m";
 const ANSI_BOLD_OFF = "\u001b[22m";

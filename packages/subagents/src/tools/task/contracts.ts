@@ -145,7 +145,7 @@ export interface RunTaskToolInput {
   readonly cwd: string;
   readonly signal: AbortSignal | undefined;
   readonly onUpdate:
-    | import("@mariozechner/pi-coding-agent").AgentToolUpdateCallback<TaskToolResultDetails>
+    | import("@earendil-works/pi-coding-agent").AgentToolUpdateCallback<TaskToolResultDetails>
     | undefined;
   readonly hasUI: boolean;
   readonly ui: RunTaskToolUiHandle | undefined;

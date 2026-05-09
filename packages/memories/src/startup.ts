@@ -2,7 +2,7 @@ import {
   SessionManager,
   type ExtensionContext,
   type SessionInfo,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import fs from "node:fs/promises";
 import { Result } from "better-result";
 import type { MemoriesConfig } from "./config";

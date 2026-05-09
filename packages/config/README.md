@@ -4,7 +4,7 @@ Shared runtime configuration package used by Pi OHM feature packages.
 
 Responsibilities:
 
-- register extension settings with `@juanibiapina/pi-extension-settings`
+- read standard Pi settings from `settings.json`
 - resolve config directory from `PI_CONFIG_DIR` / `PI_CODING_AGENT_DIR` / `PI_AGENT_DIR` / `~/.pi/agent`
 - load and merge:
   - `${cwd}/.pi/ohm.json`

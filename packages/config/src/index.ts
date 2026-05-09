@@ -1,12 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import {
-  getSetting,
-  setSetting,
-  type SettingDefinition,
-} from "@juanibiapina/pi-extension-settings";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
 import { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
 import {
@@ -96,16 +91,6 @@ async function readJsonFile(filePath: string): Promise<JsonMap | null> {
   }
 }
 
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return fallback;
-
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
-  if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
-  return fallback;
-}
-
 function normalizeSubagentBackend(
   value: unknown,
   fallback: OhmSubagentBackend,
@@ -118,11 +103,6 @@ function normalizeSubagentBackend(
   ) {
     return value;
   }
-  return fallback;
-}
-
-function normalizeString(value: unknown, fallback: string): string {
-  if (typeof value === "string") return value;
   return fallback;
 }
 
@@ -144,112 +124,7 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
 }
 
 function applyExtensionSettings(config: OhmRuntimeConfig): OhmRuntimeConfig {
-  const next = structuredClone(config);
-
-  next.defaultMode = normalizeOhmMode(
-    getSetting(OHM_EXTENSION_NAME, "default-mode", next.defaultMode),
-    next.defaultMode,
-  );
-
-  next.subagentBackend = normalizeSubagentBackend(
-    getSetting(OHM_EXTENSION_NAME, "subagent-backend", next.subagentBackend),
-    next.subagentBackend,
-  );
-
-  next.features.handoff = normalizeBoolean(
-    getSetting(OHM_EXTENSION_NAME, "feature-handoff", next.features.handoff ? "on" : "off"),
-    next.features.handoff,
-  );
-
-  next.features.subagents = normalizeBoolean(
-    getSetting(OHM_EXTENSION_NAME, "feature-subagents", next.features.subagents ? "on" : "off"),
-    next.features.subagents,
-  );
-
-  next.features.sessionThreadSearch = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "feature-session-thread-search",
-      next.features.sessionThreadSearch ? "on" : "off",
-    ),
-    next.features.sessionThreadSearch,
-  );
-
-  next.features.handoffVisualizer = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "feature-handoff-visualizer",
-      next.features.handoffVisualizer ? "on" : "off",
-    ),
-    next.features.handoffVisualizer,
-  );
-
-  next.features.painterImagegen = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "feature-painter-imagegen",
-      next.features.painterImagegen ? "on" : "off",
-    ),
-    next.features.painterImagegen,
-  );
-
-  next.painter.googleNanoBanana.enabled = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-google-enabled",
-      next.painter.googleNanoBanana.enabled ? "on" : "off",
-    ),
-    next.painter.googleNanoBanana.enabled,
-  );
-
-  next.painter.googleNanoBanana.model = normalizeString(
-    getSetting(OHM_EXTENSION_NAME, "painter-google-model", next.painter.googleNanoBanana.model),
-    next.painter.googleNanoBanana.model,
-  );
-
-  next.painter.openai.enabled = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-openai-enabled",
-      next.painter.openai.enabled ? "on" : "off",
-    ),
-    next.painter.openai.enabled,
-  );
-
-  next.painter.openai.model = normalizeString(
-    getSetting(OHM_EXTENSION_NAME, "painter-openai-model", next.painter.openai.model),
-    next.painter.openai.model,
-  );
-
-  next.painter.azureOpenai.enabled = normalizeBoolean(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-azure-enabled",
-      next.painter.azureOpenai.enabled ? "on" : "off",
-    ),
-    next.painter.azureOpenai.enabled,
-  );
-
-  next.painter.azureOpenai.deployment = normalizeString(
-    getSetting(OHM_EXTENSION_NAME, "painter-azure-deployment", next.painter.azureOpenai.deployment),
-    next.painter.azureOpenai.deployment,
-  );
-
-  next.painter.azureOpenai.endpoint = normalizeString(
-    getSetting(OHM_EXTENSION_NAME, "painter-azure-endpoint", next.painter.azureOpenai.endpoint),
-    next.painter.azureOpenai.endpoint,
-  );
-
-  next.painter.azureOpenai.apiVersion = normalizeString(
-    getSetting(
-      OHM_EXTENSION_NAME,
-      "painter-azure-api-version",
-      next.painter.azureOpenai.apiVersion,
-    ),
-    next.painter.azureOpenai.apiVersion,
-  );
-
-  return next;
+  return config;
 }
 
 export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntimeConfig> {
@@ -284,114 +159,15 @@ export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntim
   };
 }
 
-let didRegisterSettings = false;
-
-export function registerOhmSettings(pi: ExtensionAPI): void {
-  if (didRegisterSettings) return;
-  didRegisterSettings = true;
-
-  const settings: SettingDefinition[] = [
-    {
-      id: "default-mode",
-      label: "Default Mode",
-      description: "Primary working mode for Pi Ohm",
-      defaultValue: DEFAULT_OHM_CONFIG.defaultMode,
-      values: ["rush", "smart", "deep"],
-    },
-    {
-      id: "subagent-backend",
-      label: "Subagent Backend",
-      description: "How Pi Ohm should delegate subagents",
-      defaultValue: DEFAULT_OHM_CONFIG.subagentBackend,
-      values: ["interactive-shell", "interactive-sdk", "custom-plugin", "none"],
-    },
-    {
-      id: "feature-handoff",
-      label: "Feature: Handoff",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "feature-subagents",
-      label: "Feature: Subagents",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "feature-session-thread-search",
-      label: "Feature: Session/Thread Search",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "feature-handoff-visualizer",
-      label: "Feature: Handoff Visualizer",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "feature-painter-imagegen",
-      label: "Feature: Painter/ImageGen",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "painter-google-enabled",
-      label: "Painter Provider: Google Nano Banana",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "painter-google-model",
-      label: "Painter Provider: Google Model",
-      defaultValue: DEFAULT_OHM_CONFIG.painter.googleNanoBanana.model,
-    },
-    {
-      id: "painter-openai-enabled",
-      label: "Painter Provider: OpenAI",
-      defaultValue: "on",
-      values: ["on", "off"],
-    },
-    {
-      id: "painter-openai-model",
-      label: "Painter Provider: OpenAI Model",
-      defaultValue: DEFAULT_OHM_CONFIG.painter.openai.model,
-    },
-    {
-      id: "painter-azure-enabled",
-      label: "Painter Provider: Azure OpenAI",
-      defaultValue: "off",
-      values: ["on", "off"],
-    },
-    {
-      id: "painter-azure-deployment",
-      label: "Painter Provider: Azure Deployment",
-      defaultValue: "",
-    },
-    {
-      id: "painter-azure-endpoint",
-      label: "Painter Provider: Azure Endpoint",
-      defaultValue: "",
-    },
-    {
-      id: "painter-azure-api-version",
-      label: "Painter Provider: Azure API Version",
-      defaultValue: DEFAULT_OHM_CONFIG.painter.azureOpenai.apiVersion,
-    },
-  ];
-
-  pi.events.emit("pi-extension-settings:register", {
-    name: OHM_EXTENSION_NAME,
-    settings,
-  });
-}
+export function registerOhmSettings(_pi: ExtensionAPI): void {}
 
 export function getOhmSetting(settingId: string, defaultValue?: string): string | undefined {
-  return getSetting(OHM_EXTENSION_NAME, settingId, defaultValue);
+  return defaultValue;
 }
 
 export function setOhmSetting(settingId: string, value: string): void {
-  setSetting(OHM_EXTENSION_NAME, settingId, value);
+  void settingId;
+  void value;
 }
 
 export function getDefaultOhmConfig(): OhmRuntimeConfig {

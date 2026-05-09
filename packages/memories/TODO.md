@@ -16,6 +16,6 @@
 ## Remaining Pi API gaps
 
 - [ ] Add stream-transform hook in Pi so memory citations never flash while streaming.
-- [ ] Add provider-native structured-output helper in `@mariozechner/pi-ai`.
+- [ ] Add provider-native structured-output helper in `@earendil-works/pi-ai`.
 - [ ] Expose provider rate-limit headroom to extensions.
 - [ ] Add extension RPC endpoints for memory reset and thread memory mode if Pi supports it.

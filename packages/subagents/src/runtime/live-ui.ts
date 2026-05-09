@@ -1,7 +1,7 @@
 import type { SubagentTaskTreeEntry } from "@pi-ohm/tui";
 import { createSubagentTaskTreeComponent, type SubagentTaskTreeRenderOptions } from "@pi-ohm/tui";
 import type { TaskRuntimePresentation } from "./ui";
-import { TruncatedText } from "@mariozechner/pi-tui";
+import { TruncatedText } from "@earendil-works/pi-tui";
 
 export type TaskLiveUiMode = "off" | "compact" | "verbose";
 

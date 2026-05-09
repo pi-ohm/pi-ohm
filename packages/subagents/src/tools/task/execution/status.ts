@@ -1,4 +1,4 @@
-import type { AgentToolResult } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import type { RunTaskToolInput, TaskToolResultDetails } from "../contracts";
 import type { TaskToolParameters } from "../../../schema/task-tool";
 import { lookupToItem } from "./projection";

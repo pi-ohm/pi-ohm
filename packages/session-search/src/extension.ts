@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
 
 export default function registerSessionSearchExtension(pi: ExtensionAPI): void {

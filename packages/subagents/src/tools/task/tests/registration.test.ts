@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createDefaultTaskToolDependencies } from "../defaults";
 import { registerTaskTool } from "../operations";
 import { defineTest } from "../test-fixtures";

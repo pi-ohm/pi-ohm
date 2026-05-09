@@ -1,6 +1,6 @@
-import type { AgentToolResult, ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
-import { Text } from "@mariozechner/pi-tui";
+import { Text } from "@earendil-works/pi-tui";
 import { Result } from "better-result";
 import { getSubagentInvocationMode } from "../../extension";
 import { getSubagentDescription } from "../../catalog";

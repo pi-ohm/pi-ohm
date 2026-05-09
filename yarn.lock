@@ -1599,6 +1599,89 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@earendil-works/pi-agent-core@npm:0.74.0, @earendil-works/pi-agent-core@npm:^0.74.0":
+  version: 0.74.0
+  resolution: "@earendil-works/pi-agent-core@npm:0.74.0"
+  dependencies:
+    "@earendil-works/pi-ai": "npm:^0.74.0"
+    typebox: "npm:^1.1.24"
+  checksum: 10c0/c341b3ee31b1e9459bfb4dcfb6fd114101ba4fc553d4b45ff96d8f6e760941017347718fe0590d3ac6d5cd41b7a56f9d4ce0f4fd6faa1a56f09c92f493bed267
+  languageName: node
+  linkType: hard
+
+"@earendil-works/pi-ai@npm:^0.74.0":
+  version: 0.74.0
+  resolution: "@earendil-works/pi-ai@npm:0.74.0"
+  dependencies:
+    "@anthropic-ai/sdk": "npm:^0.91.1"
+    "@aws-sdk/client-bedrock-runtime": "npm:^3.1030.0"
+    "@google/genai": "npm:^1.40.0"
+    "@mistralai/mistralai": "npm:^2.2.0"
+    chalk: "npm:^5.6.2"
+    openai: "npm:6.26.0"
+    partial-json: "npm:^0.1.7"
+    proxy-agent: "npm:^6.5.0"
+    typebox: "npm:^1.1.24"
+    undici: "npm:^7.19.1"
+    zod-to-json-schema: "npm:^3.24.6"
+  bin:
+    pi-ai: dist/cli.js
+  checksum: 10c0/d7172c089880bd5c0e3ec2922193205ace767888fb7e25945e39eddb19f77d46769ca11d6954c9bc7559e34cbd43f0a2efd09cadaf85f2aa9bd00d71811ff944
+  languageName: node
+  linkType: hard
+
+"@earendil-works/pi-coding-agent@npm:0.74.0":
+  version: 0.74.0
+  resolution: "@earendil-works/pi-coding-agent@npm:0.74.0"
+  dependencies:
+    "@earendil-works/pi-agent-core": "npm:^0.74.0"
+    "@earendil-works/pi-ai": "npm:^0.74.0"
+    "@earendil-works/pi-tui": "npm:^0.74.0"
+    "@mariozechner/clipboard": "npm:^0.3.5"
+    "@silvia-odwyer/photon-node": "npm:^0.3.4"
+    chalk: "npm:^5.5.0"
+    cli-highlight: "npm:^2.1.11"
+    diff: "npm:^8.0.2"
+    extract-zip: "npm:^2.0.1"
+    file-type: "npm:^21.1.1"
+    glob: "npm:^13.0.1"
+    hosted-git-info: "npm:^9.0.2"
+    ignore: "npm:^7.0.5"
+    jiti: "npm:^2.7.0"
+    marked: "npm:^15.0.12"
+    minimatch: "npm:^10.2.3"
+    proper-lockfile: "npm:^4.1.2"
+    strip-ansi: "npm:^7.1.0"
+    typebox: "npm:^1.1.24"
+    undici: "npm:^7.19.1"
+    uuid: "npm:^14.0.0"
+    yaml: "npm:^2.8.2"
+  dependenciesMeta:
+    "@mariozechner/clipboard":
+      optional: true
+  bin:
+    pi: dist/cli.js
+  checksum: 10c0/34714036d30f068a404e8326a715210d9abaec836c50cf15eb231427772237f31c687278361c81ec7e3c71449b6c8d017ed6a778707e4ff262d6ba7cab3ac9e1
+  languageName: node
+  linkType: hard
+
+"@earendil-works/pi-tui@npm:0.74.0, @earendil-works/pi-tui@npm:^0.74.0":
+  version: 0.74.0
+  resolution: "@earendil-works/pi-tui@npm:0.74.0"
+  dependencies:
+    "@types/mime-types": "npm:^2.1.4"
+    chalk: "npm:^5.5.0"
+    get-east-asian-width: "npm:^1.3.0"
+    koffi: "npm:^2.9.0"
+    marked: "npm:^15.0.12"
+    mime-types: "npm:^3.0.1"
+  dependenciesMeta:
+    koffi:
+      optional: true
+  checksum: 10c0/31071e126a43a87412f199bba365d34a993c966f5ea04bca4552da2d38df5956528799b8cb77eac592fbb4e478c962f9149e6224dc06cbc984770e0b1435684d
+  languageName: node
+  linkType: hard
+
 "@emnapi/core@npm:^1.7.1, @emnapi/core@npm:^1.8.1":
   version: 1.8.1
   resolution: "@emnapi/core@npm:1.8.1"
@@ -2592,16 +2675,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@juanibiapina/pi-extension-settings@npm:^0.6.1":
-  version: 0.6.1
-  resolution: "@juanibiapina/pi-extension-settings@npm:0.6.1"
-  peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
-  checksum: 10c0/847ed07b1741a5efc8dd89805f4931efad754fe4b2ac1a61393b0306c9e1638989090bea34becfdc7851d10c2b1b4a38ac6346e7008db5de8c03e62762bc2bb0
-  languageName: node
-  linkType: hard
-
 "@libsql/client@npm:^0.17.0":
   version: 0.17.0
   resolution: "@libsql/client@npm:0.17.0"
@@ -2815,101 +2888,6 @@ __metadata:
     "@mariozechner/clipboard-win32-x64-msvc":
       optional: true
   checksum: 10c0/35d24d60a590122459e42137042cc1a8e13a80d83b914cc703320403931d8cc415bde68f31a49c58dae934e6660f01015921e1ef0316f321a2621f59b932983c
-  languageName: node
-  linkType: hard
-
-"@mariozechner/jiti@npm:^2.6.2":
-  version: 2.6.5
-  resolution: "@mariozechner/jiti@npm:2.6.5"
-  dependencies:
-    std-env: "npm:^3.10.0"
-    yoctocolors: "npm:^2.1.2"
-  bin:
-    jiti: lib/jiti-cli.mjs
-  checksum: 10c0/08dec995543b015b1b90d0c03c30de2ed7f98ef653c35e277713dfa2b8caa34ddb67966d72a9054a21f04b0fdd791c95bcd028dd1b3cf5fc95e7e4b80df3fc12
-  languageName: node
-  linkType: hard
-
-"@mariozechner/pi-agent-core@npm:^0.72.1":
-  version: 0.72.1
-  resolution: "@mariozechner/pi-agent-core@npm:0.72.1"
-  dependencies:
-    "@mariozechner/pi-ai": "npm:^0.72.1"
-    typebox: "npm:^1.1.24"
-  checksum: 10c0/9f65cd00ce3b5dae0c786dfa91f104cd757723a7e2a41c7931fd594abcae6ffee850fa2eb34582661a43ae21d08b94ee6df95c216d2ef8821dcff4ffe0dac735
-  languageName: node
-  linkType: hard
-
-"@mariozechner/pi-ai@npm:^0.72.1":
-  version: 0.72.1
-  resolution: "@mariozechner/pi-ai@npm:0.72.1"
-  dependencies:
-    "@anthropic-ai/sdk": "npm:^0.91.1"
-    "@aws-sdk/client-bedrock-runtime": "npm:^3.1030.0"
-    "@google/genai": "npm:^1.40.0"
-    "@mistralai/mistralai": "npm:^2.2.0"
-    chalk: "npm:^5.6.2"
-    openai: "npm:6.26.0"
-    partial-json: "npm:^0.1.7"
-    proxy-agent: "npm:^6.5.0"
-    typebox: "npm:^1.1.24"
-    undici: "npm:^7.19.1"
-    zod-to-json-schema: "npm:^3.24.6"
-  bin:
-    pi-ai: dist/cli.js
-  checksum: 10c0/bcfe321e5f31f39f32c23666606421066982fa2ec797f5001650e49c51aced34d880d4154dc72172e0703b3a55116d1d1a86247514877625b268a11e3488a4cc
-  languageName: node
-  linkType: hard
-
-"@mariozechner/pi-coding-agent@npm:^0.72.1":
-  version: 0.72.1
-  resolution: "@mariozechner/pi-coding-agent@npm:0.72.1"
-  dependencies:
-    "@mariozechner/clipboard": "npm:^0.3.5"
-    "@mariozechner/jiti": "npm:^2.6.2"
-    "@mariozechner/pi-agent-core": "npm:^0.72.1"
-    "@mariozechner/pi-ai": "npm:^0.72.1"
-    "@mariozechner/pi-tui": "npm:^0.72.1"
-    "@silvia-odwyer/photon-node": "npm:^0.3.4"
-    chalk: "npm:^5.5.0"
-    cli-highlight: "npm:^2.1.11"
-    diff: "npm:^8.0.2"
-    extract-zip: "npm:^2.0.1"
-    file-type: "npm:^21.1.1"
-    glob: "npm:^13.0.1"
-    hosted-git-info: "npm:^9.0.2"
-    ignore: "npm:^7.0.5"
-    marked: "npm:^15.0.12"
-    minimatch: "npm:^10.2.3"
-    proper-lockfile: "npm:^4.1.2"
-    strip-ansi: "npm:^7.1.0"
-    typebox: "npm:^1.1.24"
-    undici: "npm:^7.19.1"
-    uuid: "npm:^14.0.0"
-    yaml: "npm:^2.8.2"
-  dependenciesMeta:
-    "@mariozechner/clipboard":
-      optional: true
-  bin:
-    pi: dist/cli.js
-  checksum: 10c0/31127b2f0e05ae7d97ada1703aa2627fcb0fa73910b5efeb76338dde73a76120cfab7e2d4d9bedf19bfdb4b4d6b45367b1b4d8a44c7d2618b4d61698a9c2f667
-  languageName: node
-  linkType: hard
-
-"@mariozechner/pi-tui@npm:^0.72.1":
-  version: 0.72.1
-  resolution: "@mariozechner/pi-tui@npm:0.72.1"
-  dependencies:
-    "@types/mime-types": "npm:^2.1.4"
-    chalk: "npm:^5.5.0"
-    get-east-asian-width: "npm:^1.3.0"
-    koffi: "npm:^2.9.0"
-    marked: "npm:^15.0.12"
-    mime-types: "npm:^3.0.1"
-  dependenciesMeta:
-    koffi:
-      optional: true
-  checksum: 10c0/ba96b9fac54bcb0f07b16b9c33d63c67f1ad27fd716b30c4d9ce1c894988d69d0dd1d056a06d7a98089a9b0caac4de5a63c4d0a9cdd9fab2ae37cce97b502e05
   languageName: node
   linkType: hard
 
@@ -3798,13 +3776,12 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/config@workspace:packages/config"
   dependencies:
-    "@juanibiapina/pi-extension-settings": "npm:^0.6.1"
-    "@mariozechner/pi-coding-agent": "catalog:pi"
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi"
     typebox: "npm:^1.0.68"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
+    "@earendil-works/pi-tui": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3812,6 +3789,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/core@workspace:packages/core"
   dependencies:
+    "@libsql/client": "catalog:"
     better-result: "catalog:"
   languageName: unknown
   linkType: soft
@@ -3833,10 +3811,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/handoff@workspace:packages/handoff"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3844,15 +3822,14 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/memories@workspace:packages/memories"
   dependencies:
-    "@juanibiapina/pi-extension-settings": "npm:^0.6.1"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi"
     "@libsql/client": "catalog:"
-    "@mariozechner/pi-coding-agent": "catalog:pi"
-    "@mariozechner/pi-tui": "catalog:pi"
     better-result: "catalog:"
     zod: "catalog:"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
+    "@earendil-works/pi-tui": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3860,10 +3837,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/modes@workspace:packages/modes"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3871,11 +3848,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/painter@workspace:packages/painter"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3883,10 +3860,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/session-search@workspace:packages/session-search"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -3894,18 +3871,19 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/subagents@workspace:packages/subagents"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-agent-core": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
     "@pi-ohm/core": "workspace:*"
     "@pi-ohm/tui": "workspace:*"
     better-result: "catalog:"
     zod: "catalog:"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
+    "@earendil-works/pi-tui": 0.74.0
     typebox: "*"
   peerDependenciesMeta:
-    "@mariozechner/pi-tui":
+    "@earendil-works/pi-tui":
       optional: true
     typebox:
       optional: true
@@ -3916,11 +3894,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/tui@workspace:packages/tui"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
+    "@earendil-works/pi-tui": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -10086,6 +10064,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"jiti@npm:^2.7.0":
+  version: 2.7.0
+  resolution: "jiti@npm:2.7.0"
+  bin:
+    jiti: lib/jiti-cli.mjs
+  checksum: 10c0/1b1e2310a490dce1aeea3da5f5dfe18273516c20ce48be2e98eb8ea452d5f3dcc8fd0cfd6d28b4052a24c5dbab6e3089b2d7e79f0bce7915b10d750929563c42
+  languageName: node
+  linkType: hard
+
 "js-base64@npm:^3.7.5":
   version: 3.7.8
   resolution: "js-base64@npm:3.7.8"
@@ -12495,9 +12482,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "pi-ohm-monorepo@workspace:."
   dependencies:
-    "@juanibiapina/pi-extension-settings": "npm:^0.6.1"
-    "@mariozechner/pi-coding-agent": "catalog:pi"
-    "@mariozechner/pi-tui": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi"
     "@types/node": "npm:^24.3.1"
     "@typescript/native-preview": "npm:^7.0.0-dev.20260217.1"
     lefthook: "npm:^2.1.1"
@@ -12512,7 +12498,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
-    "@mariozechner/pi-coding-agent": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/config": "workspace:*"
     "@pi-ohm/handoff": "workspace:*"
     "@pi-ohm/memories": "workspace:*"
@@ -12521,7 +12507,7 @@ __metadata:
     "@pi-ohm/session-search": "workspace:*"
     "@pi-ohm/subagents": "workspace:*"
   peerDependencies:
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
   linkType: soft
 
@@ -13463,13 +13449,6 @@ __metadata:
   dependencies:
     minipass: "npm:^7.0.3"
   checksum: 10c0/cf6408a18676c57ff2ed06b8a20dc64bb3e748e5c7e095332e6aecaa2b8422b1e94a739a8453bf65156a8a47afe23757ba4ab52d3ea3b62322dc40875763e17a
-  languageName: node
-  linkType: hard
-
-"std-env@npm:^3.10.0":
-  version: 3.10.0
-  resolution: "std-env@npm:3.10.0"
-  checksum: 10c0/1814927a45004d36dde6707eaf17552a546769bc79a6421be2c16ce77d238158dfe5de30910b78ec30d95135cc1c59ea73ee22d2ca170f8b9753f84da34c427f
   languageName: node
   linkType: hard
 
@@ -14606,7 +14585,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yoctocolors@npm:^2.1.1, yoctocolors@npm:^2.1.2":
+"yoctocolors@npm:^2.1.1":
   version: 2.1.2
   resolution: "yoctocolors@npm:2.1.2"
   checksum: 10c0/b220f30f53ebc2167330c3adc86a3c7f158bcba0236f6c67e25644c3188e2571a6014ffc1321943bb619460259d3d27eb4c9cc58c2d884c1b195805883ec7066

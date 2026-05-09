@@ -30,16 +30,15 @@
     "build": "vp pack src/extension.ts"
   },
   "dependencies": {
-    "@juanibiapina/pi-extension-settings": "^0.6.1",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
     "@libsql/client": "catalog:",
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi",
     "better-result": "catalog:",
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-tui": "0.74.0"
   },
   "pi": {
     "extensions": [

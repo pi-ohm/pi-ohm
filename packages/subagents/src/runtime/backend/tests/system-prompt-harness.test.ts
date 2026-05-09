@@ -10,7 +10,7 @@ import {
   SessionManager,
   SettingsManager,
   type ResourceLoader,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { registerSubagentTools } from "../../../extension";
 import { buildSubagentSdkSystemPrompt } from "../system-prompts";
 

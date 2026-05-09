@@ -44,13 +44,12 @@
     "build": "vp pack src/index.ts src/subagents.ts src/features.ts src/modes.ts src/painter.ts"
   },
   "dependencies": {
-    "@juanibiapina/pi-extension-settings": "^0.6.1",
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
     "typebox": "^1.0.68"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "0.74.0",
+    "@earendil-works/pi-tui": "0.74.0"
   }
 }
