@@ -53,5 +53,4 @@ Success adds `outcome: "ok"`. Errors add `outcome: "error"` and a small serializ
 
 - Use at boundaries, not every line.
 - Prefer structured fields over strings.
-- Do not log secrets, full prompts, or large payloads.
 - Debug logs are ephemeral. They are not durable state.
