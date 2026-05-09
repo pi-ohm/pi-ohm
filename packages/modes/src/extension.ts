@@ -1,30 +1,25 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import {
-  extensionConfigModule,
-  isExtensionRuntimeConfig,
-  loadConfig,
-  pickConfig,
-  type ExtensionMode,
-} from "@pi-ohm/core/config";
+import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { isModesConfig, modesConfigModule, type Mode } from "./config";
 
 async function loadModesConfig(cwd: string) {
-  const loaded = await loadConfig({ cwd, modules: [extensionConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [modesConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const core = pickConfig({
+  const config = pickConfig({
     loaded: loaded.value,
-    module: extensionConfigModule,
-    is: isExtensionRuntimeConfig,
+    module: modesConfigModule,
+    is: isModesConfig,
   });
-  if (Result.isError(core)) return Result.err(core.error);
+  if (Result.isError(config)) return Result.err(config.error);
 
-  return Result.ok({ loaded: loaded.value, core: core.value });
+  return Result.ok({ loaded: loaded.value, config: config.value });
 }
 
-const MODES: readonly ExtensionMode[] = ["rush", "smart", "deep"] as const;
+const MODES: readonly Mode[] = ["rush", "smart", "deep"] as const;
 
-function parseRequestedMode(args: unknown): ExtensionMode | null {
+function parseRequestedMode(args: unknown): Mode | null {
   if (typeof args === "string") {
     const normalized = args.trim().split(/\s+/)[0]?.toLowerCase();
     if (!normalized) return null;
@@ -64,7 +59,7 @@ async function refreshModeStatus(ctx: ExtensionContext): Promise<void> {
   if (Result.isError(config)) return;
   if (!ctx.hasUI) return;
 
-  ctx.ui.setStatus("ohm-mode", `mode:${config.value.core.defaultMode}`);
+  ctx.ui.setStatus("ohm-mode", `mode:${config.value.config.defaultMode}`);
 }
 
 export default function registerModesExtension(pi: ExtensionAPI): void {
@@ -84,7 +79,7 @@ export default function registerModesExtension(pi: ExtensionAPI): void {
       const text = [
         "Pi OHM modes",
         "",
-        `defaultMode: ${config.value.core.defaultMode}`,
+        `defaultMode: ${config.value.config.defaultMode}`,
         `available: ${MODES.join(", ")}`,
         "",
         "Set mode with: /ohm-mode <rush|smart|deep>",
@@ -121,7 +116,7 @@ export default function registerModesExtension(pi: ExtensionAPI): void {
         "Pi OHM mode",
         "",
         `requestedMode: ${requestedMode}`,
-        "Persist by setting core.defaultMode in ohm.json.",
+        "Persist by setting modes.defaultMode in ohm.json.",
         "Tip: run /ohm-config to inspect merged config.",
       ].join("\n");
 

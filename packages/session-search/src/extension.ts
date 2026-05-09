@@ -1,19 +1,20 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import { featuresConfigModule, isFeatureFlags, loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { isSessionSearchConfig, sessionSearchConfigModule } from "./config";
 
 async function loadSessionSearchConfig(cwd: string) {
-  const loaded = await loadConfig({ cwd, modules: [featuresConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [sessionSearchConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const features = pickConfig({
+  const config = pickConfig({
     loaded: loaded.value,
-    module: featuresConfigModule,
-    is: isFeatureFlags,
+    module: sessionSearchConfigModule,
+    is: isSessionSearchConfig,
   });
-  if (Result.isError(features)) return Result.err(features.error);
+  if (Result.isError(config)) return Result.err(config.error);
 
-  return Result.ok({ loaded: loaded.value, features: features.value });
+  return Result.ok({ loaded: loaded.value, config: config.value });
 }
 
 export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
@@ -22,7 +23,7 @@ export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
     if (Result.isError(config)) return;
     if (!ctx.hasUI) return;
 
-    const enabled = config.value.features.sessionThreadSearch ? "on" : "off";
+    const enabled = config.value.config.enabled ? "on" : "off";
     ctx.ui.setStatus("ohm-session-search", `session-search:${enabled}`);
   });
 
@@ -38,7 +39,7 @@ export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
       const text = [
         "Pi OHM: session/thread search",
         "",
-        `enabled: ${config.value.features.sessionThreadSearch ? "yes" : "no"}`,
+        `enabled: ${config.value.config.enabled ? "yes" : "no"}`,
         "",
         "Scaffold note: connect this package to session_query + thread index tools.",
       ].join("\n");

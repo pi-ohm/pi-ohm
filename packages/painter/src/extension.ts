@@ -1,33 +1,20 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import {
-  featuresConfigModule,
-  isFeatureFlags,
-  isPainterProviders,
-  loadConfig,
-  painterConfigModule,
-  pickConfig,
-} from "@pi-ohm/core/config";
+import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { isPainterConfig, painterConfigModule } from "./config";
 
 async function loadPainterConfig(cwd: string) {
-  const loaded = await loadConfig({ cwd, modules: [featuresConfigModule, painterConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [painterConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
-
-  const features = pickConfig({
-    loaded: loaded.value,
-    module: featuresConfigModule,
-    is: isFeatureFlags,
-  });
-  if (Result.isError(features)) return Result.err(features.error);
 
   const painter = pickConfig({
     loaded: loaded.value,
     module: painterConfigModule,
-    is: isPainterProviders,
+    is: isPainterConfig,
   });
   if (Result.isError(painter)) return Result.err(painter.error);
 
-  return Result.ok({ loaded: loaded.value, features: features.value, painter: painter.value });
+  return Result.ok({ loaded: loaded.value, painter: painter.value });
 }
 
 export default function registerPainterExtension(pi: ExtensionAPI): void {
@@ -36,7 +23,7 @@ export default function registerPainterExtension(pi: ExtensionAPI): void {
     if (Result.isError(config)) return;
     if (!ctx.hasUI) return;
 
-    if (!config.value.features.painterImagegen) {
+    if (!config.value.painter.enabled) {
       ctx.ui.setStatus("ohm-painter", "painter:off");
       return;
     }
@@ -65,7 +52,7 @@ export default function registerPainterExtension(pi: ExtensionAPI): void {
       const text = [
         "Pi OHM: painter/imagegen",
         "",
-        `featureEnabled: ${config.value.features.painterImagegen ? "yes" : "no"}`,
+        `enabled: ${config.value.painter.enabled ? "yes" : "no"}`,
         `googleNanoBanana: ${config.value.painter.googleNanoBanana.enabled ? "on" : "off"} (${config.value.painter.googleNanoBanana.model})`,
         `openai: ${config.value.painter.openai.enabled ? "on" : "off"} (${config.value.painter.openai.model})`,
         `azureOpenAI: ${config.value.painter.azureOpenai.enabled ? "on" : "off"}`,

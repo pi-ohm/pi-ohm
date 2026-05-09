@@ -1,33 +1,20 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import {
-  extensionConfigModule,
-  featuresConfigModule,
-  isExtensionRuntimeConfig,
-  isFeatureFlags,
-  loadConfig,
-  pickConfig,
-} from "@pi-ohm/core/config";
+import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { handoffConfigModule, isHandoffConfig } from "./config";
 
 async function loadHandoffConfig(cwd: string) {
-  const loaded = await loadConfig({ cwd, modules: [extensionConfigModule, featuresConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [handoffConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const core = pickConfig({
+  const config = pickConfig({
     loaded: loaded.value,
-    module: extensionConfigModule,
-    is: isExtensionRuntimeConfig,
+    module: handoffConfigModule,
+    is: isHandoffConfig,
   });
-  if (Result.isError(core)) return Result.err(core.error);
+  if (Result.isError(config)) return Result.err(config.error);
 
-  const features = pickConfig({
-    loaded: loaded.value,
-    module: featuresConfigModule,
-    is: isFeatureFlags,
-  });
-  if (Result.isError(features)) return Result.err(features.error);
-
-  return Result.ok({ loaded: loaded.value, core: core.value, features: features.value });
+  return Result.ok({ loaded: loaded.value, config: config.value });
 }
 
 function renderHandoffMapWidget(ctx: ExtensionContext, visible: boolean): void {
@@ -50,17 +37,14 @@ async function refreshStatus(ctx: ExtensionContext): Promise<void> {
   const config = await loadHandoffConfig(ctx.cwd);
   if (Result.isError(config)) return;
 
-  const enabled = config.value.features.handoff ? "on" : "off";
-  const viz = config.value.features.handoffVisualizer ? "on" : "off";
+  const enabled = config.value.config.enabled ? "on" : "off";
+  const viz = config.value.config.visualizer ? "on" : "off";
 
   if (ctx.hasUI) {
     ctx.ui.setStatus("ohm-handoff", `handoff:${enabled} · visualizer:${viz}`);
   }
 
-  renderHandoffMapWidget(
-    ctx,
-    config.value.features.handoff && config.value.features.handoffVisualizer,
-  );
+  renderHandoffMapWidget(ctx, config.value.config.enabled && config.value.config.visualizer);
 }
 
 export default function registerHandoffExtension(pi: ExtensionAPI): void {
@@ -80,9 +64,8 @@ export default function registerHandoffExtension(pi: ExtensionAPI): void {
       const text = [
         "Pi OHM: handoff",
         "",
-        `enabled: ${config.value.features.handoff ? "yes" : "no"}`,
-        `visualizer: ${config.value.features.handoffVisualizer ? "yes" : "no"}`,
-        `subagent backend: ${config.value.core.subagentBackend}`,
+        `enabled: ${config.value.config.enabled ? "yes" : "no"}`,
+        `visualizer: ${config.value.config.visualizer ? "yes" : "no"}`,
         "",
         `configDir: ${config.value.loaded.paths.configDir}`,
         `loadedFrom: ${config.value.loaded.loadedFrom.length > 0 ? config.value.loaded.loadedFrom.join(", ") : "defaults"}`,

@@ -4,9 +4,11 @@ description: Planned pi-ohm config architecture, file precedence, schemas, and d
 icon: Settings
 ---
 
-This page describes the target `@pi-ohm/core/config` architecture.
+This page describes the `@pi-ohm/core/config` registry architecture.
 
 `pi-ohm` config should live in `ohm.json`, not Pi's `settings.json`. Pi settings are for Pi itself. Ohm config is for Ohm packages and extension behavior.
+
+`@pi-ohm/core/config` is universal plumbing. It does not define pi-ohm package schemas, defaults, feature flags, modes, painter providers, or subagent settings. Each extension owns every field in its namespace.
 
 ## Config files
 
@@ -26,22 +28,26 @@ Because the file is already named `ohm.json`, config is keyed by package namespa
 ```json title=".pi/ohm.json"
 {
   "subagents": {
-    "agentMaxThreads": 8,
-    "agents": {
+    "taskMaxConcurrency": 8,
+    "backend": "interactive-sdk",
+    "profiles": {
       "reviewer": {
         "description": "Review code changes",
         "prompt": "Find correctness, type safety, and design issues.",
         "model": "anthropic/claude-sonnet-4-5",
-        "thinking": "medium",
-        "tools": ["read", "grep", "bash"]
+        "whenToUse": ["review diffs", "check implementation quality"]
       }
     }
   },
-  "memories": {
-    "useMemories": true,
-    "generateMemories": true
+  "handoff": {
+    "enabled": true,
+    "visualizer": true
+  },
+  "modes": {
+    "defaultMode": "smart"
   },
   "painter": {
+    "enabled": true,
     "openai": {
       "enabled": true,
       "model": "gpt-image-1"
@@ -62,8 +68,8 @@ import { registerConfig } from "@pi-ohm/core/config";
 
 const SubagentsConfigSchema = Type.Object(
   {
-    agentMaxThreads: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
-    agents: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Unknown())),
+    taskMaxConcurrency: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
+    profiles: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Unknown())),
   },
   { additionalProperties: false },
 );
@@ -89,7 +95,7 @@ A loader receives registered modules and returns typed resolved config.
 ```ts
 const loaded = await loadConfig({
   cwd,
-  modules: [subagentsConfigModule, memoriesConfigModule, painterConfigModule],
+  modules: [subagentsConfigModule, handoffConfigModule, painterConfigModule],
 });
 ```
 
@@ -160,11 +166,20 @@ Rules:
 - deterministic merge orchestration
 - diagnostics
 
+It never owns:
+
+- extension namespaces
+- extension schemas
+- extension defaults
+- extension feature flags
+- package-specific normalization
+
 Feature packages own:
 
 - namespace schemas
 - defaults
 - merge semantics
 - domain-specific normalization
+- enablement flags
 
 This keeps config extensible without centralizing every package's domain model in `@pi-ohm/core/config`.

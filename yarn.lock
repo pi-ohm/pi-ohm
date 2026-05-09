@@ -12101,6 +12101,7 @@ __metadata:
     "@pi-ohm/painter": "workspace:*"
     "@pi-ohm/session-search": "workspace:*"
     "@pi-ohm/subagents": "workspace:*"
+    better-result: "catalog:"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
