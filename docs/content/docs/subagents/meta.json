@@ -3,5 +3,5 @@
   "description": "",
   "icon": "Superscript",
   "root": true,
-  "pages": ["index"]
+  "pages": ["index", "how-subagents-work"]
 }
