@@ -76,32 +76,6 @@ export interface RegisterPiRpcHandlerInput<Request extends PiRpcRequest, Respons
   ) => OhmPiEventResult<Response> | Promise<OhmPiEventResult<Response>>;
 }
 
-export interface SubagentsHealthRequest extends PiRpcRequest {}
-
-export interface SubagentsHealthResponse {
-  readonly namespace: "subagents";
-  readonly version: 1;
-}
-
-export interface SubagentsSpawnRequest extends PiRpcRequest {
-  readonly type: string;
-  readonly prompt: string;
-  readonly options?: unknown;
-}
-
-export interface SubagentsSpawnResponse {
-  readonly id: string;
-}
-
-export interface SubagentsKillRequest extends PiRpcRequest {
-  readonly agentId: string;
-}
-
-export interface SubagentsKillResponse {
-  readonly killed: true;
-  readonly agentId: string;
-}
-
 export function createPiEventNamespace(namespace: string): PiEventNamespace {
   return {
     namespace,
@@ -112,7 +86,7 @@ export function createPiEventNamespace(namespace: string): PiEventNamespace {
       return `${namespace}:rpc:${name}`;
     },
     reply(channel, requestId) {
-      return `${channel}:reply:${requestId}`;
+      return replyChannel(channel, requestId);
     },
   };
 }
@@ -213,17 +187,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readStringField(input: Record<string, unknown>, field: string): string | undefined {
+export function readPiEventStringField(
+  input: Record<string, unknown>,
+  field: string,
+): string | undefined {
   const value = Reflect.get(input, field);
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   if (trimmed.length === 0) return undefined;
   return trimmed;
-}
-
-function readOptionalField(input: Record<string, unknown>, field: string): unknown {
-  if (!Reflect.has(input, field)) return undefined;
-  return Reflect.get(input, field);
 }
 
 function messageFromCause(cause: unknown): string {
@@ -232,27 +204,28 @@ function messageFromCause(cause: unknown): string {
   return String(cause);
 }
 
-function invalidRequest(input: {
+export function invalidPiEventRequest(input: {
   readonly code: string;
   readonly message: string;
   readonly channel: string;
   readonly requestId?: string;
+  readonly cause?: unknown;
 }): OhmPiEventResult<never> {
   return Result.err(new OhmPiEventValidationError(input));
 }
 
 export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventResult<PiRpcRequest> {
   if (!isRecord(data)) {
-    return invalidRequest({
+    return invalidPiEventRequest({
       code: "rpc_request_not_object",
       channel,
       message: `Invalid ${channel} RPC request: payload must be an object`,
     });
   }
 
-  const requestId = readStringField(data, "requestId");
+  const requestId = readPiEventStringField(data, "requestId");
   if (!requestId) {
-    return invalidRequest({
+    return invalidPiEventRequest({
       code: "rpc_request_id_missing",
       channel,
       message: `Invalid ${channel} RPC request: requestId must be a non-empty string`,
@@ -260,84 +233,4 @@ export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventRes
   }
 
   return Result.ok({ requestId });
-}
-
-export const SUBAGENTS_EVENTS = createPiEventNamespace("subagents");
-
-export const SUBAGENTS_RPC_CHANNELS = {
-  health: SUBAGENTS_EVENTS.rpc("health"),
-  spawn: SUBAGENTS_EVENTS.rpc("spawn"),
-  kill: SUBAGENTS_EVENTS.rpc("kill"),
-} as const satisfies Readonly<Record<string, string>>;
-
-export function parseSubagentsHealthRequest(
-  data: unknown,
-): OhmPiEventResult<SubagentsHealthRequest> {
-  return parsePiRpcRequest(data, SUBAGENTS_RPC_CHANNELS.health);
-}
-
-export function parseSubagentsSpawnRequest(data: unknown): OhmPiEventResult<SubagentsSpawnRequest> {
-  const request = parsePiRpcRequest(data, SUBAGENTS_RPC_CHANNELS.spawn);
-  if (Result.isError(request)) return request;
-  if (!isRecord(data)) {
-    return invalidRequest({
-      code: "rpc_request_not_object",
-      channel: SUBAGENTS_RPC_CHANNELS.spawn,
-      requestId: request.value.requestId,
-      message: "Invalid subagents spawn RPC request: payload must be an object",
-    });
-  }
-
-  const type = readStringField(data, "type");
-  if (!type) {
-    return invalidRequest({
-      code: "subagents_spawn_type_missing",
-      channel: SUBAGENTS_RPC_CHANNELS.spawn,
-      requestId: request.value.requestId,
-      message: "Invalid subagents spawn RPC request: type must be a non-empty string",
-    });
-  }
-
-  const prompt = readStringField(data, "prompt");
-  if (!prompt) {
-    return invalidRequest({
-      code: "subagents_spawn_prompt_missing",
-      channel: SUBAGENTS_RPC_CHANNELS.spawn,
-      requestId: request.value.requestId,
-      message: "Invalid subagents spawn RPC request: prompt must be a non-empty string",
-    });
-  }
-
-  const options = readOptionalField(data, "options");
-  return Result.ok({
-    requestId: request.value.requestId,
-    type,
-    prompt,
-    ...(options === undefined ? {} : { options }),
-  });
-}
-
-export function parseSubagentsKillRequest(data: unknown): OhmPiEventResult<SubagentsKillRequest> {
-  const request = parsePiRpcRequest(data, SUBAGENTS_RPC_CHANNELS.kill);
-  if (Result.isError(request)) return request;
-  if (!isRecord(data)) {
-    return invalidRequest({
-      code: "rpc_request_not_object",
-      channel: SUBAGENTS_RPC_CHANNELS.kill,
-      requestId: request.value.requestId,
-      message: "Invalid subagents kill RPC request: payload must be an object",
-    });
-  }
-
-  const agentId = readStringField(data, "agentId");
-  if (!agentId) {
-    return invalidRequest({
-      code: "subagents_kill_agent_id_missing",
-      channel: SUBAGENTS_RPC_CHANNELS.kill,
-      requestId: request.value.requestId,
-      message: "Invalid subagents kill RPC request: agentId must be a non-empty string",
-    });
-  }
-
-  return Result.ok({ requestId: request.value.requestId, agentId });
 }

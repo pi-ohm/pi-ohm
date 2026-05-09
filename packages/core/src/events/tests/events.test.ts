@@ -1,17 +1,19 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { setImmediate } from "node:timers/promises";
+import test from "node:test";
 import { Result } from "better-result";
 import {
   createPiEventNamespace,
   emitPiEvent,
+  invalidPiEventRequest,
   onPiEvent,
-  parseSubagentsKillRequest,
-  parseSubagentsSpawnRequest,
+  parsePiRpcRequest,
+  readPiEventStringField,
   registerPiEvents,
   registerPiRpcHandler,
-  SUBAGENTS_RPC_CHANNELS,
+  type OhmPiEventResult,
   type PiEventBus,
+  type PiRpcRequest,
 } from "../index";
 
 class FakeBus implements PiEventBus {
@@ -35,18 +37,54 @@ class FakeBus implements PiEventBus {
   }
 }
 
-void test("createPiEventNamespace builds namespaced event and rpc channels", () => {
-  const subagents = createPiEventNamespace("subagents");
+interface DemoSpawnRequest extends PiRpcRequest {
+  readonly type: string;
+  readonly prompt: string;
+}
 
-  assert.equal(subagents.event("started"), "subagents:started");
-  assert.equal(subagents.rpc("health"), "subagents:rpc:health");
-  assert.equal(
-    subagents.reply("subagents:rpc:health", "req-1"),
-    "subagents:rpc:health:reply:req-1",
-  );
-  assert.equal(SUBAGENTS_RPC_CHANNELS.health, "subagents:rpc:health");
-  assert.equal(SUBAGENTS_RPC_CHANNELS.spawn, "subagents:rpc:spawn");
-  assert.equal(SUBAGENTS_RPC_CHANNELS.kill, "subagents:rpc:kill");
+function parseDemoSpawnRequest(data: unknown): OhmPiEventResult<DemoSpawnRequest> {
+  const channel = "demo:rpc:spawn";
+  const request = parsePiRpcRequest(data, channel);
+  if (Result.isError(request)) return request;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return invalidPiEventRequest({
+      code: "demo_spawn_not_object",
+      channel,
+      requestId: request.value.requestId,
+      message: "Invalid demo spawn RPC request: payload must be an object",
+    });
+  }
+
+  const record = data as Record<string, unknown>;
+  const type = readPiEventStringField(record, "type");
+  if (!type) {
+    return invalidPiEventRequest({
+      code: "demo_spawn_type_missing",
+      channel,
+      requestId: request.value.requestId,
+      message: "Invalid demo spawn RPC request: type must be a non-empty string",
+    });
+  }
+
+  const prompt = readPiEventStringField(record, "prompt");
+  if (!prompt) {
+    return invalidPiEventRequest({
+      code: "demo_spawn_prompt_missing",
+      channel,
+      requestId: request.value.requestId,
+      message: "Invalid demo spawn RPC request: prompt must be a non-empty string",
+    });
+  }
+
+  return Result.ok({ requestId: request.value.requestId, type, prompt });
+}
+
+void test("createPiEventNamespace builds generic event and rpc channels", () => {
+  const demo = createPiEventNamespace("demo");
+
+  assert.equal(demo.event("started"), "demo:started");
+  assert.equal(demo.rpc("spawn"), "demo:rpc:spawn");
+  assert.equal(demo.reply("demo:rpc:spawn", "req-1"), "demo:rpc:spawn:reply:req-1");
 });
 
 void test("onPiEvent and emitPiEvent wrap the shared bus and unsubscribe", () => {
@@ -92,18 +130,18 @@ void test("registerPiEvents registers modules and cleans them on returned cleanu
 void test("registerPiRpcHandler emits success replies on request scoped channels", async () => {
   const bus = new FakeBus();
   const replies: unknown[] = [];
-  bus.on("subagents:rpc:spawn:reply:req-1", (reply) => replies.push(reply));
+  bus.on("demo:rpc:spawn:reply:req-1", (reply) => replies.push(reply));
 
   registerPiRpcHandler({
     events: bus,
-    channel: SUBAGENTS_RPC_CHANNELS.spawn,
-    parse: parseSubagentsSpawnRequest,
+    channel: "demo:rpc:spawn",
+    parse: parseDemoSpawnRequest,
     handler(request) {
       return Promise.resolve(Result.ok({ id: `${request.type}:1`, prompt: request.prompt }));
     },
   });
 
-  bus.emit(SUBAGENTS_RPC_CHANNELS.spawn, {
+  bus.emit("demo:rpc:spawn", {
     requestId: "req-1",
     type: "finder",
     prompt: "find config loaders",
@@ -120,23 +158,23 @@ void test("registerPiRpcHandler emits success replies on request scoped channels
 void test("registerPiRpcHandler emits validation errors when requestId is present", async () => {
   const bus = new FakeBus();
   const replies: unknown[] = [];
-  bus.on("subagents:rpc:kill:reply:req-2", (reply) => replies.push(reply));
+  bus.on("demo:rpc:spawn:reply:req-2", (reply) => replies.push(reply));
 
   registerPiRpcHandler({
     events: bus,
-    channel: SUBAGENTS_RPC_CHANNELS.kill,
-    parse: parseSubagentsKillRequest,
+    channel: "demo:rpc:spawn",
+    parse: parseDemoSpawnRequest,
     handler(request) {
-      return Promise.resolve(Result.ok({ killed: request.agentId }));
+      return Promise.resolve(Result.ok({ id: request.type }));
     },
   });
 
-  bus.emit(SUBAGENTS_RPC_CHANNELS.kill, { requestId: "req-2", agentId: "" });
+  bus.emit("demo:rpc:spawn", { requestId: "req-2", type: "" });
   await setImmediate();
 
   assert.equal(replies.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(replies[0])), {
     success: false,
-    error: "Invalid subagents kill RPC request: agentId must be a non-empty string",
+    error: "Invalid demo spawn RPC request: type must be a non-empty string",
   });
 });
