@@ -3591,26 +3591,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@pi-ohm/config@workspace:*, @pi-ohm/config@workspace:packages/config":
-  version: 0.0.0-use.local
-  resolution: "@pi-ohm/config@workspace:packages/config"
-  dependencies:
-    "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@earendil-works/pi-tui": "catalog:pi"
-    better-result: "catalog:"
-    typebox: "npm:^1.0.68"
-  peerDependencies:
-    "@earendil-works/pi-coding-agent": 0.74.0
-    "@earendil-works/pi-tui": 0.74.0
-  languageName: unknown
-  linkType: soft
-
 "@pi-ohm/core@workspace:*, @pi-ohm/core@workspace:packages/core":
   version: 0.0.0-use.local
   resolution: "@pi-ohm/core@workspace:packages/core"
   dependencies:
     "@libsql/client": "catalog:"
     better-result: "catalog:"
+    typebox: "npm:^1.0.68"
   languageName: unknown
   linkType: soft
 
@@ -3619,7 +3606,7 @@ __metadata:
   resolution: "@pi-ohm/handoff@workspace:packages/handoff"
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3645,7 +3632,7 @@ __metadata:
   resolution: "@pi-ohm/modes@workspace:packages/modes"
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3657,7 +3644,7 @@ __metadata:
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@earendil-works/pi-tui": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3668,7 +3655,7 @@ __metadata:
   resolution: "@pi-ohm/session-search@workspace:packages/session-search"
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3680,7 +3667,6 @@ __metadata:
   dependencies:
     "@earendil-works/pi-agent-core": "catalog:pi"
     "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
     "@pi-ohm/core": "workspace:*"
     "@pi-ohm/tui": "workspace:*"
     better-result: "catalog:"
@@ -12102,7 +12088,7 @@ __metadata:
   resolution: "pi-ohm@workspace:packages/extension"
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
     "@pi-ohm/handoff": "workspace:*"
     "@pi-ohm/memories": "workspace:*"
     "@pi-ohm/modes": "workspace:*"
