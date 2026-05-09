@@ -40,6 +40,41 @@ Rules:
 - Do not silently fall back. Continue only when the error has been recorded as diagnostics and the fallback is part of the contract.
 - Tool responses should map `Result.err` into structured model-readable failures, not thrown exceptions.
 
+## Debug logging
+
+Subagents use `@pi-ohm/core/logging` for opt-in structured debug logs. Enable logs with:
+
+```sh
+PI_OHM_DEBUG_MODE=true
+```
+
+Use logs at package boundaries only:
+
+- controller tool actions
+- runner spawn/send/wait/close/resume calls
+- event/RPC send and reply
+- graph writes
+- parent session writes
+
+Logs observe `Result` values and return them unchanged:
+
+```ts
+import { createDebug, debugResult } from "@pi-ohm/core/logging";
+
+const debug = createDebug("@pi-ohm/subagents");
+
+const result = await runner.spawn(input);
+
+debugResult(debug, "runner.spawn", result, {
+  taskId: input.taskId,
+  backend: config.backend,
+});
+
+return result;
+```
+
+Debug logs are not durable state and are not model-visible context. Session custom entries remain the durable source for parent-visible subagent state.
+
 ## Package boundaries
 
 DB moves into core as tree-shakeable subpath exports:

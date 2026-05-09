@@ -30,5 +30,6 @@ Package boundary notes:
 - `@pi-ohm/core/db` owns connection, Result-first migration orchestration, and shared DB path/client primitives.
 - `@pi-ohm/core/config` owns universal config loading, registration, TypeBox validation, and diagnostics. It must not own pi-ohm package schemas, defaults, feature flags, modes, providers, or enablement fields.
 - `@pi-ohm/core/events` owns typed wrappers for Pi `pi.events` interop and cross-extension RPC envelopes.
+- `@pi-ohm/core/logging` owns opt-in structured debug helpers gated by `PI_OHM_DEBUG_MODE`.
 - Feature packages own their tables/repositories and register migrations through `OhmDbModule`.
 - `@pi-ohm/subagents` owns task-domain adapters that bind core primitives to task detail contracts.

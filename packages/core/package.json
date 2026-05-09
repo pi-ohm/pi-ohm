@@ -41,6 +41,10 @@
     "./events": {
       "types": "./dist/events/index.d.ts",
       "default": "./dist/events/index.js"
+    },
+    "./logging": {
+      "types": "./dist/logging/index.d.ts",
+      "default": "./dist/logging/index.js"
     }
   },
   "publishConfig": {
@@ -48,7 +52,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts"
+    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts src/logging/index.ts"
   },
   "dependencies": {
     "@libsql/client": "catalog:",

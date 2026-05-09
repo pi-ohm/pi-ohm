@@ -1,4 +1,5 @@
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { createDebug, debugResult, type Debug } from "../logging";
 
 export interface PiEventBus {
   emit(channel: string, data: unknown): void;
@@ -59,6 +60,7 @@ export class PiEventRegistry {
   readonly namespace: string;
   readonly bus: PiEventBus;
   readonly pi: PiEventApi;
+  readonly #debug: Debug;
   readonly #cleanups: PiEventCleanup[] = [];
   readonly #diagnostics: OhmPiEventError[] = [];
   #cleaned = false;
@@ -67,6 +69,7 @@ export class PiEventRegistry {
     this.namespace = input.namespace;
     this.pi = input.pi;
     this.bus = input.pi.events;
+    this.#debug = createDebug("@pi-ohm/core/events");
     this.pi.on?.("session_shutdown", () => {
       this.cleanup();
     });
@@ -127,8 +130,8 @@ export class PiEventRegistry {
           cause,
         }),
     });
-    if (Result.isError(emitted)) return emitted;
-    return Result.ok(undefined);
+    const result: OhmPiEventResult<void> = Result.isError(emitted) ? emitted : Result.ok(undefined);
+    return debugResult(this.#debug, "event.emit", result, { channel: channel.value });
   }
 
   on<T>(
@@ -152,10 +155,14 @@ export class PiEventRegistry {
           cause,
         }),
     });
-    if (Result.isError(subscribed)) return subscribed;
+    if (Result.isError(subscribed)) {
+      return debugResult(this.#debug, "event.subscribe", subscribed, { channel: channel.value });
+    }
 
     const cleanup = this.addCleanup(subscribed.value);
-    return Result.ok(cleanup);
+    return debugResult(this.#debug, "event.subscribe", Result.ok(cleanup), {
+      channel: channel.value,
+    });
   }
 
   rpc<Request extends PiRpcRequest, Response>(
@@ -179,10 +186,14 @@ export class PiEventRegistry {
           cause,
         }),
     });
-    if (Result.isError(subscribed)) return subscribed;
+    if (Result.isError(subscribed)) {
+      return debugResult(this.#debug, "rpc.subscribe", subscribed, { channel: channel.value });
+    }
 
     const cleanup = this.addCleanup(subscribed.value);
-    return Result.ok(cleanup);
+    return debugResult(this.#debug, "rpc.subscribe", Result.ok(cleanup), {
+      channel: channel.value,
+    });
   }
 
   cleanup(): OhmPiEventResult<void> {
@@ -229,6 +240,7 @@ export class PiEventRegistry {
   ): Promise<void> {
     const parsed = parse(payload);
     if (Result.isError(parsed)) {
+      debugResult(this.#debug, "event.parse", parsed, { channel });
       this.#diagnostics.push(parsed.error);
       return;
     }
@@ -245,10 +257,17 @@ export class PiEventRegistry {
     });
 
     if (Result.isError(handled)) {
+      debugResult(this.#debug, "event.handle", handled, { channel });
       this.#diagnostics.push(handled.error);
       return;
     }
-    if (Result.isError(handled.value)) this.#diagnostics.push(handled.value.error);
+    if (Result.isError(handled.value)) {
+      debugResult(this.#debug, "event.handle", handled.value, { channel });
+      this.#diagnostics.push(handled.value.error);
+      return;
+    }
+
+    this.#debug("event.handle", { channel, outcome: "ok" });
   }
 
   private async handleRpc<Request extends PiRpcRequest, Response>(
@@ -259,11 +278,14 @@ export class PiEventRegistry {
   ): Promise<void> {
     const parsed = parse(payload);
     if (Result.isError(parsed)) {
+      debugResult(this.#debug, "rpc.parse", parsed, { channel });
       this.#diagnostics.push(parsed.error);
       const requestId = parsed.error.requestId;
       if (requestId) this.emitRpcError(channel, requestId, parsed.error.message);
       return;
     }
+
+    this.#debug("rpc.request", { channel, requestId: parsed.value.requestId });
 
     const handled = await Result.tryPromise({
       try: async () => handler(parsed.value),
@@ -278,16 +300,26 @@ export class PiEventRegistry {
     });
 
     if (Result.isError(handled)) {
+      debugResult(this.#debug, "rpc.handle", handled, {
+        channel,
+        requestId: parsed.value.requestId,
+      });
       this.#diagnostics.push(handled.error);
       this.emitRpcError(channel, parsed.value.requestId, handled.error.message);
       return;
     }
 
     if (Result.isError(handled.value)) {
+      debugResult(this.#debug, "rpc.handle", handled.value, {
+        channel,
+        requestId: parsed.value.requestId,
+      });
       this.#diagnostics.push(handled.value.error);
       this.emitRpcError(channel, parsed.value.requestId, handled.value.error.message);
       return;
     }
+
+    this.#debug("rpc.handle", { channel, requestId: parsed.value.requestId, outcome: "ok" });
 
     this.emitRpcSuccess(channel, parsed.value.requestId, handled.value.value);
   }
@@ -295,26 +327,64 @@ export class PiEventRegistry {
   private emitRpcSuccess<Response>(channel: string, requestId: string, data: Response): void {
     const reply = this.replyChannel(channel, requestId);
     if (Result.isError(reply)) {
+      debugResult(this.#debug, "rpc.reply", reply, { channel, requestId });
       this.#diagnostics.push(reply.error);
       return;
     }
 
     const payload: PiRpcReply<Response> =
       data === undefined ? { success: true } : { success: true, data };
-    this.bus.emit(reply.value, payload);
+    const emitted = Result.try({
+      try: () => this.bus.emit(reply.value, payload),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "rpc_reply_emit_failed",
+          channel: reply.value,
+          requestId,
+          message: `Failed to emit Pi event RPC reply ${reply.value}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    const result: OhmPiEventResult<void> = Result.isError(emitted) ? emitted : Result.ok(undefined);
+    if (Result.isError(result)) this.#diagnostics.push(result.error);
+    debugResult(this.#debug, "rpc.reply", result, {
+      channel,
+      requestId,
+      replyChannel: reply.value,
+    });
   }
 
   private emitRpcError(channel: string, requestId: string, error: string): void {
     const reply = this.replyChannel(channel, requestId);
     if (Result.isError(reply)) {
+      debugResult(this.#debug, "rpc.reply", reply, { channel, requestId });
       this.#diagnostics.push(reply.error);
       return;
     }
 
-    this.bus.emit(reply.value, {
+    const emitted = Result.try({
+      try: () =>
+        this.bus.emit(reply.value, {
+          success: false,
+          error,
+        } satisfies PiRpcReply<unknown>),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "rpc_reply_emit_failed",
+          channel: reply.value,
+          requestId,
+          message: `Failed to emit Pi event RPC reply ${reply.value}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    const result: OhmPiEventResult<void> = Result.isError(emitted) ? emitted : Result.ok(undefined);
+    if (Result.isError(result)) this.#diagnostics.push(result.error);
+    debugResult(this.#debug, "rpc.reply", result, {
+      channel,
+      requestId,
+      replyChannel: reply.value,
       success: false,
-      error,
-    } satisfies PiRpcReply<unknown>);
+    });
   }
 }
 

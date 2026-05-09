@@ -66,6 +66,8 @@ events.value.rpc("spawn", parseSpawnRequest, async (request) => {
 
 Parser failures with a valid `requestId` emit failure replies. Handler `Result.err(...)` values and thrown handler failures also emit failure replies.
 
+Set `PI_OHM_DEBUG_MODE=true` to print structured debug events for subscriptions, emits, RPC requests, handler outcomes, and replies.
+
 ## Cleanup and diagnostics
 
 `PiEventRegistry` registers `cleanup()` on `session_shutdown` when the Pi API exposes lifecycle hooks.

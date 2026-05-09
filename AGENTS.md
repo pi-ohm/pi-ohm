@@ -15,7 +15,7 @@ This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packa
 you should uphold these standards whenever you write code in this repo:
 
 ```
-**Why pi-ohm?**
+## Why pi-ohm?
 
 1. opinionated: you're always using the good parts of pi-ohm. If we don't use and love a feature, we kill it.
 2. on the frontier: pi-ohm goes where the models take it. no backcompat, no legacy features.
@@ -35,6 +35,7 @@ you should uphold these standards whenever you write code in this repo:
 7. Versioning/changelog automation is release-please (not changesets).
 8. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).
 9. Keep publishable packages in lockstep versioning (`@pi-ohm/*` and `pi-ohm` share the same release version).
+10. Don't overname methods, functions, interfaces, types, or variables. For instance, `createPiOhmLogger` is bad; `createLogger` is good.
 
 ## Packaging goal
 
@@ -42,17 +43,15 @@ Each feature package should be installable by itself through npm, which is the P
 
 amp features:
 
-- `@pi-ohm/handoff`
-- `@pi-ohm/subagents`
-- `@pi-ohm/session-search`
-- `@pi-ohm/painter`
-- `@pi-ohm/modes`
+- `@pi-ohm/handoff` - when context is nearing capacity, offer a `/handoff` command to the user. Also invocable whenever the user needs.
+- `@pi-ohm/subagents` - the good parts of opencode, codex, and claude code. ships with default agents (oracle, librarian, explorer)
+- `@pi-ohm/session-search` - allows the agent to search through sessions
+- `@pi-ohm/memory` - codex cli style memory
+- `@pi-ohm/modes` - amp-specific mode switching with configurable models/thinking/prompts per model provider
 
 helpers:
 
-- `@pi-ohm/tui`
-- `@pi-ohm/core/config`
-- `@pi-ohm/core`
+- `@pi-ohm/core`: includes logging, config, event bus, and db abstractions.
 
 Full bundle package:
 
