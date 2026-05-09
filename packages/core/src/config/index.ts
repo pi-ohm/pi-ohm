@@ -11,11 +11,6 @@ import {
   mergeOhmPainterProviders,
   type OhmPainterProviders,
 } from "./painter";
-import {
-  DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
-  mergeSubagentRuntimeConfig,
-  type OhmSubagentRuntimeConfig,
-} from "./subagents";
 
 export const OHM_EXTENSION_NAME = "pi-ohm";
 export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
@@ -25,7 +20,6 @@ export interface OhmRuntimeConfig {
   subagentBackend: OhmSubagentBackend;
   features: OhmFeatureFlags;
   painter: OhmPainterProviders;
-  subagents?: OhmSubagentRuntimeConfig;
 }
 
 export interface OhmConfigPaths {
@@ -204,7 +198,6 @@ const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
   subagentBackend: "interactive-sdk",
   features: DEFAULT_OHM_FEATURE_FLAGS,
   painter: DEFAULT_OHM_PAINTER_PROVIDERS,
-  subagents: DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
 };
 
 type JsonMap = Record<string, unknown>;
@@ -523,11 +516,6 @@ function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
   next.features = mergeOhmFeatureFlags(next.features, patch.features);
   next.painter = mergeOhmPainterProviders(next.painter, patch.painter);
 
-  next.subagents = mergeSubagentRuntimeConfig({
-    current: next.subagents,
-    patch: patch.subagents,
-  });
-
   return next;
 }
 
@@ -596,30 +584,3 @@ export {
   mergeOhmPainterProviders,
   type OhmPainterProviders,
 } from "./painter";
-
-export {
-  DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
-  getSubagentConfiguredModel,
-  getSubagentProfileRuntimeConfig,
-  mergeSubagentRuntimeConfig,
-  resolveSubagentProfileRuntimeConfig,
-  resolveSubagentVariantPattern,
-  type OhmSubagentProfileRuntimeConfig,
-  type OhmSubagentProfileVariantRuntimeConfig,
-  type OhmSubagentRuntimeConfig,
-  type OhmSubagentToolPermissionDecision,
-  type ResolvedOhmSubagentProfileRuntimeConfig,
-} from "./subagents";
-
-export {
-  parseSubagentProfilePatch,
-  parseSubagentProfileVariantPatch,
-  SubagentProfilePatchSchema,
-  SubagentProfileVariantMapPatchSchema,
-  SubagentProfileVariantPatchSchema,
-  SubagentToolPermissionDecisionSchema,
-  SubagentToolPermissionMapSchema,
-  type SubagentProfilePatch,
-  type SubagentProfileVariantPatch,
-  type SubagentToolPermissionDecisionPatch,
-} from "./subagents";

@@ -19,6 +19,10 @@
     ".": {
       "types": "./dist/extension.d.ts",
       "default": "./dist/extension.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
     }
   },
   "publishConfig": {
@@ -26,7 +30,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/extension.ts"
+    "build": "vp pack src/extension.ts src/config.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "catalog:pi",
@@ -34,18 +38,15 @@
     "@pi-ohm/core": "workspace:*",
     "@pi-ohm/tui": "workspace:*",
     "better-result": "catalog:",
+    "typebox": "^1.0.68",
     "zod": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.74.0",
-    "@earendil-works/pi-tui": "0.74.0",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "0.74.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-tui": {
-      "optional": true
-    },
-    "typebox": {
       "optional": true
     }
   },

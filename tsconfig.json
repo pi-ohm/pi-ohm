@@ -11,5 +11,5 @@
     "types": ["node"]
   },
   "include": ["extensions/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
-  "exclude": ["node_modules", "src_legacy"]
+  "exclude": ["node_modules", "**/src_legacy/**/*.ts"]
 }

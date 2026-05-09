@@ -3670,15 +3670,13 @@ __metadata:
     "@pi-ohm/core": "workspace:*"
     "@pi-ohm/tui": "workspace:*"
     better-result: "catalog:"
+    typebox: "npm:^1.0.68"
     zod: "catalog:"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
     "@earendil-works/pi-tui": 0.74.0
-    typebox: "*"
   peerDependenciesMeta:
     "@earendil-works/pi-tui":
-      optional: true
-    typebox:
       optional: true
   languageName: unknown
   linkType: soft
