@@ -2,36 +2,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
-import { Type, type StaticDecode, type TSchema } from "typebox";
+import type { StaticDecode, TSchema } from "typebox";
 import { Value } from "typebox/value";
-import {
-  DEFAULT_EXTENSION_FEATURE_FLAGS,
-  mergeExtensionFeatureFlags,
-  type ExtensionFeatureFlags,
-} from "./features";
-import { DEFAULT_EXTENSION_MODE, normalizeExtensionMode, type ExtensionMode } from "./modes";
-import {
-  DEFAULT_EXTENSION_PAINTER_PROVIDERS,
-  mergeExtensionPainterProviders,
-  type ExtensionPainterProviders,
-} from "./painter";
-
-export type ExtensionSubagentBackend =
-  | "none"
-  | "interactive-shell"
-  | "interactive-sdk"
-  | "custom-plugin";
-
-export interface ExtensionRuntimeConfig {
-  defaultMode: ExtensionMode;
-  subagentBackend: ExtensionSubagentBackend;
-}
 
 export interface ExtensionConfigPaths {
   configDir: string;
   projectConfigFile: string;
   globalConfigFile: string;
-  providersConfigFile: string;
 }
 
 export type ExtensionConfigDiagnostic =
@@ -197,33 +174,6 @@ export class ConfigRegistry {
   }
 }
 
-export const DEFAULT_EXTENSION_RUNTIME_CONFIG: ExtensionRuntimeConfig = {
-  defaultMode: DEFAULT_EXTENSION_MODE,
-  subagentBackend: "interactive-sdk",
-};
-
-const CoreConfigSchema = Type.Object(
-  {
-    defaultMode: Type.Optional(
-      Type.Union([Type.Literal("rush"), Type.Literal("smart"), Type.Literal("deep")]),
-    ),
-    subagentBackend: Type.Optional(
-      Type.Union([
-        Type.Literal("none"),
-        Type.Literal("interactive-shell"),
-        Type.Literal("interactive-sdk"),
-        Type.Literal("custom-plugin"),
-      ]),
-    ),
-  },
-  { additionalProperties: false },
-);
-
-const UnknownRecordSchema = Type.Record(Type.String({ minLength: 1 }), Type.Unknown());
-
-type CoreConfigPatch = StaticDecode<typeof CoreConfigSchema>;
-type UnknownRecordPatch = StaticDecode<typeof UnknownRecordSchema>;
-
 type JsonMap = Record<string, unknown>;
 
 interface ReadConfigFileResult {
@@ -270,7 +220,6 @@ export function resolveExtensionConfigPaths(cwd: string): ExtensionConfigPaths {
     configDir,
     projectConfigFile: path.join(cwd, ".pi", "ohm.json"),
     globalConfigFile: path.join(configDir, "ohm.json"),
-    providersConfigFile: path.join(configDir, "ohm.providers.json"),
   };
 }
 
@@ -293,36 +242,6 @@ export function registerConfig<Config, Schema extends TSchema>(
     },
   };
 }
-
-export const extensionConfigModule = registerConfig({
-  namespace: "core",
-  schema: CoreConfigSchema,
-  defaults: DEFAULT_EXTENSION_RUNTIME_CONFIG,
-  merge(base: ExtensionRuntimeConfig, patch: CoreConfigPatch) {
-    return Result.ok({
-      defaultMode: patch.defaultMode ?? base.defaultMode,
-      subagentBackend: patch.subagentBackend ?? base.subagentBackend,
-    });
-  },
-});
-
-export const featuresConfigModule = registerConfig({
-  namespace: "features",
-  schema: UnknownRecordSchema,
-  defaults: DEFAULT_EXTENSION_FEATURE_FLAGS,
-  merge(base: ExtensionFeatureFlags, patch: UnknownRecordPatch) {
-    return Result.ok(mergeExtensionFeatureFlags(base, patch));
-  },
-});
-
-export const painterConfigModule = registerConfig({
-  namespace: "painter",
-  schema: UnknownRecordSchema,
-  defaults: DEFAULT_EXTENSION_PAINTER_PROVIDERS,
-  merge(base: ExtensionPainterProviders, patch: UnknownRecordPatch) {
-    return Result.ok(mergeExtensionPainterProviders(base, patch));
-  },
-});
 
 export function pickConfig<Config>(
   input: PickConfigInput<Config>,
@@ -554,55 +473,3 @@ async function loadConfigModules(
     diagnostics: loaded.diagnostics,
   });
 }
-
-export function isExtensionRuntimeConfig(value: unknown): value is ExtensionRuntimeConfig {
-  if (!isJsonMap(value)) return false;
-  return (
-    normalizeExtensionMode(value.defaultMode, DEFAULT_EXTENSION_MODE) === value.defaultMode &&
-    (value.subagentBackend === "none" ||
-      value.subagentBackend === "interactive-shell" ||
-      value.subagentBackend === "interactive-sdk" ||
-      value.subagentBackend === "custom-plugin")
-  );
-}
-
-export function isFeatureFlags(value: unknown): value is ExtensionFeatureFlags {
-  if (!isJsonMap(value)) return false;
-  return (
-    typeof value.handoff === "boolean" &&
-    typeof value.subagents === "boolean" &&
-    typeof value.sessionThreadSearch === "boolean" &&
-    typeof value.handoffVisualizer === "boolean" &&
-    typeof value.painterImagegen === "boolean"
-  );
-}
-
-export function isPainterProviders(value: unknown): value is ExtensionPainterProviders {
-  if (!isJsonMap(value)) return false;
-  if (!isJsonMap(value.googleNanoBanana)) return false;
-  if (!isJsonMap(value.openai)) return false;
-  if (!isJsonMap(value.azureOpenai)) return false;
-
-  return (
-    typeof value.googleNanoBanana.enabled === "boolean" &&
-    typeof value.googleNanoBanana.model === "string" &&
-    typeof value.openai.enabled === "boolean" &&
-    typeof value.openai.model === "string" &&
-    typeof value.azureOpenai.enabled === "boolean" &&
-    typeof value.azureOpenai.deployment === "string" &&
-    typeof value.azureOpenai.endpoint === "string" &&
-    typeof value.azureOpenai.apiVersion === "string"
-  );
-}
-
-export {
-  DEFAULT_EXTENSION_FEATURE_FLAGS,
-  mergeExtensionFeatureFlags,
-  type ExtensionFeatureFlags,
-} from "./features";
-export { DEFAULT_EXTENSION_MODE, normalizeExtensionMode, type ExtensionMode } from "./modes";
-export {
-  DEFAULT_EXTENSION_PAINTER_PROVIDERS,
-  mergeExtensionPainterProviders,
-  type ExtensionPainterProviders,
-} from "./painter";

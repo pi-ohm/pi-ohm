@@ -38,18 +38,6 @@
       "types": "./dist/config/index.d.ts",
       "default": "./dist/config/index.js"
     },
-    "./config/features": {
-      "types": "./dist/config/features.d.ts",
-      "default": "./dist/config/features.js"
-    },
-    "./config/modes": {
-      "types": "./dist/config/modes.d.ts",
-      "default": "./dist/config/modes.js"
-    },
-    "./config/painter": {
-      "types": "./dist/config/painter.d.ts",
-      "default": "./dist/config/painter.js"
-    },
     "./events": {
       "types": "./dist/events/index.d.ts",
       "default": "./dist/events/index.js"
@@ -60,7 +48,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/config/features.ts src/config/modes.ts src/config/painter.ts src/events/index.ts"
+    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts"
   },
   "dependencies": {
     "@libsql/client": "catalog:",

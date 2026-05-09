@@ -5,17 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
-import {
-  ConfigRegistry,
-  extensionConfigModule,
-  featuresConfigModule,
-  isExtensionRuntimeConfig,
-  isFeatureFlags,
-  loadConfig,
-  pickConfig,
-  registerConfig,
-  resolveExtensionConfigPaths,
-} from "../index";
+import { ConfigRegistry, loadConfig, registerConfig, resolveExtensionConfigPaths } from "../index";
 
 const DemoSchema = Type.Object(
   {
@@ -151,51 +141,6 @@ void test("ConfigRegistry rejects duplicate module namespaces", () => {
 
   const duplicate = registry.value.register(demo);
   assert.equal(Result.isError(duplicate), true);
-});
-
-void test("loadConfig composes core-owned config modules", async () => {
-  await withConfigEnv(async ({ cwd, agent }) => {
-    await fs.writeFile(
-      path.join(agent, "ohm.json"),
-      JSON.stringify({
-        core: { defaultMode: "rush" },
-        features: { painterImagegen: false },
-      }),
-      "utf8",
-    );
-    await fs.writeFile(
-      path.join(cwd, ".pi", "ohm.json"),
-      JSON.stringify({ core: { defaultMode: "deep" } }),
-      "utf8",
-    );
-
-    const loaded = await loadConfig({
-      cwd,
-      modules: [extensionConfigModule, featuresConfigModule],
-    });
-
-    assert.equal(Result.isOk(loaded), true);
-    if (Result.isError(loaded)) assert.fail(loaded.error.message);
-
-    const core = pickConfig({
-      loaded: loaded.value,
-      module: extensionConfigModule,
-      is: isExtensionRuntimeConfig,
-    });
-    const features = pickConfig({
-      loaded: loaded.value,
-      module: featuresConfigModule,
-      is: isFeatureFlags,
-    });
-
-    assert.equal(Result.isOk(core), true);
-    assert.equal(Result.isOk(features), true);
-    if (Result.isError(core)) assert.fail(core.error.message);
-    if (Result.isError(features)) assert.fail(features.error.message);
-
-    assert.equal(core.value.defaultMode, "deep");
-    assert.equal(features.value.painterImagegen, false);
-  });
 });
 
 void test("loadConfig reports invalid JSON as diagnostics without crashing", async () => {
