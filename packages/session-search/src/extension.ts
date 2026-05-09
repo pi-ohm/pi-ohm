@@ -1,20 +1,15 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import {
-  featuresConfigModule,
-  isOhmFeatureFlags,
-  loadOhmConfig,
-  pickOhmConfig,
-} from "@pi-ohm/core/config";
+import { featuresConfigModule, isFeatureFlags, loadConfig, pickConfig } from "@pi-ohm/core/config";
 
 async function loadSessionSearchConfig(cwd: string) {
-  const loaded = await loadOhmConfig({ cwd, modules: [featuresConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [featuresConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const features = pickOhmConfig({
+  const features = pickConfig({
     loaded: loaded.value,
     module: featuresConfigModule,
-    is: isOhmFeatureFlags,
+    is: isFeatureFlags,
   });
   if (Result.isError(features)) return Result.err(features.error);
 

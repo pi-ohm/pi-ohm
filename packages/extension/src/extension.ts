@@ -1,13 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import {
-  coreConfigModule,
+  extensionConfigModule,
   featuresConfigModule,
-  isOhmCoreConfig,
-  isOhmFeatureFlags,
-  loadOhmConfig,
+  isExtensionRuntimeConfig,
+  isFeatureFlags,
+  loadConfig,
   painterConfigModule,
-  pickOhmConfig,
+  pickConfig,
 } from "@pi-ohm/core/config";
 import registerHandoffExtension from "@pi-ohm/handoff";
 import registerSubagentsExtension from "@pi-ohm/subagents";
@@ -18,23 +18,23 @@ import registerMemoriesExtension from "@pi-ohm/memories";
 import { OHM_FEATURE_PACKAGES, OHM_RECOMMENDED_NEXT } from "./manifest";
 
 async function loadBundleConfig(cwd: string) {
-  const loaded = await loadOhmConfig({
+  const loaded = await loadConfig({
     cwd,
-    modules: [coreConfigModule, featuresConfigModule, painterConfigModule],
+    modules: [extensionConfigModule, featuresConfigModule, painterConfigModule],
   });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const core = pickOhmConfig({
+  const core = pickConfig({
     loaded: loaded.value,
-    module: coreConfigModule,
-    is: isOhmCoreConfig,
+    module: extensionConfigModule,
+    is: isExtensionRuntimeConfig,
   });
   if (Result.isError(core)) return Result.err(core.error);
 
-  const features = pickOhmConfig({
+  const features = pickConfig({
     loaded: loaded.value,
     module: featuresConfigModule,
-    is: isOhmFeatureFlags,
+    is: isFeatureFlags,
   });
   if (Result.isError(features)) return Result.err(features.error);
 

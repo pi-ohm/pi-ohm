@@ -2,28 +2,28 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import {
   featuresConfigModule,
-  isOhmFeatureFlags,
-  isOhmPainterProviders,
-  loadOhmConfig,
+  isFeatureFlags,
+  isPainterProviders,
+  loadConfig,
   painterConfigModule,
-  pickOhmConfig,
+  pickConfig,
 } from "@pi-ohm/core/config";
 
 async function loadPainterConfig(cwd: string) {
-  const loaded = await loadOhmConfig({ cwd, modules: [featuresConfigModule, painterConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [featuresConfigModule, painterConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const features = pickOhmConfig({
+  const features = pickConfig({
     loaded: loaded.value,
     module: featuresConfigModule,
-    is: isOhmFeatureFlags,
+    is: isFeatureFlags,
   });
   if (Result.isError(features)) return Result.err(features.error);
 
-  const painter = pickOhmConfig({
+  const painter = pickConfig({
     loaded: loaded.value,
     module: painterConfigModule,
-    is: isOhmPainterProviders,
+    is: isPainterProviders,
   });
   if (Result.isError(painter)) return Result.err(painter.error);
 

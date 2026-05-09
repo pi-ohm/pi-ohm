@@ -1,8 +1,8 @@
-export type OhmMode = "rush" | "smart" | "deep";
+export type ExtensionMode = "rush" | "smart" | "deep";
 
-export const DEFAULT_OHM_MODE: OhmMode = "smart";
+export const DEFAULT_EXTENSION_MODE: ExtensionMode = "smart";
 
-export function normalizeOhmMode(value: unknown, fallback: OhmMode): OhmMode {
+export function normalizeExtensionMode(value: unknown, fallback: ExtensionMode): ExtensionMode {
   if (value === "rush" || value === "smart" || value === "deep") return value;
   return fallback;
 }

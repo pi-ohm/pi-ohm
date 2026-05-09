@@ -6,16 +6,15 @@ import test from "node:test";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
 import {
-  PiConfigRegistry,
-  coreConfigModule,
+  ConfigRegistry,
+  extensionConfigModule,
   featuresConfigModule,
-  isOhmCoreConfig,
-  isOhmFeatureFlags,
-  loadOhmConfig,
-  loadRegisteredConfig,
-  pickOhmConfig,
+  isExtensionRuntimeConfig,
+  isFeatureFlags,
+  loadConfig,
+  pickConfig,
   registerConfig,
-  resolveOhmConfigPaths,
+  resolveExtensionConfigPaths,
 } from "../index";
 
 const DemoSchema = Type.Object(
@@ -75,16 +74,16 @@ async function withConfigEnv<T>(
   });
 }
 
-void test("resolveOhmConfigPaths uses PI_CODING_AGENT_DIR as the agent directory", async () => {
+void test("resolveExtensionConfigPaths uses PI_CODING_AGENT_DIR as the agent directory", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
-    const paths = resolveOhmConfigPaths(cwd);
+    const paths = resolveExtensionConfigPaths(cwd);
 
     assert.equal(paths.globalConfigFile, path.join(agent, "ohm.json"));
     assert.equal(paths.projectConfigFile, path.join(cwd, ".pi", "ohm.json"));
   });
 });
 
-void test("loadRegisteredConfig merges defaults, global config, then project config", async () => {
+void test("loadConfig merges defaults, global config, then project config", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
     await fs.writeFile(
       path.join(agent, "ohm.json"),
@@ -97,7 +96,7 @@ void test("loadRegisteredConfig merges defaults, global config, then project con
       "utf8",
     );
 
-    const loaded = await loadRegisteredConfig({ cwd, modules: [demo] });
+    const loaded = await loadConfig({ cwd, modules: [demo] });
 
     assert.equal(Result.isOk(loaded), true);
     if (Result.isError(loaded)) assert.fail(loaded.error.message);
@@ -114,7 +113,7 @@ void test("loadRegisteredConfig merges defaults, global config, then project con
   });
 });
 
-void test("PiConfigRegistry registers modules and loads resolved config", async () => {
+void test("ConfigRegistry registers modules and loads resolved config", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
     await fs.writeFile(
       path.join(agent, "ohm.json"),
@@ -122,7 +121,7 @@ void test("PiConfigRegistry registers modules and loads resolved config", async 
       "utf8",
     );
 
-    const registry = PiConfigRegistry.create({ cwd });
+    const registry = ConfigRegistry.create({ cwd });
 
     assert.equal(Result.isOk(registry), true);
     if (Result.isError(registry)) assert.fail(registry.error.message);
@@ -142,8 +141,8 @@ void test("PiConfigRegistry registers modules and loads resolved config", async 
   });
 });
 
-void test("PiConfigRegistry rejects duplicate module namespaces", () => {
-  const registry = PiConfigRegistry.create({ cwd: process.cwd() });
+void test("ConfigRegistry rejects duplicate module namespaces", () => {
+  const registry = ConfigRegistry.create({ cwd: process.cwd() });
 
   assert.equal(Result.isOk(registry), true);
   if (Result.isError(registry)) assert.fail(registry.error.message);
@@ -154,7 +153,7 @@ void test("PiConfigRegistry rejects duplicate module namespaces", () => {
   assert.equal(Result.isError(duplicate), true);
 });
 
-void test("loadOhmConfig composes core-owned config modules", async () => {
+void test("loadConfig composes core-owned config modules", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
     await fs.writeFile(
       path.join(agent, "ohm.json"),
@@ -170,23 +169,23 @@ void test("loadOhmConfig composes core-owned config modules", async () => {
       "utf8",
     );
 
-    const loaded = await loadOhmConfig({
+    const loaded = await loadConfig({
       cwd,
-      modules: [coreConfigModule, featuresConfigModule],
+      modules: [extensionConfigModule, featuresConfigModule],
     });
 
     assert.equal(Result.isOk(loaded), true);
     if (Result.isError(loaded)) assert.fail(loaded.error.message);
 
-    const core = pickOhmConfig({
+    const core = pickConfig({
       loaded: loaded.value,
-      module: coreConfigModule,
-      is: isOhmCoreConfig,
+      module: extensionConfigModule,
+      is: isExtensionRuntimeConfig,
     });
-    const features = pickOhmConfig({
+    const features = pickConfig({
       loaded: loaded.value,
       module: featuresConfigModule,
-      is: isOhmFeatureFlags,
+      is: isFeatureFlags,
     });
 
     assert.equal(Result.isOk(core), true);
@@ -199,11 +198,11 @@ void test("loadOhmConfig composes core-owned config modules", async () => {
   });
 });
 
-void test("loadRegisteredConfig reports invalid JSON as diagnostics without crashing", async () => {
+void test("loadConfig reports invalid JSON as diagnostics without crashing", async () => {
   await withConfigEnv(async ({ cwd }) => {
     await fs.writeFile(path.join(cwd, ".pi", "ohm.json"), "{ nope", "utf8");
 
-    const loaded = await loadRegisteredConfig({ cwd, modules: [demo] });
+    const loaded = await loadConfig({ cwd, modules: [demo] });
 
     assert.equal(Result.isOk(loaded), true);
     if (Result.isError(loaded)) assert.fail(loaded.error.message);
@@ -219,7 +218,7 @@ void test("loadRegisteredConfig reports invalid JSON as diagnostics without cras
   });
 });
 
-void test("loadRegisteredConfig reports schema diagnostics and keeps last valid value", async () => {
+void test("loadConfig reports schema diagnostics and keeps last valid value", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
     await fs.writeFile(
       path.join(agent, "ohm.json"),
@@ -232,7 +231,7 @@ void test("loadRegisteredConfig reports schema diagnostics and keeps last valid 
       "utf8",
     );
 
-    const loaded = await loadRegisteredConfig({ cwd, modules: [demo] });
+    const loaded = await loadConfig({ cwd, modules: [demo] });
 
     assert.equal(Result.isOk(loaded), true);
     if (Result.isError(loaded)) assert.fail(loaded.error.message);

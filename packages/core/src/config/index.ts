@@ -4,30 +4,37 @@ import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
 import { Type, type StaticDecode, type TSchema } from "typebox";
 import { Value } from "typebox/value";
-import { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
-import { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
 import {
-  DEFAULT_OHM_PAINTER_PROVIDERS,
-  mergeOhmPainterProviders,
-  type OhmPainterProviders,
+  DEFAULT_EXTENSION_FEATURE_FLAGS,
+  mergeExtensionFeatureFlags,
+  type ExtensionFeatureFlags,
+} from "./features";
+import { DEFAULT_EXTENSION_MODE, normalizeExtensionMode, type ExtensionMode } from "./modes";
+import {
+  DEFAULT_EXTENSION_PAINTER_PROVIDERS,
+  mergeExtensionPainterProviders,
+  type ExtensionPainterProviders,
 } from "./painter";
 
-export const OHM_EXTENSION_NAME = "pi-ohm";
-export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
+export type ExtensionSubagentBackend =
+  | "none"
+  | "interactive-shell"
+  | "interactive-sdk"
+  | "custom-plugin";
 
-export interface OhmCoreConfig {
-  defaultMode: OhmMode;
-  subagentBackend: OhmSubagentBackend;
+export interface ExtensionRuntimeConfig {
+  defaultMode: ExtensionMode;
+  subagentBackend: ExtensionSubagentBackend;
 }
 
-export interface OhmConfigPaths {
+export interface ExtensionConfigPaths {
   configDir: string;
   projectConfigFile: string;
   globalConfigFile: string;
   providersConfigFile: string;
 }
 
-export type OhmConfigDiagnostic =
+export type ExtensionConfigDiagnostic =
   | {
       readonly kind: "read-failed";
       readonly path: string;
@@ -57,59 +64,54 @@ export type OhmConfigDiagnostic =
       readonly path: string;
       readonly namespace: string;
       readonly message: string;
-      readonly cause: OhmConfigModuleError;
+      readonly cause: ExtensionConfigModuleError;
     };
 
-export class OhmConfigModuleError extends TaggedError("OhmConfigModuleError")<{
+export class ExtensionConfigModuleError extends TaggedError("ExtensionConfigModuleError")<{
   readonly code: string;
   readonly message: string;
   readonly namespace?: string;
   readonly cause?: unknown;
 }>() {}
 
-export class OhmConfigRuntimeError extends TaggedError("OhmConfigRuntimeError")<{
+export class ExtensionConfigRuntimeError extends TaggedError("ExtensionConfigRuntimeError")<{
   readonly code: string;
   readonly message: string;
   readonly cause?: unknown;
 }>() {}
 
-export type OhmConfigResult<T> = BetterResult<T, OhmConfigModuleError>;
-export type OhmConfigLoadResult<T> = BetterResult<T, OhmConfigRuntimeError>;
+export type ExtensionConfigResult<T> = BetterResult<T, ExtensionConfigModuleError>;
+export type ExtensionConfigLoadResult<T> = BetterResult<T, ExtensionConfigRuntimeError>;
 
-export interface OhmConfigModule<
+export interface ExtensionConfigModule<
   Config = unknown,
   Schema extends TSchema = TSchema,
-> extends OhmRegisteredConfigModule {
+> extends RegisteredConfigModule {
   readonly namespace: string;
   readonly schema: Schema;
   readonly defaults: Config;
   readonly merge: (
     base: Config,
     patch: StaticDecode<Schema>,
-  ) => OhmConfigResult<Config> | Promise<OhmConfigResult<Config>>;
+  ) => ExtensionConfigResult<Config> | Promise<ExtensionConfigResult<Config>>;
 }
 
-export interface RegisterOhmConfigInput<Config, Schema extends TSchema> {
+export interface RegisterConfigInput<Config, Schema extends TSchema> {
   readonly namespace: string;
   readonly schema: Schema;
   readonly defaults: Config;
   readonly merge: (
     base: Config,
     patch: StaticDecode<Schema>,
-  ) => OhmConfigResult<Config> | Promise<OhmConfigResult<Config>>;
+  ) => ExtensionConfigResult<Config> | Promise<ExtensionConfigResult<Config>>;
 }
 
-export interface LoadRegisteredConfigInput {
+export interface LoadConfigInput {
   readonly cwd: string;
-  readonly modules: readonly OhmRegisteredConfigModule[];
+  readonly modules: readonly RegisteredConfigModule[];
 }
 
-export interface LoadOhmConfigInput {
-  readonly cwd: string;
-  readonly modules: readonly OhmRegisteredConfigModule[];
-}
-
-export interface PiConfigRegistryInput {
+export interface ConfigRegistryInput {
   readonly cwd: string;
 }
 
@@ -117,69 +119,67 @@ interface ModuleLoadedConfig {
   readonly namespace: string;
   readonly value: unknown;
   readonly loadedFrom: readonly string[];
-  readonly diagnostics: readonly OhmConfigDiagnostic[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
 }
 
-export interface OhmRegisteredConfigModule {
+export interface RegisteredConfigModule {
   readonly namespace: string;
   readonly schema: TSchema;
   readonly defaults: unknown;
   readonly load: (files: readonly ReadConfigFileResult[]) => Promise<ModuleLoadedConfig>;
 }
 
-export interface LoadedRegisteredConfig {
+export interface LoadedExtensionConfig {
   readonly config: Readonly<Record<string, unknown>>;
-  readonly paths: OhmConfigPaths;
+  readonly paths: ExtensionConfigPaths;
   readonly loadedFrom: readonly string[];
-  readonly diagnostics: readonly OhmConfigDiagnostic[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
 }
 
-export type LoadedOhmConfig = LoadedRegisteredConfig;
-
-export interface PickOhmConfigInput<Config> {
-  readonly loaded: LoadedOhmConfig;
-  readonly module: OhmRegisteredConfigModule;
+export interface PickConfigInput<Config> {
+  readonly loaded: LoadedExtensionConfig;
+  readonly module: RegisteredConfigModule;
   readonly is: (value: unknown) => value is Config;
 }
 
-export class PiConfigRegistry {
+export class ConfigRegistry {
   readonly cwd: string;
-  readonly #modules: OhmRegisteredConfigModule[] = [];
+  readonly #modules: RegisteredConfigModule[] = [];
 
-  private constructor(input: PiConfigRegistryInput) {
+  private constructor(input: ConfigRegistryInput) {
     this.cwd = input.cwd;
   }
 
-  static create(input: PiConfigRegistryInput): OhmConfigLoadResult<PiConfigRegistry> {
+  static create(input: ConfigRegistryInput): ExtensionConfigLoadResult<ConfigRegistry> {
     const cwd = input.cwd.trim();
     if (cwd.length === 0) {
       return Result.err(
-        new OhmConfigRuntimeError({
+        new ExtensionConfigRuntimeError({
           code: "config_cwd_empty",
-          message: "Invalid Ohm config registry input: cwd must be a non-empty string",
+          message: "Invalid extension config registry input: cwd must be a non-empty string",
         }),
       );
     }
 
-    return Result.ok(new PiConfigRegistry({ cwd }));
+    return Result.ok(new ConfigRegistry({ cwd }));
   }
 
-  register(module: OhmRegisteredConfigModule): OhmConfigLoadResult<void> {
+  register(module: RegisteredConfigModule): ExtensionConfigLoadResult<void> {
     const namespace = module.namespace.trim();
     if (namespace.length === 0) {
       return Result.err(
-        new OhmConfigRuntimeError({
+        new ExtensionConfigRuntimeError({
           code: "config_namespace_empty",
-          message: "Invalid Ohm config module: namespace must be a non-empty string",
+          message: "Invalid extension config module: namespace must be a non-empty string",
         }),
       );
     }
 
     if (this.#modules.some((registered) => registered.namespace === namespace)) {
       return Result.err(
-        new OhmConfigRuntimeError({
+        new ExtensionConfigRuntimeError({
           code: "config_namespace_duplicate",
-          message: `Invalid Ohm config module: namespace "${namespace}" is already registered`,
+          message: `Invalid extension config module: namespace "${namespace}" is already registered`,
         }),
       );
     }
@@ -188,17 +188,17 @@ export class PiConfigRegistry {
     return Result.ok(undefined);
   }
 
-  modules(): readonly OhmRegisteredConfigModule[] {
+  modules(): readonly RegisteredConfigModule[] {
     return [...this.#modules];
   }
 
-  async load(): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
+  async load(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
     return loadConfigModules({ cwd: this.cwd, modules: this.#modules });
   }
 }
 
-export const DEFAULT_OHM_CORE_CONFIG: OhmCoreConfig = {
-  defaultMode: DEFAULT_OHM_MODE,
+export const DEFAULT_EXTENSION_RUNTIME_CONFIG: ExtensionRuntimeConfig = {
+  defaultMode: DEFAULT_EXTENSION_MODE,
   subagentBackend: "interactive-sdk",
 };
 
@@ -229,7 +229,7 @@ type JsonMap = Record<string, unknown>;
 interface ReadConfigFileResult {
   readonly path: string;
   readonly value: JsonMap | undefined;
-  readonly diagnostic?: OhmConfigDiagnostic;
+  readonly diagnostic?: ExtensionConfigDiagnostic;
 }
 
 function isJsonMap(value: unknown): value is JsonMap {
@@ -253,7 +253,7 @@ function expandHome(value: string): string {
   return value;
 }
 
-export function resolveOhmConfigDir(): string {
+export function resolveExtensionConfigDir(): string {
   const envDir =
     process.env.PI_CONFIG_DIR ?? process.env.PI_CODING_AGENT_DIR ?? process.env.PI_AGENT_DIR;
 
@@ -264,8 +264,8 @@ export function resolveOhmConfigDir(): string {
   return path.join(os.homedir(), ".pi", "agent");
 }
 
-export function resolveOhmConfigPaths(cwd: string): OhmConfigPaths {
-  const configDir = resolveOhmConfigDir();
+export function resolveExtensionConfigPaths(cwd: string): ExtensionConfigPaths {
+  const configDir = resolveExtensionConfigDir();
   return {
     configDir,
     projectConfigFile: path.join(cwd, ".pi", "ohm.json"),
@@ -275,8 +275,8 @@ export function resolveOhmConfigPaths(cwd: string): OhmConfigPaths {
 }
 
 export function registerConfig<Config, Schema extends TSchema>(
-  input: RegisterOhmConfigInput<Config, Schema>,
-): OhmConfigModule<Config, Schema> {
+  input: RegisterConfigInput<Config, Schema>,
+): ExtensionConfigModule<Config, Schema> {
   return {
     namespace: input.namespace,
     schema: input.schema,
@@ -294,11 +294,11 @@ export function registerConfig<Config, Schema extends TSchema>(
   };
 }
 
-export const coreConfigModule = registerConfig({
+export const extensionConfigModule = registerConfig({
   namespace: "core",
   schema: CoreConfigSchema,
-  defaults: DEFAULT_OHM_CORE_CONFIG,
-  merge(base: OhmCoreConfig, patch: CoreConfigPatch) {
+  defaults: DEFAULT_EXTENSION_RUNTIME_CONFIG,
+  merge(base: ExtensionRuntimeConfig, patch: CoreConfigPatch) {
     return Result.ok({
       defaultMode: patch.defaultMode ?? base.defaultMode,
       subagentBackend: patch.subagentBackend ?? base.subagentBackend,
@@ -309,31 +309,31 @@ export const coreConfigModule = registerConfig({
 export const featuresConfigModule = registerConfig({
   namespace: "features",
   schema: UnknownRecordSchema,
-  defaults: DEFAULT_OHM_FEATURE_FLAGS,
-  merge(base: OhmFeatureFlags, patch: UnknownRecordPatch) {
-    return Result.ok(mergeOhmFeatureFlags(base, patch));
+  defaults: DEFAULT_EXTENSION_FEATURE_FLAGS,
+  merge(base: ExtensionFeatureFlags, patch: UnknownRecordPatch) {
+    return Result.ok(mergeExtensionFeatureFlags(base, patch));
   },
 });
 
 export const painterConfigModule = registerConfig({
   namespace: "painter",
   schema: UnknownRecordSchema,
-  defaults: DEFAULT_OHM_PAINTER_PROVIDERS,
-  merge(base: OhmPainterProviders, patch: UnknownRecordPatch) {
-    return Result.ok(mergeOhmPainterProviders(base, patch));
+  defaults: DEFAULT_EXTENSION_PAINTER_PROVIDERS,
+  merge(base: ExtensionPainterProviders, patch: UnknownRecordPatch) {
+    return Result.ok(mergeExtensionPainterProviders(base, patch));
   },
 });
 
-export function pickOhmConfig<Config>(
-  input: PickOhmConfigInput<Config>,
-): OhmConfigLoadResult<Config> {
+export function pickConfig<Config>(
+  input: PickConfigInput<Config>,
+): ExtensionConfigLoadResult<Config> {
   const value = input.loaded.config[input.module.namespace];
   if (input.is(value)) return Result.ok(value);
 
   return Result.err(
-    new OhmConfigRuntimeError({
+    new ExtensionConfigRuntimeError({
       code: "config_namespace_missing",
-      message: `Loaded Ohm config is missing namespace "${input.module.namespace}"`,
+      message: `Loaded extension config is missing namespace "${input.module.namespace}"`,
     }),
   );
 }
@@ -355,7 +355,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
       diagnostic: {
         kind: "read-failed",
         path: file,
-        message: `Failed to read Ohm config: ${file}`,
+        message: `Failed to read extension config: ${file}`,
         cause: raw.error,
       },
     };
@@ -373,7 +373,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
       diagnostic: {
         kind: "invalid-json",
         path: file,
-        message: `Failed to parse Ohm config JSON: ${file}: ${causeMessage(parsed.error)}`,
+        message: `Failed to parse extension config JSON: ${file}: ${causeMessage(parsed.error)}`,
         cause: parsed.error,
       },
     };
@@ -386,7 +386,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
       diagnostic: {
         kind: "invalid-root",
         path: file,
-        message: `Ohm config root must be a JSON object: ${file}`,
+        message: `Extension config root must be a JSON object: ${file}`,
       },
     };
   }
@@ -399,13 +399,13 @@ function schemaErrors(schema: TSchema, value: unknown): readonly string[] {
 }
 
 async function mergeConfigModule<Config, Schema extends TSchema>(input: {
-  readonly module: RegisterOhmConfigInput<Config, Schema>;
+  readonly module: RegisterConfigInput<Config, Schema>;
   readonly current: Config;
   readonly patch: unknown;
   readonly file: string;
 }): Promise<
   | { readonly status: "applied"; readonly value: Config }
-  | { readonly status: "skipped"; readonly diagnostic: OhmConfigDiagnostic }
+  | { readonly status: "skipped"; readonly diagnostic: ExtensionConfigDiagnostic }
 > {
   if (!Value.Check(input.module.schema, input.patch)) {
     const errors = schemaErrors(input.module.schema, input.patch);
@@ -415,7 +415,7 @@ async function mergeConfigModule<Config, Schema extends TSchema>(input: {
         kind: "invalid-schema",
         path: input.file,
         namespace: input.module.namespace,
-        message: `Invalid Ohm config for namespace "${input.module.namespace}" in ${input.file}`,
+        message: `Invalid extension config for namespace "${input.module.namespace}" in ${input.file}`,
         errors,
       },
     };
@@ -431,7 +431,7 @@ async function mergeConfigModule<Config, Schema extends TSchema>(input: {
         kind: "merge-failed",
         path: input.file,
         namespace: input.module.namespace,
-        message: `Failed to merge Ohm config for namespace "${input.module.namespace}" in ${input.file}`,
+        message: `Failed to merge extension config for namespace "${input.module.namespace}" in ${input.file}`,
         cause: merged.error,
       },
     };
@@ -443,11 +443,11 @@ async function mergeConfigModule<Config, Schema extends TSchema>(input: {
 interface ConfigModuleState<Config> {
   readonly value: Config;
   readonly loadedFrom: readonly string[];
-  readonly diagnostics: readonly OhmConfigDiagnostic[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
 }
 
 async function applyConfigFiles<Config, Schema extends TSchema>(input: {
-  readonly input: RegisterOhmConfigInput<Config, Schema>;
+  readonly input: RegisterConfigInput<Config, Schema>;
   readonly files: readonly ReadConfigFileResult[];
 }): Promise<ConfigModuleState<Config>> {
   const initial: ConfigModuleState<Config> = {
@@ -489,13 +489,13 @@ async function applyConfigFiles<Config, Schema extends TSchema>(input: {
 interface RegisteredLoadState {
   readonly config: Readonly<Record<string, unknown>>;
   readonly loadedFrom: readonly string[];
-  readonly diagnostics: readonly OhmConfigDiagnostic[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
 }
 
-export async function loadRegisteredConfig(
-  input: LoadRegisteredConfigInput,
-): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
-  const registry = PiConfigRegistry.create({ cwd: input.cwd });
+export async function loadConfig(
+  input: LoadConfigInput,
+): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
+  const registry = ConfigRegistry.create({ cwd: input.cwd });
   if (Result.isError(registry)) return registry;
 
   for (const module of input.modules) {
@@ -506,23 +506,17 @@ export async function loadRegisteredConfig(
   return registry.value.load();
 }
 
-export async function loadOhmConfig(
-  input: LoadOhmConfigInput,
-): Promise<OhmConfigLoadResult<LoadedOhmConfig>> {
-  return loadRegisteredConfig(input);
-}
-
 async function loadConfigModules(
-  input: LoadRegisteredConfigInput,
-): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
-  const paths = resolveOhmConfigPaths(input.cwd);
+  input: LoadConfigInput,
+): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
+  const paths = resolveExtensionConfigPaths(input.cwd);
   const files = [
     await readConfigFile(paths.globalConfigFile),
     await readConfigFile(paths.projectConfigFile),
   ];
   const fileDiagnostics = files
     .map((file) => file.diagnostic)
-    .filter((diagnostic): diagnostic is OhmConfigDiagnostic => diagnostic !== undefined);
+    .filter((diagnostic): diagnostic is ExtensionConfigDiagnostic => diagnostic !== undefined);
 
   const initial: RegisteredLoadState = {
     config: {},
@@ -561,10 +555,10 @@ async function loadConfigModules(
   });
 }
 
-export function isOhmCoreConfig(value: unknown): value is OhmCoreConfig {
+export function isExtensionRuntimeConfig(value: unknown): value is ExtensionRuntimeConfig {
   if (!isJsonMap(value)) return false;
   return (
-    normalizeOhmMode(value.defaultMode, DEFAULT_OHM_MODE) === value.defaultMode &&
+    normalizeExtensionMode(value.defaultMode, DEFAULT_EXTENSION_MODE) === value.defaultMode &&
     (value.subagentBackend === "none" ||
       value.subagentBackend === "interactive-shell" ||
       value.subagentBackend === "interactive-sdk" ||
@@ -572,7 +566,7 @@ export function isOhmCoreConfig(value: unknown): value is OhmCoreConfig {
   );
 }
 
-export function isOhmFeatureFlags(value: unknown): value is OhmFeatureFlags {
+export function isFeatureFlags(value: unknown): value is ExtensionFeatureFlags {
   if (!isJsonMap(value)) return false;
   return (
     typeof value.handoff === "boolean" &&
@@ -583,7 +577,7 @@ export function isOhmFeatureFlags(value: unknown): value is OhmFeatureFlags {
   );
 }
 
-export function isOhmPainterProviders(value: unknown): value is OhmPainterProviders {
+export function isPainterProviders(value: unknown): value is ExtensionPainterProviders {
   if (!isJsonMap(value)) return false;
   if (!isJsonMap(value.googleNanoBanana)) return false;
   if (!isJsonMap(value.openai)) return false;
@@ -601,10 +595,14 @@ export function isOhmPainterProviders(value: unknown): value is OhmPainterProvid
   );
 }
 
-export { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
-export { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
 export {
-  DEFAULT_OHM_PAINTER_PROVIDERS,
-  mergeOhmPainterProviders,
-  type OhmPainterProviders,
+  DEFAULT_EXTENSION_FEATURE_FLAGS,
+  mergeExtensionFeatureFlags,
+  type ExtensionFeatureFlags,
+} from "./features";
+export { DEFAULT_EXTENSION_MODE, normalizeExtensionMode, type ExtensionMode } from "./modes";
+export {
+  DEFAULT_EXTENSION_PAINTER_PROVIDERS,
+  mergeExtensionPainterProviders,
+  type ExtensionPainterProviders,
 } from "./painter";

@@ -18,30 +18,30 @@ export const SubagentsConfigSchema = Type.Record(Type.String({ minLength: 1 }), 
 
 type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
 
-export interface OhmSubagentsConfig {
-  readonly subagents: OhmSubagentRuntimeConfig;
+export interface SubagentsConfig {
+  readonly subagents: SubagentRuntimeConfig;
 }
 
-export interface OhmSubagentProfileRuntimeConfig {
+export interface SubagentProfileRuntimeConfig {
   model?: string;
   prompt?: string;
   description?: string;
   whenToUse?: readonly string[];
-  permissions?: Readonly<Record<string, OhmSubagentToolPermissionDecision>>;
-  variants?: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>>;
+  permissions?: Readonly<Record<string, SubagentToolPermissionDecision>>;
+  variants?: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>>;
 }
 
-export type OhmSubagentToolPermissionDecision = "allow" | "deny" | "inherit";
+export type SubagentToolPermissionDecision = "allow" | "deny" | "inherit";
 
-export interface OhmSubagentProfileVariantRuntimeConfig {
+export interface SubagentProfileVariantRuntimeConfig {
   model?: string;
   prompt?: string;
   description?: string;
   whenToUse?: readonly string[];
-  permissions?: Readonly<Record<string, OhmSubagentToolPermissionDecision>>;
+  permissions?: Readonly<Record<string, SubagentToolPermissionDecision>>;
 }
 
-export interface ResolvedOhmSubagentProfileRuntimeConfig {
+export interface ResolvedSubagentProfileRuntimeConfig {
   model?: string;
   prompt?: string;
   description?: string;
@@ -50,7 +50,7 @@ export interface ResolvedOhmSubagentProfileRuntimeConfig {
   variantPattern?: string;
 }
 
-export interface OhmSubagentRuntimeConfig {
+export interface SubagentRuntimeConfig {
   taskMaxConcurrency: number;
   taskRetentionMs: number;
   permissions: {
@@ -58,7 +58,7 @@ export interface OhmSubagentRuntimeConfig {
     subagents: Record<string, "allow" | "deny">;
     allowInternalRouting: boolean;
   };
-  profiles: Record<string, OhmSubagentProfileRuntimeConfig>;
+  profiles: Record<string, SubagentProfileRuntimeConfig>;
 }
 
 interface JsonMap {
@@ -66,10 +66,10 @@ interface JsonMap {
 }
 
 interface RuntimeConfigWithSubagents {
-  readonly subagents?: OhmSubagentRuntimeConfig;
+  readonly subagents?: SubagentRuntimeConfig;
 }
 
-export const DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG: OhmSubagentRuntimeConfig = {
+export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
   taskMaxConcurrency: 3,
   taskRetentionMs: 1000 * 60 * 60 * 24,
   permissions: {
@@ -83,8 +83,8 @@ export const DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG: OhmSubagentRuntimeConfig = {
 export const subagentsConfigModule = registerConfig({
   namespace: "subagents",
   schema: SubagentsConfigSchema,
-  defaults: DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG,
-  merge(base: OhmSubagentRuntimeConfig, patch: SubagentsConfigPatch) {
+  defaults: DEFAULT_SUBAGENT_RUNTIME_CONFIG,
+  merge(base: SubagentRuntimeConfig, patch: SubagentsConfigPatch) {
     return Result.ok(
       mergeSubagentRuntimeConfig({
         current: base,
@@ -159,7 +159,7 @@ function normalizePermissionDecisionMap(
 
 function normalizeSubagentToolPermissionDecision(
   value: unknown,
-): OhmSubagentToolPermissionDecision | undefined {
+): SubagentToolPermissionDecision | undefined {
   if (value === "allow" || value === "deny" || value === "inherit") return value;
 
   // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
@@ -169,18 +169,18 @@ function normalizeSubagentToolPermissionDecision(
 
 function normalizeSubagentToolPermissionDecisionPatch(
   value: SubagentToolPermissionDecisionPatch,
-): OhmSubagentToolPermissionDecision {
+): SubagentToolPermissionDecision {
   if (value === "allow" || value === "deny" || value === "inherit") return value;
   return "deny";
 }
 
 function normalizeSubagentToolPermissionMap(
   value: unknown,
-  fallback: Readonly<Record<string, OhmSubagentToolPermissionDecision>>,
-): Readonly<Record<string, OhmSubagentToolPermissionDecision>> {
+  fallback: Readonly<Record<string, SubagentToolPermissionDecision>>,
+): Readonly<Record<string, SubagentToolPermissionDecision>> {
   if (!isJsonMap(value)) return fallback;
 
-  const normalized: Record<string, OhmSubagentToolPermissionDecision> = { ...fallback };
+  const normalized: Record<string, SubagentToolPermissionDecision> = { ...fallback };
   for (const [rawToolName, rawDecision] of Object.entries(value)) {
     const toolName = rawToolName.trim().toLowerCase();
     if (toolName.length === 0) continue;
@@ -237,8 +237,8 @@ function stripThinkingSuffix(modelId: string): string {
 
 function mergeSubagentVariantConfig(
   patch: JsonMap,
-  fallback: OhmSubagentProfileVariantRuntimeConfig | undefined,
-): OhmSubagentProfileVariantRuntimeConfig | undefined {
+  fallback: SubagentProfileVariantRuntimeConfig | undefined,
+): SubagentProfileVariantRuntimeConfig | undefined {
   const parsedPatch = parseSubagentProfileVariantPatch(patch);
   if (!parsedPatch) return fallback;
 
@@ -259,7 +259,7 @@ function mergeSubagentVariantConfig(
     fallback?.permissions ?? {},
   );
 
-  const merged: OhmSubagentProfileVariantRuntimeConfig = {
+  const merged: SubagentProfileVariantRuntimeConfig = {
     ...fallback,
     ...(model ? { model } : {}),
     ...(prompt ? { prompt } : {}),
@@ -281,11 +281,11 @@ function mergeSubagentVariantConfig(
 
 function normalizeSubagentVariantMap(
   value: unknown,
-  fallback: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>>,
-): Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>> {
+  fallback: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>>,
+): Readonly<Record<string, SubagentProfileVariantRuntimeConfig>> {
   if (!isJsonMap(value)) return fallback;
 
-  const merged: Record<string, OhmSubagentProfileVariantRuntimeConfig> = { ...fallback };
+  const merged: Record<string, SubagentProfileVariantRuntimeConfig> = { ...fallback };
   for (const [rawPattern, rawVariant] of Object.entries(value)) {
     const pattern = normalizeSubagentVariantPattern(rawPattern);
     if (!pattern) continue;
@@ -301,8 +301,8 @@ function normalizeSubagentVariantMap(
 
 function mergeSubagentProfileConfig(
   patch: JsonMap,
-  fallback: OhmSubagentProfileRuntimeConfig | undefined,
-): OhmSubagentProfileRuntimeConfig | undefined {
+  fallback: SubagentProfileRuntimeConfig | undefined,
+): SubagentProfileRuntimeConfig | undefined {
   const parsedPatch = parseSubagentProfilePatch(patch);
   if (!parsedPatch) return fallback;
 
@@ -324,7 +324,7 @@ function mergeSubagentProfileConfig(
   );
   const variants = normalizeSubagentVariantMap(parsedPatch.variants, fallback?.variants ?? {});
 
-  const merged: OhmSubagentProfileRuntimeConfig = {
+  const merged: SubagentProfileRuntimeConfig = {
     ...fallback,
     ...(model ? { model } : {}),
     ...(prompt ? { prompt } : {}),
@@ -348,8 +348,8 @@ function mergeSubagentProfileConfig(
 
 function normalizeSubagentProfileMap(
   value: unknown,
-  fallback: Record<string, OhmSubagentProfileRuntimeConfig>,
-): Record<string, OhmSubagentProfileRuntimeConfig> {
+  fallback: Record<string, SubagentProfileRuntimeConfig>,
+): Record<string, SubagentProfileRuntimeConfig> {
   const normalized = structuredClone(fallback);
   if (!isJsonMap(value)) return normalized;
 
@@ -368,8 +368,8 @@ function normalizeSubagentProfileMap(
 
 function normalizeInlineSubagentProfiles(
   value: JsonMap | undefined,
-  fallback: Record<string, OhmSubagentProfileRuntimeConfig>,
-): Record<string, OhmSubagentProfileRuntimeConfig> {
+  fallback: Record<string, SubagentProfileRuntimeConfig>,
+): Record<string, SubagentProfileRuntimeConfig> {
   const normalized = structuredClone(fallback);
   if (!value) return normalized;
 
@@ -418,11 +418,11 @@ function toModelVariantCandidates(modelPattern: string | undefined): readonly st
 }
 
 export function mergeSubagentRuntimeConfig(input: {
-  readonly current: OhmSubagentRuntimeConfig | undefined;
+  readonly current: SubagentRuntimeConfig | undefined;
   readonly patch: unknown;
-}): OhmSubagentRuntimeConfig {
+}): SubagentRuntimeConfig {
   const patch = isJsonMap(input.patch) ? input.patch : undefined;
-  const defaults = input.current ?? DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG;
+  const defaults = input.current ?? DEFAULT_SUBAGENT_RUNTIME_CONFIG;
 
   const taskMaxConcurrency = normalizePositiveInteger(
     patch?.taskMaxConcurrency,
@@ -481,14 +481,14 @@ export function getSubagentConfiguredModel(
 export function getSubagentProfileRuntimeConfig(
   config: RuntimeConfigWithSubagents,
   subagentId: string,
-): OhmSubagentProfileRuntimeConfig | undefined {
+): SubagentProfileRuntimeConfig | undefined {
   const key = subagentId.trim().toLowerCase();
   if (key.length === 0) return undefined;
   return config.subagents?.profiles[key];
 }
 
 export function resolveSubagentVariantPattern(input: {
-  readonly variants: Readonly<Record<string, OhmSubagentProfileVariantRuntimeConfig>> | undefined;
+  readonly variants: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>> | undefined;
   readonly modelPattern: string | undefined;
 }): string | undefined {
   if (!input.variants) return undefined;
@@ -510,8 +510,8 @@ export function resolveSubagentVariantPattern(input: {
 }
 
 function applyInheritedToolPermissions(input: {
-  readonly base: Readonly<Record<string, OhmSubagentToolPermissionDecision>> | undefined;
-  readonly override: Readonly<Record<string, OhmSubagentToolPermissionDecision>> | undefined;
+  readonly base: Readonly<Record<string, SubagentToolPermissionDecision>> | undefined;
+  readonly override: Readonly<Record<string, SubagentToolPermissionDecision>> | undefined;
 }): Readonly<Record<string, "allow" | "deny">> {
   const resolved: Record<string, "allow" | "deny"> = {};
 
@@ -539,7 +539,7 @@ export function resolveSubagentProfileRuntimeConfig(input: {
   readonly config: RuntimeConfigWithSubagents;
   readonly subagentId: string;
   readonly modelPattern?: string;
-}): ResolvedOhmSubagentProfileRuntimeConfig | undefined {
+}): ResolvedSubagentProfileRuntimeConfig | undefined {
   const profile = getSubagentProfileRuntimeConfig(input.config, input.subagentId);
   if (!profile) return undefined;
 
@@ -564,7 +564,7 @@ export function resolveSubagentProfileRuntimeConfig(input: {
   };
 }
 
-export function isOhmSubagentRuntimeConfig(value: unknown): value is OhmSubagentRuntimeConfig {
+export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntimeConfig {
   if (!isJsonMap(value)) return false;
   return (
     typeof value.taskMaxConcurrency === "number" &&

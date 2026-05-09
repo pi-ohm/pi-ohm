@@ -87,7 +87,7 @@ export const subagentsConfigModule = registerConfig({
 A loader receives registered modules and returns typed resolved config.
 
 ```ts
-const loaded = await loadRegisteredConfig({
+const loaded = await loadConfig({
   cwd,
   modules: [subagentsConfigModule, memoriesConfigModule, painterConfigModule],
 });
@@ -134,10 +134,10 @@ Modules may normalize permissive input before validation, but normalization must
 Recoverable config operations return `better-result` values.
 
 ```ts
-interface LoadedRegisteredConfig<T> {
+interface LoadedExtensionConfig<T> {
   readonly config: T;
   readonly loadedFrom: readonly string[];
-  readonly diagnostics: readonly OhmConfigDiagnostic[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
 }
 ```
 

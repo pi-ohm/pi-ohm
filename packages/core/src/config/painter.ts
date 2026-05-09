@@ -1,4 +1,4 @@
-export interface OhmPainterProviders {
+export interface ExtensionPainterProviders {
   googleNanoBanana: {
     enabled: boolean;
     model: string;
@@ -18,7 +18,7 @@ export interface OhmPainterProviders {
 const BOOLEAN_TRUE_VALUES = ["1", "true", "yes", "on", "enabled"];
 const BOOLEAN_FALSE_VALUES = ["0", "false", "no", "off", "disabled"];
 
-export const DEFAULT_OHM_PAINTER_PROVIDERS: OhmPainterProviders = {
+export const DEFAULT_EXTENSION_PAINTER_PROVIDERS: ExtensionPainterProviders = {
   googleNanoBanana: {
     enabled: true,
     model: "gemini-2.5-flash-image-preview",
@@ -54,10 +54,10 @@ function normalizeString(value: unknown, fallback: string): string {
   return fallback;
 }
 
-export function mergeOhmPainterProviders(
-  base: OhmPainterProviders,
+export function mergeExtensionPainterProviders(
+  base: ExtensionPainterProviders,
   patch: unknown,
-): OhmPainterProviders {
+): ExtensionPainterProviders {
   const painterPatch = isJsonMap(patch) ? patch : {};
   const googlePatch = isJsonMap(painterPatch.googleNanoBanana) ? painterPatch.googleNanoBanana : {};
   const openaiPatch = isJsonMap(painterPatch.openai) ? painterPatch.openai : {};

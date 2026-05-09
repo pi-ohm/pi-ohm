@@ -1,30 +1,30 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import {
-  coreConfigModule,
-  isOhmCoreConfig,
-  loadOhmConfig,
-  pickOhmConfig,
-  type OhmMode,
+  extensionConfigModule,
+  isExtensionRuntimeConfig,
+  loadConfig,
+  pickConfig,
+  type ExtensionMode,
 } from "@pi-ohm/core/config";
 
 async function loadModesConfig(cwd: string) {
-  const loaded = await loadOhmConfig({ cwd, modules: [coreConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [extensionConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const core = pickOhmConfig({
+  const core = pickConfig({
     loaded: loaded.value,
-    module: coreConfigModule,
-    is: isOhmCoreConfig,
+    module: extensionConfigModule,
+    is: isExtensionRuntimeConfig,
   });
   if (Result.isError(core)) return Result.err(core.error);
 
   return Result.ok({ loaded: loaded.value, core: core.value });
 }
 
-const MODES: readonly OhmMode[] = ["rush", "smart", "deep"] as const;
+const MODES: readonly ExtensionMode[] = ["rush", "smart", "deep"] as const;
 
-function parseRequestedMode(args: unknown): OhmMode | null {
+function parseRequestedMode(args: unknown): ExtensionMode | null {
   if (typeof args === "string") {
     const normalized = args.trim().split(/\s+/)[0]?.toLowerCase();
     if (!normalized) return null;

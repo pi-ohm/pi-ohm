@@ -1,29 +1,29 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import {
-  coreConfigModule,
+  extensionConfigModule,
   featuresConfigModule,
-  isOhmCoreConfig,
-  isOhmFeatureFlags,
-  loadOhmConfig,
-  pickOhmConfig,
+  isExtensionRuntimeConfig,
+  isFeatureFlags,
+  loadConfig,
+  pickConfig,
 } from "@pi-ohm/core/config";
 
 async function loadHandoffConfig(cwd: string) {
-  const loaded = await loadOhmConfig({ cwd, modules: [coreConfigModule, featuresConfigModule] });
+  const loaded = await loadConfig({ cwd, modules: [extensionConfigModule, featuresConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
 
-  const core = pickOhmConfig({
+  const core = pickConfig({
     loaded: loaded.value,
-    module: coreConfigModule,
-    is: isOhmCoreConfig,
+    module: extensionConfigModule,
+    is: isExtensionRuntimeConfig,
   });
   if (Result.isError(core)) return Result.err(core.error);
 
-  const features = pickOhmConfig({
+  const features = pickConfig({
     loaded: loaded.value,
     module: featuresConfigModule,
-    is: isOhmFeatureFlags,
+    is: isFeatureFlags,
   });
   if (Result.isError(features)) return Result.err(features.error);
 

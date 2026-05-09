@@ -1,4 +1,4 @@
-export interface OhmFeatureFlags {
+export interface ExtensionFeatureFlags {
   handoff: boolean;
   subagents: boolean;
   sessionThreadSearch: boolean;
@@ -9,7 +9,7 @@ export interface OhmFeatureFlags {
 const BOOLEAN_TRUE_VALUES = ["1", "true", "yes", "on", "enabled"];
 const BOOLEAN_FALSE_VALUES = ["0", "false", "no", "off", "disabled"];
 
-export const DEFAULT_OHM_FEATURE_FLAGS: OhmFeatureFlags = {
+export const DEFAULT_EXTENSION_FEATURE_FLAGS: ExtensionFeatureFlags = {
   handoff: true,
   subagents: true,
   sessionThreadSearch: true,
@@ -31,7 +31,10 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
-export function mergeOhmFeatureFlags(base: OhmFeatureFlags, patch: unknown): OhmFeatureFlags {
+export function mergeExtensionFeatureFlags(
+  base: ExtensionFeatureFlags,
+  patch: unknown,
+): ExtensionFeatureFlags {
   const featurePatch = isJsonMap(patch) ? patch : {};
 
   return {
