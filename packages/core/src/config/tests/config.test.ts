@@ -5,7 +5,12 @@ import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
-import { loadRegisteredConfig, registerConfig, resolveOhmConfigPaths } from "../index";
+import {
+  PiConfigRegistry,
+  loadRegisteredConfig,
+  registerConfig,
+  resolveOhmConfigPaths,
+} from "../index";
 
 const DemoSchema = Type.Object(
   {
@@ -101,6 +106,46 @@ void test("loadRegisteredConfig merges defaults, global config, then project con
     ]);
     assert.deepEqual(loaded.value.diagnostics, []);
   });
+});
+
+void test("PiConfigRegistry registers modules and loads resolved config", async () => {
+  await withConfigEnv(async ({ cwd, agent }) => {
+    await fs.writeFile(
+      path.join(agent, "ohm.json"),
+      JSON.stringify({ demo: { enabled: false, count: 5 } }),
+      "utf8",
+    );
+
+    const registry = PiConfigRegistry.create({ cwd });
+
+    assert.equal(Result.isOk(registry), true);
+    if (Result.isError(registry)) assert.fail(registry.error.message);
+
+    const registered = registry.value.register(demo);
+    assert.equal(Result.isOk(registered), true);
+
+    const loaded = await registry.value.load();
+
+    assert.equal(Result.isOk(loaded), true);
+    if (Result.isError(loaded)) assert.fail(loaded.error.message);
+    assert.deepEqual(loaded.value.config.demo, {
+      enabled: false,
+      count: 5,
+      label: "default",
+    });
+  });
+});
+
+void test("PiConfigRegistry rejects duplicate module namespaces", () => {
+  const registry = PiConfigRegistry.create({ cwd: process.cwd() });
+
+  assert.equal(Result.isOk(registry), true);
+  if (Result.isError(registry)) assert.fail(registry.error.message);
+
+  assert.equal(Result.isOk(registry.value.register(demo)), true);
+
+  const duplicate = registry.value.register(demo);
+  assert.equal(Result.isError(duplicate), true);
 });
 
 void test("loadRegisteredConfig reports invalid JSON as diagnostics without crashing", async () => {

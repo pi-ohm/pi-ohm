@@ -119,6 +119,10 @@ export interface LoadRegisteredConfigInput {
   readonly modules: readonly OhmRegisteredConfigModule[];
 }
 
+export interface PiConfigRegistryInput {
+  readonly cwd: string;
+}
+
 interface ModuleLoadedConfig {
   readonly namespace: string;
   readonly value: unknown;
@@ -138,6 +142,61 @@ export interface LoadedRegisteredConfig {
   readonly paths: OhmConfigPaths;
   readonly loadedFrom: readonly string[];
   readonly diagnostics: readonly OhmConfigDiagnostic[];
+}
+
+export class PiConfigRegistry {
+  readonly cwd: string;
+  readonly #modules: OhmRegisteredConfigModule[] = [];
+
+  private constructor(input: PiConfigRegistryInput) {
+    this.cwd = input.cwd;
+  }
+
+  static create(input: PiConfigRegistryInput): OhmConfigLoadResult<PiConfigRegistry> {
+    const cwd = input.cwd.trim();
+    if (cwd.length === 0) {
+      return Result.err(
+        new OhmConfigRuntimeError({
+          code: "config_cwd_empty",
+          message: "Invalid Ohm config registry input: cwd must be a non-empty string",
+        }),
+      );
+    }
+
+    return Result.ok(new PiConfigRegistry({ cwd }));
+  }
+
+  register(module: OhmRegisteredConfigModule): OhmConfigLoadResult<void> {
+    const namespace = module.namespace.trim();
+    if (namespace.length === 0) {
+      return Result.err(
+        new OhmConfigRuntimeError({
+          code: "config_namespace_empty",
+          message: "Invalid Ohm config module: namespace must be a non-empty string",
+        }),
+      );
+    }
+
+    if (this.#modules.some((registered) => registered.namespace === namespace)) {
+      return Result.err(
+        new OhmConfigRuntimeError({
+          code: "config_namespace_duplicate",
+          message: `Invalid Ohm config module: namespace "${namespace}" is already registered`,
+        }),
+      );
+    }
+
+    this.#modules.push(module);
+    return Result.ok(undefined);
+  }
+
+  modules(): readonly OhmRegisteredConfigModule[] {
+    return [...this.#modules];
+  }
+
+  async load(): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
+    return loadConfigModules({ cwd: this.cwd, modules: this.#modules });
+  }
 }
 
 const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
@@ -378,6 +437,20 @@ interface RuntimeLoadState {
 }
 
 export async function loadRegisteredConfig(
+  input: LoadRegisteredConfigInput,
+): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
+  const registry = PiConfigRegistry.create({ cwd: input.cwd });
+  if (Result.isError(registry)) return registry;
+
+  for (const module of input.modules) {
+    const registered = registry.value.register(module);
+    if (Result.isError(registered)) return registered;
+  }
+
+  return registry.value.load();
+}
+
+async function loadConfigModules(
   input: LoadRegisteredConfigInput,
 ): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
   const paths = resolveOhmConfigPaths(input.cwd);
