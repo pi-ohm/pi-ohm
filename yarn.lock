@@ -3778,6 +3778,7 @@ __metadata:
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@earendil-works/pi-tui": "catalog:pi"
+    better-result: "catalog:"
     typebox: "npm:^1.0.68"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0

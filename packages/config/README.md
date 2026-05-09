@@ -4,13 +4,11 @@ Shared runtime configuration package used by Pi OHM feature packages.
 
 Responsibilities:
 
-- read standard Pi settings from `settings.json`
-- resolve config directory from `PI_CONFIG_DIR` / `PI_CODING_AGENT_DIR` / `PI_AGENT_DIR` / `~/.pi/agent`
-- load and merge:
-  - `${cwd}/.pi/ohm.json`
-  - `${configDir}/ohm.json`
-  - `${configDir}/ohm.providers.json`
+- read Ohm config from `${cwd}/.pi/ohm.json` and `${PI_CODING_AGENT_DIR:-~/.pi/agent}/ohm.json`
+- keep Ohm config separate from Pi `settings.json`
+- expose `registerConfig()` and `loadRegisteredConfig()` for package-owned TypeBox config modules
 - expose typed runtime config helpers to feature packages
+- return diagnostics for invalid JSON, invalid roots, schema failures, read failures, and merge failures
 
 TypeBox config schemas are exported for subagent profile authoring/validation:
 
@@ -24,7 +22,7 @@ TypeBox config schemas are exported for subagent profile authoring/validation:
 
 Tree-shakeable modular entrypoints:
 
-- `@pi-ohm/config` - full runtime loader + settings registration helpers
+- `@pi-ohm/config` - registered config loader + runtime config helpers
 - `@pi-ohm/config/subagents` - subagent profile types, schema, resolvers, and merge helpers
 - `@pi-ohm/config/features` - feature-flag defaults + merge helpers
 - `@pi-ohm/config/modes` - mode type/default/normalizer

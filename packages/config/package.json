@@ -46,6 +46,7 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",
     "@earendil-works/pi-tui": "catalog:pi",
+    "better-result": "catalog:",
     "typebox": "^1.0.68"
   },
   "peerDependencies": {

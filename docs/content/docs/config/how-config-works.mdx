@@ -57,7 +57,7 @@ Do not wrap everything in an extra `ohm` key.
 Packages define their own config modules. A module owns its namespace, TypeBox schema, defaults, and merge behavior.
 
 ```ts
-import { Type, type Static } from "typebox";
+import { Type, type StaticDecode } from "typebox";
 import { registerConfig } from "@pi-ohm/config";
 
 const SubagentsConfigSchema = Type.Object(
@@ -68,7 +68,7 @@ const SubagentsConfigSchema = Type.Object(
   { additionalProperties: false },
 );
 
-type SubagentsConfigPatch = Static<typeof SubagentsConfigSchema>;
+type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
 
 export const subagentsConfigModule = registerConfig({
   namespace: "subagents",
