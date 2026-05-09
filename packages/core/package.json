@@ -29,6 +29,10 @@
     "./toolkit": {
       "types": "./dist/toolkit.d.ts",
       "default": "./dist/toolkit.js"
+    },
+    "./db": {
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
     }
   },
   "publishConfig": {
@@ -36,9 +40,10 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts"
+    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts"
   },
   "dependencies": {
+    "@libsql/client": "catalog:",
     "better-result": "catalog:"
   }
 }
