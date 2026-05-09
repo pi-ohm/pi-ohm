@@ -2,37 +2,32 @@ import { Result, TaggedError, type Result as BetterResult } from "better-result"
 
 export interface PiEventBus {
   emit(channel: string, data: unknown): void;
-  on(channel: string, handler: (data: unknown) => void): () => void;
-}
-
-export interface PiEventLifecycle {
-  on(event: "session_shutdown", handler: (event: unknown, ctx: unknown) => void): void;
+  on(channel: string, handler: (data: unknown) => void): PiEventCleanup;
 }
 
 export interface PiEventApi {
   readonly events: PiEventBus;
-  readonly on?: PiEventLifecycle["on"];
+  readonly on?: (
+    event: "session_shutdown",
+    handler: (event: unknown, ctx: unknown) => void,
+  ) => void;
 }
 
 export type PiEventCleanup = () => void;
-export type PiEventHandler = (data: unknown) => void;
 
-export interface PiEventNamespace {
-  readonly namespace: string;
-  readonly event: (name: string) => string;
-  readonly rpc: (name: string) => string;
-  readonly reply: (channel: string, requestId: string) => string;
+export interface PiRpcRequest {
+  readonly requestId: string;
 }
 
-export interface PiEventModuleInput {
-  readonly pi: PiEventApi;
-  readonly events: PiEventBus;
-}
-
-export interface PiEventModule {
-  readonly namespace: string;
-  readonly register: (input: PiEventModuleInput) => readonly PiEventCleanup[] | void;
-}
+export type PiRpcReply<T> =
+  | {
+      readonly success: true;
+      readonly data?: T;
+    }
+  | {
+      readonly success: false;
+      readonly error: string;
+    };
 
 export class OhmPiEventValidationError extends TaggedError("OhmPiEventValidationError")<{
   readonly code: string;
@@ -53,149 +48,337 @@ export class OhmPiEventRuntimeError extends TaggedError("OhmPiEventRuntimeError"
 export type OhmPiEventError = OhmPiEventValidationError | OhmPiEventRuntimeError;
 export type OhmPiEventResult<T> = BetterResult<T, OhmPiEventError>;
 
-export interface PiRpcRequest {
-  readonly requestId: string;
-}
-
-export type PiRpcReply<T> =
-  | {
-      readonly success: true;
-      readonly data: T;
-    }
-  | {
-      readonly success: false;
-      readonly error: string;
-    };
-
-export interface RegisterPiRpcHandlerInput<Request extends PiRpcRequest, Response> {
-  readonly events: PiEventBus;
-  readonly channel: string;
-  readonly parse: (data: unknown) => OhmPiEventResult<Request>;
-  readonly handler: (
-    request: Request,
-  ) => OhmPiEventResult<Response> | Promise<OhmPiEventResult<Response>>;
-}
-
-export function createPiEventNamespace(namespace: string): PiEventNamespace {
-  return {
-    namespace,
-    event(name) {
-      return `${namespace}:${name}`;
-    },
-    rpc(name) {
-      return `${namespace}:rpc:${name}`;
-    },
-    reply(channel, requestId) {
-      return replyChannel(channel, requestId);
-    },
-  };
-}
-
-export function emitPiEvent(events: PiEventBus, channel: string, data: unknown): void {
-  events.emit(channel, data);
-}
-
-export function onPiEvent(
-  events: PiEventBus,
-  channel: string,
-  handler: PiEventHandler,
-): PiEventCleanup {
-  return events.on(channel, handler);
-}
-
-export function registerPiEvents(input: {
+export interface PiEventRegistryInput {
+  readonly namespace: string;
   readonly pi: PiEventApi;
-  readonly modules: readonly PiEventModule[];
-}): PiEventCleanup {
-  const cleanups = input.modules.flatMap(
-    (module) =>
-      module.register({
-        pi: input.pi,
-        events: input.pi.events,
-      }) ?? [],
-  );
-
-  const cleanup = () => {
-    for (const item of [...cleanups].reverse()) item();
-  };
-
-  input.pi.on?.("session_shutdown", () => cleanup());
-
-  return cleanup;
 }
 
-export function registerPiRpcHandler<Request extends PiRpcRequest, Response>(
-  input: RegisterPiRpcHandlerInput<Request, Response>,
-): PiEventCleanup {
-  return input.events.on(input.channel, (data) => {
-    void handlePiRpc(input, data);
-  });
-}
+const SEGMENT_PATTERN = /^[a-z][a-z0-9_-]*$/;
 
-async function handlePiRpc<Request extends PiRpcRequest, Response>(
-  input: RegisterPiRpcHandlerInput<Request, Response>,
-  data: unknown,
-): Promise<void> {
-  const parsed = input.parse(data);
-  if (Result.isError(parsed)) {
-    if (parsed.error.requestId) {
-      emitRpcError(input.events, input.channel, parsed.error.requestId, parsed.error.message);
+export class PiEventRegistry {
+  readonly namespace: string;
+  readonly bus: PiEventBus;
+  readonly pi: PiEventApi;
+  readonly #cleanups: PiEventCleanup[] = [];
+  readonly #diagnostics: OhmPiEventError[] = [];
+  #cleaned = false;
+
+  private constructor(input: PiEventRegistryInput) {
+    this.namespace = input.namespace;
+    this.pi = input.pi;
+    this.bus = input.pi.events;
+    this.pi.on?.("session_shutdown", () => {
+      this.cleanup();
+    });
+  }
+
+  static create(input: PiEventRegistryInput): OhmPiEventResult<PiEventRegistry> {
+    const namespace = validateName(input.namespace, "namespace");
+    if (Result.isError(namespace)) return namespace;
+    if (!isPiEventBus(input.pi.events)) {
+      return Result.err(
+        new OhmPiEventValidationError({
+          code: "event_bus_missing",
+          message: "Invalid Pi event registry input: pi.events must expose emit() and on()",
+        }),
+      );
     }
-    return;
+
+    return Result.ok(new PiEventRegistry(input));
   }
 
-  const handled = await Result.tryPromise({
-    try: async () => input.handler(parsed.value),
-    catch: (cause) =>
-      new OhmPiEventRuntimeError({
-        code: "rpc_handler_failed",
-        channel: input.channel,
-        requestId: parsed.value.requestId,
-        message: `Pi event RPC handler failed for ${input.channel}: ${messageFromCause(cause)}`,
-        cause,
+  diagnostics(): readonly OhmPiEventError[] {
+    return [...this.#diagnostics];
+  }
+
+  channel(name: string): OhmPiEventResult<string> {
+    const valid = validateName(name, "event name");
+    if (Result.isError(valid)) return valid;
+    return Result.ok(`${this.namespace}:${name}`);
+  }
+
+  rpcChannel(name: string): OhmPiEventResult<string> {
+    const valid = validateName(name, "rpc name");
+    if (Result.isError(valid)) return valid;
+    return Result.ok(`${this.namespace}:rpc:${name}`);
+  }
+
+  replyChannel(channel: string, requestId: string): OhmPiEventResult<string> {
+    const validChannel = validateChannel(channel);
+    if (Result.isError(validChannel)) return validChannel;
+    const validRequest = validateRequestId(requestId, channel);
+    if (Result.isError(validRequest)) return validRequest;
+    return Result.ok(`${channel}:reply:${requestId}`);
+  }
+
+  emit<T>(name: string, payload: T): OhmPiEventResult<void> {
+    const channel = name.startsWith(`${this.namespace}:`)
+      ? validateChannel(name)
+      : this.channel(name);
+    if (Result.isError(channel)) return channel;
+
+    const emitted = Result.try({
+      try: () => this.bus.emit(channel.value, payload),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "event_emit_failed",
+          channel: channel.value,
+          message: `Failed to emit Pi event ${channel.value}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    if (Result.isError(emitted)) return emitted;
+    return Result.ok(undefined);
+  }
+
+  on<T>(
+    name: string,
+    parse: (payload: unknown) => OhmPiEventResult<T>,
+    handler: (payload: T) => OhmPiEventResult<void> | Promise<OhmPiEventResult<void>>,
+  ): OhmPiEventResult<PiEventCleanup> {
+    const channel = this.channel(name);
+    if (Result.isError(channel)) return channel;
+
+    const subscribed = Result.try({
+      try: () =>
+        this.bus.on(channel.value, (payload) => {
+          void this.handleEvent(channel.value, payload, parse, handler);
+        }),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "event_subscribe_failed",
+          channel: channel.value,
+          message: `Failed to subscribe to Pi event ${channel.value}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    if (Result.isError(subscribed)) return subscribed;
+
+    const cleanup = this.addCleanup(subscribed.value);
+    return Result.ok(cleanup);
+  }
+
+  rpc<Request extends PiRpcRequest, Response>(
+    name: string,
+    parse: (payload: unknown) => OhmPiEventResult<Request>,
+    handler: (request: Request) => OhmPiEventResult<Response> | Promise<OhmPiEventResult<Response>>,
+  ): OhmPiEventResult<PiEventCleanup> {
+    const channel = this.rpcChannel(name);
+    if (Result.isError(channel)) return channel;
+
+    const subscribed = Result.try({
+      try: () =>
+        this.bus.on(channel.value, (payload) => {
+          void this.handleRpc(channel.value, payload, parse, handler);
+        }),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "rpc_subscribe_failed",
+          channel: channel.value,
+          message: `Failed to subscribe to Pi event RPC ${channel.value}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    if (Result.isError(subscribed)) return subscribed;
+
+    const cleanup = this.addCleanup(subscribed.value);
+    return Result.ok(cleanup);
+  }
+
+  cleanup(): OhmPiEventResult<void> {
+    if (this.#cleaned) return Result.ok(undefined);
+    this.#cleaned = true;
+
+    const errors: OhmPiEventError[] = [];
+    for (const cleanup of [...this.#cleanups].reverse()) {
+      const result = Result.try({
+        try: () => cleanup(),
+        catch: (cause) =>
+          new OhmPiEventRuntimeError({
+            code: "event_cleanup_failed",
+            message: `Failed to cleanup Pi event registry ${this.namespace}: ${messageFromCause(cause)}`,
+            cause,
+          }),
+      });
+      if (Result.isError(result)) errors.push(result.error);
+    }
+    this.#cleanups.length = 0;
+    this.#diagnostics.push(...errors);
+
+    const first = errors[0];
+    if (first) return Result.err(first);
+    return Result.ok(undefined);
+  }
+
+  private addCleanup(cleanup: PiEventCleanup): PiEventCleanup {
+    let active = true;
+    const tracked = () => {
+      if (!active) return;
+      active = false;
+      cleanup();
+    };
+    this.#cleanups.push(tracked);
+    return tracked;
+  }
+
+  private async handleEvent<T>(
+    channel: string,
+    payload: unknown,
+    parse: (payload: unknown) => OhmPiEventResult<T>,
+    handler: (payload: T) => OhmPiEventResult<void> | Promise<OhmPiEventResult<void>>,
+  ): Promise<void> {
+    const parsed = parse(payload);
+    if (Result.isError(parsed)) {
+      this.#diagnostics.push(parsed.error);
+      return;
+    }
+
+    const handled = await Result.tryPromise({
+      try: async () => handler(parsed.value),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "event_handler_failed",
+          channel,
+          message: `Pi event handler failed for ${channel}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+
+    if (Result.isError(handled)) {
+      this.#diagnostics.push(handled.error);
+      return;
+    }
+    if (Result.isError(handled.value)) this.#diagnostics.push(handled.value.error);
+  }
+
+  private async handleRpc<Request extends PiRpcRequest, Response>(
+    channel: string,
+    payload: unknown,
+    parse: (payload: unknown) => OhmPiEventResult<Request>,
+    handler: (request: Request) => OhmPiEventResult<Response> | Promise<OhmPiEventResult<Response>>,
+  ): Promise<void> {
+    const parsed = parse(payload);
+    if (Result.isError(parsed)) {
+      this.#diagnostics.push(parsed.error);
+      const requestId = parsed.error.requestId;
+      if (requestId) this.emitRpcError(channel, requestId, parsed.error.message);
+      return;
+    }
+
+    const handled = await Result.tryPromise({
+      try: async () => handler(parsed.value),
+      catch: (cause) =>
+        new OhmPiEventRuntimeError({
+          code: "rpc_handler_failed",
+          channel,
+          requestId: parsed.value.requestId,
+          message: `Pi event RPC handler failed for ${channel}: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+
+    if (Result.isError(handled)) {
+      this.#diagnostics.push(handled.error);
+      this.emitRpcError(channel, parsed.value.requestId, handled.error.message);
+      return;
+    }
+
+    if (Result.isError(handled.value)) {
+      this.#diagnostics.push(handled.value.error);
+      this.emitRpcError(channel, parsed.value.requestId, handled.value.error.message);
+      return;
+    }
+
+    this.emitRpcSuccess(channel, parsed.value.requestId, handled.value.value);
+  }
+
+  private emitRpcSuccess<Response>(channel: string, requestId: string, data: Response): void {
+    const reply = this.replyChannel(channel, requestId);
+    if (Result.isError(reply)) {
+      this.#diagnostics.push(reply.error);
+      return;
+    }
+
+    const payload: PiRpcReply<Response> =
+      data === undefined ? { success: true } : { success: true, data };
+    this.bus.emit(reply.value, payload);
+  }
+
+  private emitRpcError(channel: string, requestId: string, error: string): void {
+    const reply = this.replyChannel(channel, requestId);
+    if (Result.isError(reply)) {
+      this.#diagnostics.push(reply.error);
+      return;
+    }
+
+    this.bus.emit(reply.value, {
+      success: false,
+      error,
+    } satisfies PiRpcReply<unknown>);
+  }
+}
+
+function isPiEventBus(value: unknown): value is PiEventBus {
+  if (typeof value !== "object" || value === null) return false;
+  const emit = Reflect.get(value, "emit");
+  const on = Reflect.get(value, "on");
+  return typeof emit === "function" && typeof on === "function";
+}
+
+function validateName(name: string, label: string): OhmPiEventResult<string> {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return Result.err(
+      new OhmPiEventValidationError({
+        code: "event_name_empty",
+        message: `Invalid Pi event ${label}: must be a non-empty string`,
       }),
-  });
-
-  if (Result.isError(handled)) {
-    emitRpcError(input.events, input.channel, parsed.value.requestId, handled.error.message);
-    return;
+    );
   }
 
-  if (Result.isError(handled.value)) {
-    emitRpcError(input.events, input.channel, parsed.value.requestId, handled.value.error.message);
-    return;
+  const valid = trimmed.split(":").every((segment) => SEGMENT_PATTERN.test(segment));
+  if (!valid) {
+    return Result.err(
+      new OhmPiEventValidationError({
+        code: "event_name_invalid",
+        message: `Invalid Pi event ${label} "${name}": use lowercase alphanumeric segments with - or _`,
+      }),
+    );
   }
 
-  input.events.emit(replyChannel(input.channel, parsed.value.requestId), {
-    success: true,
-    data: handled.value.value,
-  } satisfies PiRpcReply<Response>);
+  return Result.ok(trimmed);
 }
 
-function emitRpcError(events: PiEventBus, channel: string, requestId: string, error: string): void {
-  events.emit(replyChannel(channel, requestId), {
-    success: false,
-    error,
-  } satisfies PiRpcReply<unknown>);
+function validateChannel(channel: string): OhmPiEventResult<string> {
+  const valid = validateName(channel, "channel");
+  if (Result.isError(valid)) return valid;
+  return Result.ok(valid.value);
 }
 
-export function replyChannel(channel: string, requestId: string): string {
-  return `${channel}:reply:${requestId}`;
-}
+function validateRequestId(requestId: string, channel: string): OhmPiEventResult<string> {
+  const trimmed = requestId.trim();
+  if (trimmed.length === 0) {
+    return Result.err(
+      new OhmPiEventValidationError({
+        code: "rpc_request_id_missing",
+        channel,
+        message: `Invalid ${channel} RPC request: requestId must be a non-empty string`,
+      }),
+    );
+  }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+  if (trimmed.includes(":")) {
+    return Result.err(
+      new OhmPiEventValidationError({
+        code: "rpc_request_id_invalid",
+        channel,
+        requestId,
+        message: `Invalid ${channel} RPC request: requestId must not contain ':'`,
+      }),
+    );
+  }
 
-export function readPiEventStringField(
-  input: Record<string, unknown>,
-  field: string,
-): string | undefined {
-  const value = Reflect.get(input, field);
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
-  return trimmed;
+  return Result.ok(trimmed);
 }
 
 function messageFromCause(cause: unknown): string {
@@ -204,10 +387,18 @@ function messageFromCause(cause: unknown): string {
   return String(cause);
 }
 
+export function readPiEventStringField(input: object, field: string): string | undefined {
+  const value = Reflect.get(input, field);
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
 export function invalidPiEventRequest(input: {
   readonly code: string;
   readonly message: string;
-  readonly channel: string;
+  readonly channel?: string;
   readonly requestId?: string;
   readonly cause?: unknown;
 }): OhmPiEventResult<never> {
@@ -215,7 +406,7 @@ export function invalidPiEventRequest(input: {
 }
 
 export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventResult<PiRpcRequest> {
-  if (!isRecord(data)) {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
     return invalidPiEventRequest({
       code: "rpc_request_not_object",
       channel,
@@ -232,5 +423,7 @@ export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventRes
     });
   }
 
-  return Result.ok({ requestId });
+  const validRequest = validateRequestId(requestId, channel);
+  if (Result.isError(validRequest)) return validRequest;
+  return Result.ok({ requestId: validRequest.value });
 }

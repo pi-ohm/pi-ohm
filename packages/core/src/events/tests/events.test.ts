@@ -3,16 +3,13 @@ import { setImmediate } from "node:timers/promises";
 import test from "node:test";
 import { Result } from "better-result";
 import {
-  createPiEventNamespace,
-  emitPiEvent,
   invalidPiEventRequest,
-  onPiEvent,
   parsePiRpcRequest,
+  PiEventRegistry,
   readPiEventStringField,
-  registerPiEvents,
-  registerPiRpcHandler,
   type OhmPiEventResult,
   type PiEventBus,
+  type PiEventCleanup,
   type PiRpcRequest,
 } from "../index";
 
@@ -27,7 +24,7 @@ class FakeBus implements PiEventBus {
     for (const listener of listeners) listener(data);
   }
 
-  on(channel: string, handler: (data: unknown) => void): () => void {
+  on(channel: string, handler: (data: unknown) => void): PiEventCleanup {
     const listeners = this.listeners.get(channel) ?? new Set<(data: unknown) => void>();
     listeners.add(handler);
     this.listeners.set(channel, listeners);
@@ -37,144 +34,198 @@ class FakeBus implements PiEventBus {
   }
 }
 
+interface FakePi {
+  readonly events: PiEventBus;
+  on(event: "session_shutdown", handler: (event: unknown, ctx: unknown) => void): void;
+  shutdown(): void;
+}
+
+function createFakePi(bus: PiEventBus): FakePi {
+  const shutdownHandlers = new Set<(event: unknown, ctx: unknown) => void>();
+  return {
+    events: bus,
+    on(event, handler) {
+      if (event === "session_shutdown") shutdownHandlers.add(handler);
+    },
+    shutdown() {
+      for (const handler of shutdownHandlers) handler({}, {});
+    },
+  };
+}
+
+interface DemoStartedEvent {
+  readonly id: string;
+}
+
 interface DemoSpawnRequest extends PiRpcRequest {
   readonly type: string;
   readonly prompt: string;
 }
 
-function parseDemoSpawnRequest(data: unknown): OhmPiEventResult<DemoSpawnRequest> {
-  const channel = "demo:rpc:spawn";
-  const request = parsePiRpcRequest(data, channel);
-  if (Result.isError(request)) return request;
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+function parseStartedEvent(payload: unknown): OhmPiEventResult<DemoStartedEvent> {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     return invalidPiEventRequest({
-      code: "demo_spawn_not_object",
-      channel,
-      requestId: request.value.requestId,
-      message: "Invalid demo spawn RPC request: payload must be an object",
+      code: "started_not_object",
+      channel: "demo:started",
+      message: "Invalid started event: payload must be an object",
     });
   }
 
-  const record = data as Record<string, unknown>;
-  const type = readPiEventStringField(record, "type");
+  const id = readPiEventStringField(payload, "id");
+  if (!id) {
+    return invalidPiEventRequest({
+      code: "started_id_missing",
+      channel: "demo:started",
+      message: "Invalid started event: id must be a non-empty string",
+    });
+  }
+
+  return Result.ok({ id });
+}
+
+function parseDemoSpawnRequest(payload: unknown): OhmPiEventResult<DemoSpawnRequest> {
+  const channel = "demo:rpc:spawn";
+  const request = parsePiRpcRequest(payload, channel);
+  if (Result.isError(request)) return request;
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return invalidPiEventRequest({
+      code: "spawn_not_object",
+      channel,
+      requestId: request.value.requestId,
+      message: "Invalid spawn request: payload must be an object",
+    });
+  }
+
+  const type = readPiEventStringField(payload, "type");
   if (!type) {
     return invalidPiEventRequest({
-      code: "demo_spawn_type_missing",
+      code: "spawn_type_missing",
       channel,
       requestId: request.value.requestId,
-      message: "Invalid demo spawn RPC request: type must be a non-empty string",
+      message: "Invalid spawn request: type must be a non-empty string",
     });
   }
 
-  const prompt = readPiEventStringField(record, "prompt");
+  const prompt = readPiEventStringField(payload, "prompt");
   if (!prompt) {
     return invalidPiEventRequest({
-      code: "demo_spawn_prompt_missing",
+      code: "spawn_prompt_missing",
       channel,
       requestId: request.value.requestId,
-      message: "Invalid demo spawn RPC request: prompt must be a non-empty string",
+      message: "Invalid spawn request: prompt must be a non-empty string",
     });
   }
 
   return Result.ok({ requestId: request.value.requestId, type, prompt });
 }
 
-void test("createPiEventNamespace builds generic event and rpc channels", () => {
-  const demo = createPiEventNamespace("demo");
+void test("PiEventRegistry validates namespace and builds event, rpc, and reply channels", () => {
+  const bus = new FakeBus();
+  const registry = PiEventRegistry.create({ namespace: "demo", pi: { events: bus } });
 
-  assert.equal(demo.event("started"), "demo:started");
-  assert.equal(demo.rpc("spawn"), "demo:rpc:spawn");
-  assert.equal(demo.reply("demo:rpc:spawn", "req-1"), "demo:rpc:spawn:reply:req-1");
+  assert.equal(Result.isOk(registry), true);
+  if (Result.isError(registry)) assert.fail(registry.error.message);
+
+  assert.deepEqual(registry.value.channel("started"), Result.ok("demo:started"));
+  assert.deepEqual(registry.value.rpcChannel("spawn"), Result.ok("demo:rpc:spawn"));
+  assert.deepEqual(
+    registry.value.replyChannel("demo:rpc:spawn", "req-1"),
+    Result.ok("demo:rpc:spawn:reply:req-1"),
+  );
+
+  const invalid = PiEventRegistry.create({ namespace: "Bad Namespace", pi: { events: bus } });
+  assert.equal(Result.isError(invalid), true);
 });
 
-void test("onPiEvent and emitPiEvent wrap the shared bus and unsubscribe", () => {
+void test("PiEventRegistry emits and listens with parser boundary", () => {
   const bus = new FakeBus();
+  const registry = PiEventRegistry.create({ namespace: "demo", pi: { events: bus } });
+  if (Result.isError(registry)) assert.fail(registry.error.message);
+
   const seen: string[] = [];
-  const unsub = onPiEvent(bus, "ohm:test", (payload) => {
-    if (typeof payload !== "object" || payload === null || !("message" in payload)) return;
-    if (typeof payload.message !== "string") return;
-    seen.push(payload.message);
+  const cleanup = registry.value.on("started", parseStartedEvent, (event) => {
+    seen.push(event.id);
+    return Result.ok(undefined);
   });
+  assert.equal(Result.isOk(cleanup), true);
 
-  emitPiEvent(bus, "ohm:test", { message: "one" });
-  unsub();
-  emitPiEvent(bus, "ohm:test", { message: "two" });
+  registry.value.emit("started", { id: "one" });
+  registry.value.emit("started", { missing: true });
+  registry.value.emit("started", { id: "two" });
 
-  assert.deepEqual(seen, ["one"]);
+  assert.deepEqual(seen, ["one", "two"]);
+  assert.equal(registry.value.diagnostics().length, 1);
 });
 
-void test("registerPiEvents registers modules and cleans them on returned cleanup", () => {
+void test("PiEventRegistry cleanup unregisters listeners and is lifecycle-bound", () => {
   const bus = new FakeBus();
-  const events: string[] = [];
+  const pi = createFakePi(bus);
+  const registry = PiEventRegistry.create({ namespace: "demo", pi });
+  if (Result.isError(registry)) assert.fail(registry.error.message);
 
-  const cleanup = registerPiEvents({
-    pi: { events: bus },
-    modules: [
-      {
-        namespace: "demo",
-        register(input) {
-          const unsub = input.events.on("demo:ping", () => events.push("ping"));
-          return [unsub, () => events.push("cleanup")];
-        },
-      },
-    ],
+  const seen: string[] = [];
+  registry.value.on("started", parseStartedEvent, (event) => {
+    seen.push(event.id);
+    return Result.ok(undefined);
   });
 
-  bus.emit("demo:ping", {});
-  cleanup();
-  bus.emit("demo:ping", {});
+  registry.value.emit("started", { id: "before" });
+  pi.shutdown();
+  registry.value.emit("started", { id: "after" });
 
-  assert.deepEqual(events, ["ping", "cleanup"]);
+  assert.deepEqual(seen, ["before"]);
+  assert.deepEqual(registry.value.cleanup(), Result.ok(undefined));
 });
 
-void test("registerPiRpcHandler emits success replies on request scoped channels", async () => {
+void test("PiEventRegistry rpc emits success replies on request-scoped channels", async () => {
   const bus = new FakeBus();
+  const registry = PiEventRegistry.create({ namespace: "demo", pi: { events: bus } });
+  if (Result.isError(registry)) assert.fail(registry.error.message);
+
   const replies: unknown[] = [];
   bus.on("demo:rpc:spawn:reply:req-1", (reply) => replies.push(reply));
 
-  registerPiRpcHandler({
-    events: bus,
-    channel: "demo:rpc:spawn",
-    parse: parseDemoSpawnRequest,
-    handler(request) {
-      return Promise.resolve(Result.ok({ id: `${request.type}:1`, prompt: request.prompt }));
-    },
-  });
+  const cleanup = registry.value.rpc("spawn", parseDemoSpawnRequest, async (request) =>
+    Result.ok({ id: `${request.type}:1`, prompt: request.prompt }),
+  );
+  assert.equal(Result.isOk(cleanup), true);
 
-  bus.emit("demo:rpc:spawn", {
+  registry.value.emit("rpc:spawn", {
     requestId: "req-1",
     type: "finder",
     prompt: "find config loaders",
   });
   await setImmediate();
 
-  assert.equal(replies.length, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(replies[0])), {
-    success: true,
-    data: { id: "finder:1", prompt: "find config loaders" },
-  });
+  assert.deepEqual(JSON.parse(JSON.stringify(replies)), [
+    { success: true, data: { id: "finder:1", prompt: "find config loaders" } },
+  ]);
 });
 
-void test("registerPiRpcHandler emits validation errors when requestId is present", async () => {
+void test("PiEventRegistry rpc emits parser and handler errors as failure replies", async () => {
   const bus = new FakeBus();
+  const registry = PiEventRegistry.create({ namespace: "demo", pi: { events: bus } });
+  if (Result.isError(registry)) assert.fail(registry.error.message);
+
   const replies: unknown[] = [];
   bus.on("demo:rpc:spawn:reply:req-2", (reply) => replies.push(reply));
+  bus.on("demo:rpc:spawn:reply:req-3", (reply) => replies.push(reply));
 
-  registerPiRpcHandler({
-    events: bus,
-    channel: "demo:rpc:spawn",
-    parse: parseDemoSpawnRequest,
-    handler(request) {
-      return Promise.resolve(Result.ok({ id: request.type }));
-    },
-  });
+  registry.value.rpc("spawn", parseDemoSpawnRequest, (request) =>
+    invalidPiEventRequest({
+      code: "spawn_rejected",
+      channel: "demo:rpc:spawn",
+      requestId: request.requestId,
+      message: "Spawn rejected by policy",
+    }),
+  );
 
-  bus.emit("demo:rpc:spawn", { requestId: "req-2", type: "" });
+  registry.value.emit("rpc:spawn", { requestId: "req-2", type: "", prompt: "x" });
+  registry.value.emit("rpc:spawn", { requestId: "req-3", type: "finder", prompt: "x" });
   await setImmediate();
 
-  assert.equal(replies.length, 1);
-  assert.deepEqual(JSON.parse(JSON.stringify(replies[0])), {
-    success: false,
-    error: "Invalid demo spawn RPC request: type must be a non-empty string",
-  });
+  assert.deepEqual(JSON.parse(JSON.stringify(replies)), [
+    { success: false, error: "Invalid spawn request: type must be a non-empty string" },
+    { success: false, error: "Spawn rejected by policy" },
+  ]);
 });

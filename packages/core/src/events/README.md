@@ -1,93 +1,50 @@
 # `@pi-ohm/core/events`
 
-Pi exposes two different event surfaces to extensions:
+Pi has two event surfaces:
 
-1. `pi.on(...)` is Pi's lifecycle hook system. Use it for Pi-owned events like `session_start`, `tool_call`, `message_end`, and `session_shutdown`.
-2. `pi.events` is the shared extension event bus. Use it for extension-to-extension communication.
+1. `pi.on(...)` for Pi lifecycle hooks such as `session_start`, `tool_call`, and `session_shutdown`.
+2. `pi.events` for extension-to-extension communication.
 
-`@pi-ohm/core/events` wraps `pi.events` with small reusable helpers so Ohm packages and third-party Pi extensions can share stable event/RPC contracts without importing each other's runtime packages.
+`@pi-ohm/core/events` wraps `pi.events` with a small `PiEventRegistry` class. Core owns generic channel construction, validation, cleanup, diagnostics, and RPC reply envelopes. Feature packages own their own event contracts and parsers.
 
-Core owns the bus shape and generic RPC envelope only. Feature packages own their domain channels, payload types, and parsers.
-
-## Event bus shape
-
-Pi's bus is intentionally tiny:
+## Registry
 
 ```ts
-interface PiEventBus {
-  emit(channel: string, data: unknown): void;
-  on(channel: string, handler: (data: unknown) => void): () => void;
-}
+import { PiEventRegistry } from "@pi-ohm/core/events";
+import { Result } from "better-result";
+
+const events = PiEventRegistry.create({ namespace: "subagents", pi });
+if (Result.isError(events)) return;
+
+events.value.emit("ready", { version: 1 });
 ```
 
-`on()` returns an unsubscribe function. Call it during `session_shutdown`, or use `registerPiEvents()` so cleanup is wired consistently.
-
-## Namespaces
-
-Every event family should define a namespace. Namespaces keep channels predictable and avoid collisions with other extensions.
+Channels are built from the namespace:
 
 ```ts
-import { createPiEventNamespace } from "@pi-ohm/core/events";
-
-export const subagentsEvents = createPiEventNamespace("subagents");
-
-subagentsEvents.event("started"); // subagents:started
-subagentsEvents.rpc("spawn"); // subagents:rpc:spawn
-subagentsEvents.reply("subagents:rpc:spawn", "req-1"); // subagents:rpc:spawn:reply:req-1
+events.value.channel("started"); // subagents:started
+events.value.rpcChannel("spawn"); // subagents:rpc:spawn
+events.value.replyChannel("subagents:rpc:spawn", "req-1"); // subagents:rpc:spawn:reply:req-1
 ```
 
-Use feature-owned namespaces for public interop:
+Names are validated once through the registry. Use lowercase alphanumeric segments with `-` or `_`. Nested names can use `:` segments, for example `graph:edge_created`.
 
-- `subagents:*`
-- `memories:*`
-- `painter:*`
-- `ohm:*` for root/bundle events
+## Listening
 
-## Registering event modules
-
-Feature packages can expose event modules. The root extension can register all modules, while standalone packages can register only their own module.
+Payloads cross extension boundaries as `unknown`. Parse before trusting them.
 
 ```ts
-import { registerPiEvents, type PiEventModule } from "@pi-ohm/core/events";
-
-export const subagentsEventModule: PiEventModule = {
-  namespace: "subagents",
-  register(input) {
-    const unsub = input.events.on("subagents:ready", (payload) => {
-      // payload is unknown at the bus boundary. Parse before trusting it.
-    });
-
-    return [unsub];
-  },
-};
-
-export default function extension(pi: ExtensionAPI) {
-  registerPiEvents({ pi, modules: [subagentsEventModule] });
-}
-```
-
-`registerPiEvents()` also listens for Pi `session_shutdown` when available and runs module cleanup functions.
-
-## Emitting lifecycle events
-
-Use plain events for notifications. Consumers should not assume delivery ordering beyond Pi's synchronous `emit()` call.
-
-```ts
-import { emitPiEvent } from "@pi-ohm/core/events";
-import { subagentsEvents } from "./events";
-
-emitPiEvent(pi.events, subagentsEvents.event("started"), {
-  id: "task_123",
-  type: "finder",
-  description: "Find config usage",
+const cleanup = events.value.on("started", parseStartedEvent, async (event) => {
+  // event is typed here
+  return Result.ok(undefined);
 });
 ```
 
-Payloads cross package boundaries as `unknown`. Public listeners should parse payloads at the boundary before using them.
+`on()` returns a cleanup handle wrapped in `Result`. The registry tracks cleanup handles internally too.
 
-## RPC over `pi.events`
+## RPC
 
-RPC uses a request channel plus a request-scoped reply channel:
+RPC uses request-scoped reply channels:
 
 - request: `<namespace>:rpc:<method>`
 - reply: `<namespace>:rpc:<method>:reply:<requestId>`
@@ -95,84 +52,47 @@ RPC uses a request channel plus a request-scoped reply channel:
 Replies use one envelope:
 
 ```ts
-type PiRpcReply<T> = { success: true; data: T } | { success: false; error: string };
+type PiRpcReply<T> = { success: true; data?: T } | { success: false; error: string };
 ```
 
-Feature packages define their own channels:
+Register a handler:
 
 ```ts
-import { createPiEventNamespace } from "@pi-ohm/core/events";
-
-export const subagentsEvents = createPiEventNamespace("subagents");
-export const subagentsRpcChannels = {
-  health: subagentsEvents.rpc("health"),
-  spawn: subagentsEvents.rpc("spawn"),
-  kill: subagentsEvents.rpc("kill"),
-} as const;
-```
-
-### Register a handler
-
-```ts
-import { registerPiRpcHandler } from "@pi-ohm/core/events";
-import { Result } from "better-result";
-import { parseSubagentsHealthRequest, subagentsRpcChannels } from "./events";
-
-const cleanup = registerPiRpcHandler({
-  events: pi.events,
-  channel: subagentsRpcChannels.health,
-  parse: parseSubagentsHealthRequest,
-  handler() {
-    return Result.ok({ namespace: "subagents", version: 1 });
-  },
+events.value.rpc("spawn", parseSpawnRequest, async (request) => {
+  const id = await spawnSubagent(request);
+  return Result.ok({ id });
 });
 ```
 
-Handlers return `better-result` values. Thrown handler failures are caught and sent as `{ success: false, error }` replies.
+Parser failures with a valid `requestId` emit failure replies. Handler `Result.err(...)` values and thrown handler failures also emit failure replies.
 
-### Call a handler from another extension
+## Cleanup and diagnostics
+
+`PiEventRegistry` registers `cleanup()` on `session_shutdown` when the Pi API exposes lifecycle hooks.
 
 ```ts
-import { replyChannel } from "@pi-ohm/core/events";
-
-const requestId = crypto.randomUUID();
-const channel = "subagents:rpc:spawn";
-const reply = replyChannel(channel, requestId);
-
-const unsub = pi.events.on(reply, (payload) => {
-  unsub();
-  // Parse payload as PiRpcReply before trusting it.
-});
-
-pi.events.emit(channel, {
-  requestId,
-  type: "finder",
-  prompt: "Find all config imports",
-  options: { description: "config import audit" },
-});
+const result = events.value.cleanup();
 ```
+
+Non-fatal parser and handler errors are retained as diagnostics:
+
+```ts
+const diagnostics = events.value.diagnostics();
+```
+
+This lets packages surface errors in commands or debug UI without crashing Pi startup.
 
 ## Feature-owned contracts
 
-`@pi-ohm/core/events` intentionally does not export `subagents:*`, `memories:*`, or any other feature-specific channels. Those belong in the feature packages.
+Core does not export feature-specific channels. Put those next to the feature runtime:
 
-For example, `@pi-ohm/subagents` may define:
+```ts
+export const createSubagentsEvents = (pi: PiEventApi) =>
+  PiEventRegistry.create({ namespace: "subagents", pi });
 
-| Channel                | Request                                 | Success data                             |
-| ---------------------- | --------------------------------------- | ---------------------------------------- |
-| `subagents:rpc:health` | `{ requestId }`                         | `{ namespace: "subagents", version: 1 }` |
-| `subagents:rpc:spawn`  | `{ requestId, type, prompt, options? }` | `{ id }`                                 |
-| `subagents:rpc:kill`   | `{ requestId, agentId }`                | `{ killed: true, agentId }`              |
+subagentsEvents.rpc("spawn", parseSpawnRequest, spawnHandler);
+subagentsEvents.rpc("kill", parseKillRequest, killHandler);
+subagentsEvents.rpc("health", parseHealthRequest, healthHandler);
+```
 
-Core only provides helpers such as `parsePiRpcRequest()`, `readPiEventStringField()`, and `invalidPiEventRequest()` so packages can implement parsers consistently.
-
-## Pi lifecycle interop
-
-Use both surfaces together:
-
-- `pi.on("session_start", ...)` to capture active session context.
-- `pi.events.emit("subagents:ready", ...)` to announce availability.
-- `registerPiRpcHandler(...)` to accept public cross-extension requests.
-- `pi.on("session_shutdown", ...)` or `registerPiEvents(...)` to unsubscribe and clear state.
-
-Do not use `globalThis` or package imports for cross-extension runtime access unless the event bus cannot express the interaction. The event bus is the public contract. Durable state belongs in `@pi-ohm/core/db`; live coordination belongs in `@pi-ohm/core/events`.
+Use the bus for live coordination. Use `@pi-ohm/core/db` for durable state.
