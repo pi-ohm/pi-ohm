@@ -1,14 +1,6 @@
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
-import {
-  loadOhmRuntimeConfig,
-  PiConfigRegistry,
-  registerConfig,
-  getDefaultOhmConfig as getDefaultCoreOhmConfig,
-  type OhmConfigDiagnostic,
-  type LoadedOhmRuntimeConfig as LoadedCoreOhmRuntimeConfig,
-  type OhmRuntimeConfig as CoreOhmRuntimeConfig,
-} from "@pi-ohm/core/config";
+import { registerConfig } from "@pi-ohm/core/config";
 import {
   parseSubagentProfilePatch,
   parseSubagentProfileVariantPatch,
@@ -26,16 +18,9 @@ export const SubagentsConfigSchema = Type.Record(Type.String({ minLength: 1 }), 
 
 type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
 
-export type OhmSubagentsRuntimeConfig = CoreOhmRuntimeConfig & {
+export interface OhmSubagentsConfig {
   readonly subagents: OhmSubagentRuntimeConfig;
-};
-
-export type LoadedOhmSubagentsRuntimeConfig = Omit<LoadedCoreOhmRuntimeConfig, "config"> & {
-  readonly config: OhmSubagentsRuntimeConfig;
-};
-
-export type OhmRuntimeConfig = OhmSubagentsRuntimeConfig;
-export type LoadedOhmRuntimeConfig = LoadedOhmSubagentsRuntimeConfig;
+}
 
 export interface OhmSubagentProfileRuntimeConfig {
   model?: string;
@@ -579,74 +564,7 @@ export function resolveSubagentProfileRuntimeConfig(input: {
   };
 }
 
-export async function loadOhmSubagentsRuntimeConfig(
-  cwd: string,
-): Promise<LoadedOhmSubagentsRuntimeConfig> {
-  const runtime = await loadOhmRuntimeConfig(cwd);
-  const registry = PiConfigRegistry.create({ cwd });
-
-  if (Result.isError(registry)) {
-    return withSubagentsConfigDiagnostic(runtime, registry.error);
-  }
-
-  const registeredModule = registry.value.register(subagentsConfigModule);
-  if (Result.isError(registeredModule)) {
-    return withSubagentsConfigDiagnostic(runtime, registeredModule.error);
-  }
-
-  const registered = await registry.value.load();
-
-  if (Result.isError(registered)) {
-    return withSubagentsConfigDiagnostic(runtime, registered.error);
-  }
-
-  const subagents = registered.value.config.subagents;
-  const config = isOhmSubagentRuntimeConfig(subagents)
-    ? subagents
-    : structuredClone(DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG);
-
-  return {
-    ...runtime,
-    config: {
-      ...runtime.config,
-      subagents: config,
-    },
-    loadedFrom: [...runtime.loadedFrom, ...registered.value.loadedFrom].filter(
-      (file, index, files) => files.indexOf(file) === index,
-    ),
-    diagnostics: [...(runtime.diagnostics ?? []), ...registered.value.diagnostics],
-  };
-}
-
-function withSubagentsConfigDiagnostic(
-  runtime: LoadedCoreOhmRuntimeConfig,
-  cause: Error,
-): LoadedOhmSubagentsRuntimeConfig {
-  const diagnostic: OhmConfigDiagnostic = {
-    kind: "read-failed",
-    path: runtime.paths.projectConfigFile,
-    message: cause.message,
-    cause,
-  };
-
-  return {
-    ...runtime,
-    config: {
-      ...runtime.config,
-      subagents: structuredClone(DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG),
-    },
-    diagnostics: [...(runtime.diagnostics ?? []), diagnostic],
-  };
-}
-
-export function getDefaultOhmConfig(): OhmRuntimeConfig {
-  return {
-    ...getDefaultCoreOhmConfig(),
-    subagents: structuredClone(DEFAULT_OHM_SUBAGENT_RUNTIME_CONFIG),
-  };
-}
-
-function isOhmSubagentRuntimeConfig(value: unknown): value is OhmSubagentRuntimeConfig {
+export function isOhmSubagentRuntimeConfig(value: unknown): value is OhmSubagentRuntimeConfig {
   if (!isJsonMap(value)) return false;
   return (
     typeof value.taskMaxConcurrency === "number" &&

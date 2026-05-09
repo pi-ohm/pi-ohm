@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
-import type { StaticDecode, TSchema } from "typebox";
+import { Type, type StaticDecode, type TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";
 import { DEFAULT_OHM_MODE, normalizeOhmMode, type OhmMode } from "./modes";
@@ -15,11 +15,9 @@ import {
 export const OHM_EXTENSION_NAME = "pi-ohm";
 export type OhmSubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
 
-export interface OhmRuntimeConfig {
+export interface OhmCoreConfig {
   defaultMode: OhmMode;
   subagentBackend: OhmSubagentBackend;
-  features: OhmFeatureFlags;
-  painter: OhmPainterProviders;
 }
 
 export interface OhmConfigPaths {
@@ -27,13 +25,6 @@ export interface OhmConfigPaths {
   projectConfigFile: string;
   globalConfigFile: string;
   providersConfigFile: string;
-}
-
-export interface LoadedOhmRuntimeConfig {
-  config: OhmRuntimeConfig;
-  paths: OhmConfigPaths;
-  loadedFrom: readonly string[];
-  diagnostics?: readonly OhmConfigDiagnostic[];
 }
 
 export type OhmConfigDiagnostic =
@@ -113,6 +104,11 @@ export interface LoadRegisteredConfigInput {
   readonly modules: readonly OhmRegisteredConfigModule[];
 }
 
+export interface LoadOhmConfigInput {
+  readonly cwd: string;
+  readonly modules: readonly OhmRegisteredConfigModule[];
+}
+
 export interface PiConfigRegistryInput {
   readonly cwd: string;
 }
@@ -136,6 +132,14 @@ export interface LoadedRegisteredConfig {
   readonly paths: OhmConfigPaths;
   readonly loadedFrom: readonly string[];
   readonly diagnostics: readonly OhmConfigDiagnostic[];
+}
+
+export type LoadedOhmConfig = LoadedRegisteredConfig;
+
+export interface PickOhmConfigInput<Config> {
+  readonly loaded: LoadedOhmConfig;
+  readonly module: OhmRegisteredConfigModule;
+  readonly is: (value: unknown) => value is Config;
 }
 
 export class PiConfigRegistry {
@@ -193,12 +197,32 @@ export class PiConfigRegistry {
   }
 }
 
-const DEFAULT_OHM_CONFIG: OhmRuntimeConfig = {
+export const DEFAULT_OHM_CORE_CONFIG: OhmCoreConfig = {
   defaultMode: DEFAULT_OHM_MODE,
   subagentBackend: "interactive-sdk",
-  features: DEFAULT_OHM_FEATURE_FLAGS,
-  painter: DEFAULT_OHM_PAINTER_PROVIDERS,
 };
+
+const CoreConfigSchema = Type.Object(
+  {
+    defaultMode: Type.Optional(
+      Type.Union([Type.Literal("rush"), Type.Literal("smart"), Type.Literal("deep")]),
+    ),
+    subagentBackend: Type.Optional(
+      Type.Union([
+        Type.Literal("none"),
+        Type.Literal("interactive-shell"),
+        Type.Literal("interactive-sdk"),
+        Type.Literal("custom-plugin"),
+      ]),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+const UnknownRecordSchema = Type.Record(Type.String({ minLength: 1 }), Type.Unknown());
+
+type CoreConfigPatch = StaticDecode<typeof CoreConfigSchema>;
+type UnknownRecordPatch = StaticDecode<typeof UnknownRecordSchema>;
 
 type JsonMap = Record<string, unknown>;
 
@@ -268,6 +292,50 @@ export function registerConfig<Config, Schema extends TSchema>(
       };
     },
   };
+}
+
+export const coreConfigModule = registerConfig({
+  namespace: "core",
+  schema: CoreConfigSchema,
+  defaults: DEFAULT_OHM_CORE_CONFIG,
+  merge(base: OhmCoreConfig, patch: CoreConfigPatch) {
+    return Result.ok({
+      defaultMode: patch.defaultMode ?? base.defaultMode,
+      subagentBackend: patch.subagentBackend ?? base.subagentBackend,
+    });
+  },
+});
+
+export const featuresConfigModule = registerConfig({
+  namespace: "features",
+  schema: UnknownRecordSchema,
+  defaults: DEFAULT_OHM_FEATURE_FLAGS,
+  merge(base: OhmFeatureFlags, patch: UnknownRecordPatch) {
+    return Result.ok(mergeOhmFeatureFlags(base, patch));
+  },
+});
+
+export const painterConfigModule = registerConfig({
+  namespace: "painter",
+  schema: UnknownRecordSchema,
+  defaults: DEFAULT_OHM_PAINTER_PROVIDERS,
+  merge(base: OhmPainterProviders, patch: UnknownRecordPatch) {
+    return Result.ok(mergeOhmPainterProviders(base, patch));
+  },
+});
+
+export function pickOhmConfig<Config>(
+  input: PickOhmConfigInput<Config>,
+): OhmConfigLoadResult<Config> {
+  const value = input.loaded.config[input.module.namespace];
+  if (input.is(value)) return Result.ok(value);
+
+  return Result.err(
+    new OhmConfigRuntimeError({
+      code: "config_namespace_missing",
+      message: `Loaded Ohm config is missing namespace "${input.module.namespace}"`,
+    }),
+  );
 }
 
 async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
@@ -424,11 +492,6 @@ interface RegisteredLoadState {
   readonly diagnostics: readonly OhmConfigDiagnostic[];
 }
 
-interface RuntimeLoadState {
-  readonly config: OhmRuntimeConfig;
-  readonly loadedFrom: readonly string[];
-}
-
 export async function loadRegisteredConfig(
   input: LoadRegisteredConfigInput,
 ): Promise<OhmConfigLoadResult<LoadedRegisteredConfig>> {
@@ -441,6 +504,12 @@ export async function loadRegisteredConfig(
   }
 
   return registry.value.load();
+}
+
+export async function loadOhmConfig(
+  input: LoadOhmConfigInput,
+): Promise<OhmConfigLoadResult<LoadedOhmConfig>> {
+  return loadRegisteredConfig(input);
 }
 
 async function loadConfigModules(
@@ -492,89 +561,44 @@ async function loadConfigModules(
   });
 }
 
-function normalizeSubagentBackend(
-  value: unknown,
-  fallback: OhmSubagentBackend,
-): OhmSubagentBackend {
-  if (
-    value === "none" ||
-    value === "interactive-shell" ||
-    value === "interactive-sdk" ||
-    value === "custom-plugin"
-  ) {
-    return value;
-  }
-  return fallback;
+export function isOhmCoreConfig(value: unknown): value is OhmCoreConfig {
+  if (!isJsonMap(value)) return false;
+  return (
+    normalizeOhmMode(value.defaultMode, DEFAULT_OHM_MODE) === value.defaultMode &&
+    (value.subagentBackend === "none" ||
+      value.subagentBackend === "interactive-shell" ||
+      value.subagentBackend === "interactive-sdk" ||
+      value.subagentBackend === "custom-plugin")
+  );
 }
 
-function mergeConfig(base: OhmRuntimeConfig, patch: JsonMap): OhmRuntimeConfig {
-  const next: OhmRuntimeConfig = structuredClone(base);
-
-  next.defaultMode = normalizeOhmMode(patch.defaultMode, next.defaultMode);
-  next.subagentBackend = normalizeSubagentBackend(patch.subagentBackend, next.subagentBackend);
-
-  next.features = mergeOhmFeatureFlags(next.features, patch.features);
-  next.painter = mergeOhmPainterProviders(next.painter, patch.painter);
-
-  return next;
+export function isOhmFeatureFlags(value: unknown): value is OhmFeatureFlags {
+  if (!isJsonMap(value)) return false;
+  return (
+    typeof value.handoff === "boolean" &&
+    typeof value.subagents === "boolean" &&
+    typeof value.sessionThreadSearch === "boolean" &&
+    typeof value.handoffVisualizer === "boolean" &&
+    typeof value.painterImagegen === "boolean"
+  );
 }
 
-function applyExtensionSettings(config: OhmRuntimeConfig): OhmRuntimeConfig {
-  return config;
-}
+export function isOhmPainterProviders(value: unknown): value is OhmPainterProviders {
+  if (!isJsonMap(value)) return false;
+  if (!isJsonMap(value.googleNanoBanana)) return false;
+  if (!isJsonMap(value.openai)) return false;
+  if (!isJsonMap(value.azureOpenai)) return false;
 
-export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntimeConfig> {
-  const paths = resolveOhmConfigPaths(cwd);
-  const files = [
-    await readConfigFile(paths.globalConfigFile),
-    await readConfigFile(paths.projectConfigFile),
-    await readConfigFile(paths.providersConfigFile),
-  ];
-
-  const configFiles = files.map((file) => {
-    if (file.path !== paths.providersConfigFile) return file;
-    if (!file.value) return file;
-    return { path: file.path, value: { painter: file.value } };
-  });
-
-  const diagnostics = configFiles
-    .map((file) => file.diagnostic)
-    .filter((diagnostic): diagnostic is OhmConfigDiagnostic => diagnostic !== undefined);
-
-  const initial: RuntimeLoadState = {
-    config: structuredClone(DEFAULT_OHM_CONFIG),
-    loadedFrom: [],
-  };
-
-  const state = configFiles.reduce<RuntimeLoadState>((current, file) => {
-    if (!file.value) return current;
-    return {
-      config: mergeConfig(current.config, file.value),
-      loadedFrom: [...current.loadedFrom, file.path],
-    };
-  }, initial);
-
-  return {
-    config: applyExtensionSettings(state.config),
-    paths,
-    loadedFrom: state.loadedFrom,
-    diagnostics,
-  };
-}
-
-export function registerOhmSettings(_pi: unknown): void {}
-
-export function getOhmSetting(settingId: string, defaultValue?: string): string | undefined {
-  return defaultValue;
-}
-
-export function setOhmSetting(settingId: string, value: string): void {
-  void settingId;
-  void value;
-}
-
-export function getDefaultOhmConfig(): OhmRuntimeConfig {
-  return structuredClone(DEFAULT_OHM_CONFIG);
+  return (
+    typeof value.googleNanoBanana.enabled === "boolean" &&
+    typeof value.googleNanoBanana.model === "string" &&
+    typeof value.openai.enabled === "boolean" &&
+    typeof value.openai.model === "string" &&
+    typeof value.azureOpenai.enabled === "boolean" &&
+    typeof value.azureOpenai.deployment === "string" &&
+    typeof value.azureOpenai.endpoint === "string" &&
+    typeof value.azureOpenai.apiVersion === "string"
+  );
 }
 
 export { DEFAULT_OHM_FEATURE_FLAGS, mergeOhmFeatureFlags, type OhmFeatureFlags } from "./features";

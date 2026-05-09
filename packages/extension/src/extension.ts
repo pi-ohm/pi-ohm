@@ -1,5 +1,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/core/config";
+import { Result } from "better-result";
+import {
+  coreConfigModule,
+  featuresConfigModule,
+  isOhmCoreConfig,
+  isOhmFeatureFlags,
+  loadOhmConfig,
+  painterConfigModule,
+  pickOhmConfig,
+} from "@pi-ohm/core/config";
 import registerHandoffExtension from "@pi-ohm/handoff";
 import registerSubagentsExtension from "@pi-ohm/subagents";
 import registerSessionSearchExtension from "@pi-ohm/session-search";
@@ -8,9 +17,31 @@ import registerModesExtension from "@pi-ohm/modes";
 import registerMemoriesExtension from "@pi-ohm/memories";
 import { OHM_FEATURE_PACKAGES, OHM_RECOMMENDED_NEXT } from "./manifest";
 
-export default function registerPiOhmExtension(pi: ExtensionAPI): void {
-  registerOhmSettings(pi);
+async function loadBundleConfig(cwd: string) {
+  const loaded = await loadOhmConfig({
+    cwd,
+    modules: [coreConfigModule, featuresConfigModule, painterConfigModule],
+  });
+  if (Result.isError(loaded)) return Result.err(loaded.error);
 
+  const core = pickOhmConfig({
+    loaded: loaded.value,
+    module: coreConfigModule,
+    is: isOhmCoreConfig,
+  });
+  if (Result.isError(core)) return Result.err(core.error);
+
+  const features = pickOhmConfig({
+    loaded: loaded.value,
+    module: featuresConfigModule,
+    is: isOhmFeatureFlags,
+  });
+  if (Result.isError(features)) return Result.err(features.error);
+
+  return Result.ok({ loaded: loaded.value, core: core.value, features: features.value });
+}
+
+export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   registerHandoffExtension(pi);
   registerSubagentsExtension(pi);
   registerSessionSearchExtension(pi);
@@ -21,14 +52,19 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   pi.registerCommand("ohm-features", {
     description: "Show installed pi-ohm feature packages and feature flags",
     handler: async (_args, ctx) => {
-      const { config } = await loadOhmRuntimeConfig(ctx.cwd);
+      const config = await loadBundleConfig(ctx.cwd);
+      if (Result.isError(config)) {
+        console.log(config.error.message);
+        return;
+      }
+
       const lines = [
-        `handoff: ${config.features.handoff ? "on" : "off"}`,
-        `subagents: ${config.features.subagents ? "on" : "off"}`,
-        `sessionThreadSearch: ${config.features.sessionThreadSearch ? "on" : "off"}`,
-        `handoffVisualizer: ${config.features.handoffVisualizer ? "on" : "off"}`,
-        `painterImagegen: ${config.features.painterImagegen ? "on" : "off"}`,
-        `defaultMode: ${config.defaultMode}`,
+        `handoff: ${config.value.features.handoff ? "on" : "off"}`,
+        `subagents: ${config.value.features.subagents ? "on" : "off"}`,
+        `sessionThreadSearch: ${config.value.features.sessionThreadSearch ? "on" : "off"}`,
+        `handoffVisualizer: ${config.value.features.handoffVisualizer ? "on" : "off"}`,
+        `painterImagegen: ${config.value.features.painterImagegen ? "on" : "off"}`,
+        `defaultMode: ${config.value.core.defaultMode}`,
       ];
 
       const text = [
@@ -53,17 +89,21 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   pi.registerCommand("ohm-config", {
     description: "Inspect effective Pi OHM runtime config",
     handler: async (_args, ctx) => {
-      const loaded = await loadOhmRuntimeConfig(ctx.cwd);
+      const config = await loadBundleConfig(ctx.cwd);
+      if (Result.isError(config)) {
+        console.log(config.error.message);
+        return;
+      }
+
       const text = [
         "Pi OHM effective config",
         "",
-        JSON.stringify(loaded.config, null, 2),
+        JSON.stringify(config.value.loaded.config, null, 2),
         "",
-        `configDir: ${loaded.paths.configDir}`,
-        `projectConfigFile: ${loaded.paths.projectConfigFile}`,
-        `globalConfigFile: ${loaded.paths.globalConfigFile}`,
-        `providersConfigFile: ${loaded.paths.providersConfigFile}`,
-        `loadedFrom: ${loaded.loadedFrom.length > 0 ? loaded.loadedFrom.join(", ") : "defaults + extension settings"}`,
+        `configDir: ${config.value.loaded.paths.configDir}`,
+        `projectConfigFile: ${config.value.loaded.paths.projectConfigFile}`,
+        `globalConfigFile: ${config.value.loaded.paths.globalConfigFile}`,
+        `loadedFrom: ${config.value.loaded.loadedFrom.length > 0 ? config.value.loaded.loadedFrom.join(", ") : "defaults"}`,
       ].join("\n");
 
       if (!ctx.hasUI) {

@@ -1,10 +1,26 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Result } from "better-result";
 import {
-  loadOhmRuntimeConfig,
-  registerOhmSettings,
-  setOhmSetting,
+  coreConfigModule,
+  isOhmCoreConfig,
+  loadOhmConfig,
+  pickOhmConfig,
   type OhmMode,
 } from "@pi-ohm/core/config";
+
+async function loadModesConfig(cwd: string) {
+  const loaded = await loadOhmConfig({ cwd, modules: [coreConfigModule] });
+  if (Result.isError(loaded)) return Result.err(loaded.error);
+
+  const core = pickOhmConfig({
+    loaded: loaded.value,
+    module: coreConfigModule,
+    is: isOhmCoreConfig,
+  });
+  if (Result.isError(core)) return Result.err(core.error);
+
+  return Result.ok({ loaded: loaded.value, core: core.value });
+}
 
 const MODES: readonly OhmMode[] = ["rush", "smart", "deep"] as const;
 
@@ -44,15 +60,14 @@ function parseRequestedMode(args: unknown): OhmMode | null {
 }
 
 async function refreshModeStatus(ctx: ExtensionContext): Promise<void> {
-  const { config } = await loadOhmRuntimeConfig(ctx.cwd);
+  const config = await loadModesConfig(ctx.cwd);
+  if (Result.isError(config)) return;
   if (!ctx.hasUI) return;
 
-  ctx.ui.setStatus("ohm-mode", `mode:${config.defaultMode}`);
+  ctx.ui.setStatus("ohm-mode", `mode:${config.value.core.defaultMode}`);
 }
 
 export default function registerModesExtension(pi: ExtensionAPI): void {
-  registerOhmSettings(pi);
-
   pi.on("session_start", async (_event, ctx) => {
     await refreshModeStatus(ctx);
   });
@@ -60,15 +75,20 @@ export default function registerModesExtension(pi: ExtensionAPI): void {
   pi.registerCommand("ohm-modes", {
     description: "Show available modes and current default mode",
     handler: async (_args, ctx) => {
-      const { config, loadedFrom } = await loadOhmRuntimeConfig(ctx.cwd);
+      const config = await loadModesConfig(ctx.cwd);
+      if (Result.isError(config)) {
+        console.log(config.error.message);
+        return;
+      }
+
       const text = [
         "Pi OHM modes",
         "",
-        `defaultMode: ${config.defaultMode}`,
+        `defaultMode: ${config.value.core.defaultMode}`,
         `available: ${MODES.join(", ")}`,
         "",
         "Set mode with: /ohm-mode <rush|smart|deep>",
-        `loadedFrom: ${loadedFrom.length > 0 ? loadedFrom.join(", ") : "defaults + extension settings"}`,
+        `loadedFrom: ${config.value.loaded.loadedFrom.length > 0 ? config.value.loaded.loadedFrom.join(", ") : "defaults"}`,
       ].join("\n");
 
       if (!ctx.hasUI) {
@@ -97,14 +117,12 @@ export default function registerModesExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      setOhmSetting("default-mode", requestedMode);
-      await refreshModeStatus(ctx);
-
       const text = [
-        "Pi OHM mode updated",
+        "Pi OHM mode",
         "",
-        `defaultMode: ${requestedMode}`,
-        "Tip: run /ohm-config to inspect merged runtime config.",
+        `requestedMode: ${requestedMode}`,
+        "Persist by setting core.defaultMode in ohm.json.",
+        "Tip: run /ohm-config to inspect merged config.",
       ].join("\n");
 
       if (!ctx.hasUI) {
