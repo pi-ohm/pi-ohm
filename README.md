@@ -88,7 +88,6 @@ pi-ohm/
 ├── packages/
 │   ├── config/                     # @pi-ohm/config
 │   ├── core/                       # @pi-ohm/core (shared runtime primitives)
-│   ├── db/                         # @pi-ohm/db (internal state/session store)
 │   ├── tui/                        # @pi-ohm/tui
 │   ├── modes/                      # @pi-ohm/modes
 │   ├── handoff/                    # @pi-ohm/handoff (includes visualizer)
