@@ -159,7 +159,6 @@ Preferred backend:
 
 The SDK subprocess gives isolation, cancellation, session ownership, and typed control without reimplementing Pi.
 
-
 ## Controller process lifecycle
 
 Default runtime shape is one SDK controller subprocess per root parent session. That process owns the live `AgentRegistry`, manages many child Pi sessions, and communicates with the parent extension over stdio JSON-RPC.
@@ -570,9 +569,9 @@ Avoid nested action payloads:
 agent_controller({
   action: {
     spawn_agent: {
-      task_name: "review-auth"
-    }
-  }
+      task_name: "review-auth",
+    },
+  },
 });
 ```
 
