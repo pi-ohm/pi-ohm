@@ -102,6 +102,14 @@ pi-ohm/
 └── .github/workflows/
 ```
 
+</details>
+
+<details>
+  <summary>
+    <strong>Publishing (click to expand)</strong>
+    <p>Branch flow, release-please, npm channels, trusted publishing, manual publishing.</p>
+  </summary>
+
 #### Branch model
 
 - `dev` = default integration branch
