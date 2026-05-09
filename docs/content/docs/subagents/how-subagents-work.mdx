@@ -18,6 +18,27 @@ The direction is simple: subagents should be real Pi coding-agent sessions, not 
 - Avoid the old non-standard settings extension.
 - Use standard Pi settings from `PI_CODING_AGENT_DIR` / `~/.pi/agent/settings.json` and project `.pi/settings.json`.
 - Use `@earendil-works/*` Pi packages with exact pinned versions.
+- Treat `better-result` `Result` values as the primitive for recoverable errors. No thrown-control-flow across config, DB, runner, graph, or tool boundaries.
+
+## Naming contract
+
+Pi uses sessions, so storage and implementation names should use session language. Avoid `thread` names except when comparing this design to Codex or other systems.
+
+- Public/model-facing names: `agent_id`, `task_id`, `nickname`.
+- Storage names: `parent_session_id`, `child_session_id`, `child_session_file`.
+- Tool arguments may use `target` for any accepted lookup key: task id, agent id, nickname, or path.
+
+## Result-first error model
+
+Every recoverable boundary returns `Result<T, E>` from `better-result`. This includes config loading, DB migrations, graph operations, runner protocol calls, child session lifecycle, parent session writes, and controller tool handlers.
+
+Rules:
+
+- Parse external input at boundaries into typed ADTs.
+- Return typed tagged errors with stable `code`, `stage`, `message`, and optional metadata.
+- Convert thrown SDK/process/libsql failures immediately into typed errors.
+- Do not silently fall back. Continue only when the error has been recorded as diagnostics and the fallback is part of the contract.
+- Tool responses should map `Result.err` into structured model-readable failures, not thrown exceptions.
 
 ## Package boundaries
 
@@ -45,7 +66,7 @@ interface OhmDbModule {
 
 interface OhmDbMigration {
   readonly id: string;
-  readonly up: (db: OhmDbClient) => Promise<void>;
+  readonly up: (db: OhmDbClient) => Promise<Result<void, OhmDbMigrationError>>;
 }
 ```
 
@@ -120,13 +141,13 @@ The implementation should hide process details behind a runner interface:
 
 ```ts
 interface AgentRunner {
-  spawn(input: SpawnAgentArgs): Promise<SpawnAgentResult>;
-  send(input: SendInputArgs): Promise<SendInputResult>;
-  wait(input: WaitAgentArgs): Promise<WaitAgentResult>;
-  close(input: CloseAgentArgs): Promise<CloseAgentResult>;
-  resume(input: ResumeAgentArgs): Promise<ResumeAgentResult>;
-  get(input: GetAgentResultArgs): Promise<GetAgentResultResult>;
-  list(input: ListAgentsArgs): Promise<ListAgentsResult>;
+  spawn(input: SpawnAgentArgs): Promise<Result<SpawnAgentResult, AgentRunnerError>>;
+  send(input: SendInputArgs): Promise<Result<SendInputResult, AgentRunnerError>>;
+  wait(input: WaitAgentArgs): Promise<Result<WaitAgentResult, AgentRunnerError>>;
+  close(input: CloseAgentArgs): Promise<Result<CloseAgentResult, AgentRunnerError>>;
+  resume(input: ResumeAgentArgs): Promise<Result<ResumeAgentResult, AgentRunnerError>>;
+  get(input: GetAgentResultArgs): Promise<Result<GetAgentResultResult, AgentRunnerError>>;
+  list(input: ListAgentsArgs): Promise<Result<ListAgentsResult, AgentRunnerError>>;
 }
 ```
 
@@ -137,6 +158,19 @@ Preferred backend:
 3. `cli` - fallback/debug only.
 
 The SDK subprocess gives isolation, cancellation, session ownership, and typed control without reimplementing Pi.
+
+
+## Controller process lifecycle
+
+Default runtime shape is one SDK controller subprocess per root parent session. That process owns the live `AgentRegistry`, manages many child Pi sessions, and communicates with the parent extension over stdio JSON-RPC.
+
+Reasons:
+
+- One shared registry naturally enforces `agent_max_threads`, nicknames, and path reservations.
+- Child sessions stay isolated from the parent extension process without creating one controller process per agent.
+- Resume can rebuild live state from parent session custom entries plus graph DB edges.
+
+Per-agent subprocesses are allowed only as an internal fallback/debug mode if the controller process proves too coupled or hard to recover.
 
 ## Agent metadata and status
 
@@ -150,16 +184,16 @@ interface AgentMetadata {
 }
 
 type AgentStatus =
-  | "pending_init"
-  | "running"
-  | "interrupted"
-  | { readonly completed: string | null }
-  | { readonly errored: string }
-  | "shutdown"
-  | "not_found";
+  | { readonly state: "pending_init" }
+  | { readonly state: "running" }
+  | { readonly state: "interrupted" }
+  | { readonly state: "completed"; readonly result: string | null }
+  | { readonly state: "errored"; readonly error: string }
+  | { readonly state: "shutdown" }
+  | { readonly state: "not_found" };
 
-interface ThreadSpawnSource {
-  readonly parent_thread_id: string;
+interface SessionSpawnSource {
+  readonly parent_session_id: string;
   readonly depth: number;
   readonly agent_path?: string | null;
   readonly agent_nickname?: string | null;
@@ -169,13 +203,13 @@ interface ThreadSpawnSource {
 
 ## Live storage
 
-`AgentControl` is cloned into every thread in a root tree. It owns an `AgentRegistry` shared by the root and descendants.
+`AgentControl` is cloned into every session in a root session tree. It owns an `AgentRegistry` shared by the root and descendants.
 
 `AgentRegistry` tracks:
 
 ```ts
 interface AgentRegistryState {
-  readonly agent_tree: ReadonlyMap<string, AgentMetadata>;
+  readonly agent_sessions: ReadonlyMap<string, AgentMetadata>;
   readonly used_agent_nicknames: ReadonlySet<string>;
   readonly nickname_reset_count: number;
   readonly total_count: number;
@@ -183,9 +217,9 @@ interface AgentRegistryState {
 }
 ```
 
-Keys are canonical paths or `thread:<id>`.
+Keys are canonical paths or `session:<id>`.
 
-Spawn uses a reservation object. Reservation increments thread count and reserves path/nickname before async work begins. If spawn fails before commit, cleanup releases reservations.
+Spawn uses a reservation object. Reservation increments agent count and reserves path/nickname before async work begins. If spawn fails before commit, cleanup releases reservations.
 
 ```ts
 interface AgentReservation {
@@ -219,8 +253,9 @@ Spawn edges are persisted in `@pi-ohm/core/db` as directional parent-child edges
 type AgentGraphEdgeStatus = "open" | "closed";
 
 interface AgentGraphEdge {
-  readonly parentThreadId: string;
-  readonly childThreadId: string;
+  readonly parentSessionId: string;
+  readonly childSessionId: string;
+  readonly childSessionFile: string;
   readonly status: AgentGraphEdgeStatus;
   readonly agentPath?: string | null;
   readonly agentNickname?: string | null;
@@ -230,33 +265,34 @@ interface AgentGraphEdge {
 }
 
 interface AgentGraphStore {
-  upsertThreadSpawnEdge(
-    parentThreadId: string,
-    childThreadId: string,
+  upsertSessionSpawnEdge(
+    parentSessionId: string,
+    childSessionId: string,
+    childSessionFile: string,
     status: AgentGraphEdgeStatus,
-  ): Promise<void>;
+  ): Promise<Result<void, AgentGraphStoreError>>;
 
-  setThreadSpawnEdgeStatus(
-    childThreadId: string,
+  setSessionSpawnEdgeStatus(
+    childSessionId: string,
     status: AgentGraphEdgeStatus,
-  ): Promise<void>;
+  ): Promise<Result<void, AgentGraphStoreError>>;
 
-  listThreadSpawnChildren(
-    parentThreadId: string,
+  listSessionSpawnChildren(
+    parentSessionId: string,
     status?: AgentGraphEdgeStatus,
-  ): Promise<string[]>;
+  ): Promise<Result<readonly AgentGraphEdge[], AgentGraphStoreError>>;
 
-  listThreadSpawnDescendants(
-    rootThreadId: string,
+  listSessionSpawnDescendants(
+    rootSessionId: string,
     status?: AgentGraphEdgeStatus,
-  ): Promise<string[]>;
+  ): Promise<Result<readonly AgentGraphEdge[], AgentGraphStoreError>>;
 }
 ```
 
 Rules:
 
 - On spawn, store edge as `open`.
-- On resume, reopen persisted open descendants breadth-first.
+- On resume, reopen persisted open descendants breadth-first using stored `childSessionFile` paths.
 - `close_agent` marks the target edge `closed`, then shuts down target and live descendants.
 - Session files remain the transcript source of truth.
 - DB is an index and graph store, not an alternate session store.
@@ -274,8 +310,9 @@ interface ParentAgentEventEntry {
     | "agent_closed"
     | "agent_resumed";
   readonly task_id: string;
-  readonly child_thread_id?: string;
+  readonly child_session_id?: string;
   readonly child_session_file?: string;
+  readonly parent_entry_id?: string;
   readonly status?: AgentStatus;
   readonly at_epoch_ms: number;
 }
@@ -288,14 +325,14 @@ Use:
 
 ## Rollouts and forks
 
-Each subagent is its own Pi thread/session with its own rollout.
+Each subagent is its own Pi session with its own rollout.
 
 Fork flow:
 
 1. Parent rollout is materialized and flushed.
 2. Parent stored history is read, including archived history.
 3. History is filtered.
-4. Child thread starts with forked initial history.
+4. Child session starts with forked initial history.
 
 Fork keeps:
 
@@ -346,7 +383,7 @@ Agent files should also be supported:
 ~/.pi/agent/agents/reviewer.md
 ```
 
-Settings override files. Project settings override global settings. Built-ins are defaults that user config can override.
+Config precedence is fixed: built-ins < global agent files < global settings < project agent files < project settings < spawn args. Settings override files at the same scope. Project scope overrides global scope. Built-ins are defaults that user config can override.
 
 ## Tool surface
 
@@ -356,7 +393,7 @@ The preferred public tool is one flat discriminated controller:
 interface AgentControllerArgs {
   readonly action:
     | "spawn_agent"
-    | "send_input"
+    | "send_agent_input"
     | "wait_agent"
     | "close_agent"
     | "resume_agent"
@@ -369,7 +406,7 @@ The implementation schema should be a discriminated union by `action`, not neste
 
 ### `spawn_agent`
 
-Creates a new Pi thread/session and submits initial input. It does not wait for completion by default.
+Creates a new Pi session and submits initial input. It does not wait for completion by default.
 
 ```ts
 interface SpawnAgentArgs {
@@ -404,13 +441,13 @@ Fields:
 - `run_in_background` - run without blocking parent. Defaults to `true`.
 - `fork_context` - fork parent context into the child. Defaults from agent config.
 
-### `send_input`
+### `send_agent_input`
 
-Queues or steers input to an existing spawned Pi thread.
+Queues or steers input to an existing spawned Pi session.
 
 ```ts
 interface SendInputArgs {
-  readonly action: "send_input";
+  readonly action: "send_agent_input";
   readonly target: string;
   readonly prompt: string;
   readonly mode?: "prompt" | "steer" | "follow_up";
@@ -475,7 +512,7 @@ interface ResumeAgentResult {
 
 ### `get_agent_result`
 
-Checks status and retrieves results from a spawned Pi thread if available.
+Checks status and retrieves results from a spawned Pi session if available.
 
 ```ts
 interface GetAgentResultArgs {
@@ -493,7 +530,7 @@ interface GetAgentResultResult {
 
 ### `list_agents`
 
-Lists live agents in the current root thread tree. Can filter by task-path prefix.
+Lists live agents in the current root session tree. Can filter by task-path prefix.
 
 ```ts
 interface ListAgentsArgs {
