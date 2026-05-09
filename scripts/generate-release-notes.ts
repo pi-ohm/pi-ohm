@@ -20,7 +20,6 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const SOURCES: ChangelogSource[] = [
-  { label: "@pi-ohm/config", path: "packages/config/CHANGELOG.md" },
   { label: "@pi-ohm/core", path: "packages/core/CHANGELOG.md" },
   { label: "@pi-ohm/modes", path: "packages/modes/CHANGELOG.md" },
   { label: "@pi-ohm/handoff", path: "packages/handoff/CHANGELOG.md" },

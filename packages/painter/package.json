@@ -30,7 +30,7 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",
     "@earendil-works/pi-tui": "catalog:pi",
-    "@pi-ohm/config": "workspace:*"
+    "@pi-ohm/core": "workspace:*"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.74.0"

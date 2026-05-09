@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
+import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import type { TaskExecutionBackend } from "../../../runtime/backend/types";
 import { createInMemoryTaskRuntimeStore } from "../../../runtime/tasks/store";

@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { resolveOhmConfigPaths } from "@pi-ohm/config";
+import { resolveOhmConfigPaths } from "@pi-ohm/core/config";
 import {
   DEFAULT_SUBAGENT_PROMPT_PROFILE_RULES,
   isSubagentPromptProfile,

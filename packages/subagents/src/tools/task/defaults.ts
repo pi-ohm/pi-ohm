@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { loadOhmRuntimeConfig } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig } from "@pi-ohm/core/config";
 import { resolveOhmAgentDataHome } from "@pi-ohm/core/paths";
 import { getSubagentById, OHM_SUBAGENT_CATALOG } from "../../catalog";
 import { createDefaultTaskExecutionBackend } from "../../runtime/backend/index";

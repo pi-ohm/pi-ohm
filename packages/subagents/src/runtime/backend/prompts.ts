@@ -1,8 +1,8 @@
 import type { TaskBackendSendInput, TaskBackendStartInput } from "./types";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { resolveOhmConfigDir } from "@pi-ohm/config";
-import { resolveSubagentProfileRuntimeConfig } from "@pi-ohm/config/subagents";
+import { resolveOhmConfigDir } from "@pi-ohm/core/config";
+import { resolveSubagentProfileRuntimeConfig } from "@pi-ohm/core/config";
 import { getSubagentDescription } from "../../catalog";
 import { resolveBuiltInSubagentPromptReference } from "./subagent-prompts";
 

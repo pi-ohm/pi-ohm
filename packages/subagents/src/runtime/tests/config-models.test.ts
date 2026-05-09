@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { loadOhmRuntimeConfig, resolveSubagentProfileRuntimeConfig } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig, resolveSubagentProfileRuntimeConfig } from "@pi-ohm/core/config";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);

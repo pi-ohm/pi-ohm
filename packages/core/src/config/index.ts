@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
 import type { StaticDecode, TSchema } from "typebox";
 import { Value } from "typebox/value";
@@ -502,7 +501,7 @@ export async function loadOhmRuntimeConfig(cwd: string): Promise<LoadedOhmRuntim
   };
 }
 
-export function registerOhmSettings(_pi: ExtensionAPI): void {}
+export function registerOhmSettings(_pi: unknown): void {}
 
 export function getOhmSetting(settingId: string, defaultValue?: string): string | undefined {
   return defaultValue;

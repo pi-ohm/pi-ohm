@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getDefaultOhmConfig, type OhmRuntimeConfig } from "@pi-ohm/config";
+import { getDefaultOhmConfig, type OhmRuntimeConfig } from "@pi-ohm/core/config";
 import { resolveRuntimeSubagentById, resolveRuntimeSubagentCatalog } from "../subagent-profiles";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {

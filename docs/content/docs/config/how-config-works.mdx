@@ -4,7 +4,7 @@ description: Planned pi-ohm config architecture, file precedence, schemas, and d
 icon: Settings
 ---
 
-This page describes the target `@pi-ohm/config` architecture.
+This page describes the target `@pi-ohm/core/config` architecture.
 
 `pi-ohm` config should live in `ohm.json`, not Pi's `settings.json`. Pi settings are for Pi itself. Ohm config is for Ohm packages and extension behavior.
 
@@ -58,7 +58,7 @@ Packages define their own config modules. A module owns its namespace, TypeBox s
 
 ```ts
 import { Type, type StaticDecode } from "typebox";
-import { registerConfig } from "@pi-ohm/config";
+import { registerConfig } from "@pi-ohm/core/config";
 
 const SubagentsConfigSchema = Type.Object(
   {
@@ -151,7 +151,7 @@ Rules:
 
 ## Package boundaries
 
-`@pi-ohm/config` owns:
+`@pi-ohm/core/config` owns:
 
 - path resolution
 - JSON reading
@@ -167,4 +167,4 @@ Feature packages own:
 - merge semantics
 - domain-specific normalization
 
-This keeps config extensible without centralizing every package's domain model in `@pi-ohm/config`.
+This keeps config extensible without centralizing every package's domain model in `@pi-ohm/core/config`.

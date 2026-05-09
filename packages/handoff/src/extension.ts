@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/core/config";
 
 function renderHandoffMapWidget(ctx: ExtensionContext, visible: boolean): void {
   if (!ctx.hasUI) return;

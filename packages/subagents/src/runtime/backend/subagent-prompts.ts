@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveSubagentVariantPattern } from "@pi-ohm/config/subagents";
+import { resolveSubagentVariantPattern } from "@pi-ohm/core/config";
 
 interface BuiltInSubagentPromptProfile {
   readonly defaultPromptFile: string;

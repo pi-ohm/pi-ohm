@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Theme, type AgentToolResult, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/config";
+import type { LoadedOhmRuntimeConfig, OhmRuntimeConfig } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../catalog";
 import { createInMemoryTaskRuntimeStore } from "../../runtime/tasks/store";

@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import type { OhmRuntimeConfig } from "@pi-ohm/core/config";
 import type { OhmSubagentDefinition } from "../../catalog";
 import type { SubagentRuntimeError, SubagentResult } from "../../errors";
 import type { TaskExecutionEvent } from "../events";

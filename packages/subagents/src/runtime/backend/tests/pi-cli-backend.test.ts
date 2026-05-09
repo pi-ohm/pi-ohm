@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { OhmRuntimeConfig, OhmSubagentBackend } from "@pi-ohm/config";
+import type { OhmRuntimeConfig, OhmSubagentBackend } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../../catalog";
 import { SubagentRuntimeError } from "../../../errors";

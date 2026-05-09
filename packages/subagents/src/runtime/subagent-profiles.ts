@@ -1,8 +1,8 @@
-import { type OhmRuntimeConfig } from "@pi-ohm/config";
+import { type OhmRuntimeConfig } from "@pi-ohm/core/config";
 import {
   getSubagentProfileRuntimeConfig,
   resolveSubagentProfileRuntimeConfig,
-} from "@pi-ohm/config/subagents";
+} from "@pi-ohm/core/config";
 import { getSubagentById, OHM_SUBAGENT_CATALOG, type OhmSubagentDefinition } from "../catalog";
 
 function toTitleCaseFromId(id: string): string {

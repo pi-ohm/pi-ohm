@@ -51,7 +51,7 @@ amp features:
 helpers:
 
 - `@pi-ohm/tui`
-- `@pi-ohm/config`
+- `@pi-ohm/core/config`
 - `@pi-ohm/core`
 
 Full bundle package:

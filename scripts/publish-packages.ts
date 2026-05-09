@@ -118,7 +118,6 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS = [
-  "packages/config",
   "packages/core",
   "packages/modes",
   "packages/handoff",

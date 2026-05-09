@@ -4,7 +4,7 @@ import {
   registerOhmSettings,
   setOhmSetting,
   type OhmMode,
-} from "@pi-ohm/config";
+} from "@pi-ohm/core/config";
 
 const MODES: readonly OhmMode[] = ["rush", "smart", "deep"] as const;
 

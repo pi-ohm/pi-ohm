@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { resolveOhmConfigDir } from "@pi-ohm/config";
+import { resolveOhmConfigDir } from "@pi-ohm/core/config";
 
 export type PiScopedModelSource =
   | "project_local"

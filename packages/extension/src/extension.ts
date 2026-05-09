@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/core/config";
 import registerHandoffExtension from "@pi-ohm/handoff";
 import registerSubagentsExtension from "@pi-ohm/subagents";
 import registerSessionSearchExtension from "@pi-ohm/session-search";

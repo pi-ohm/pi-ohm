@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*",
+    "@pi-ohm/core": "workspace:*",
     "@pi-ohm/handoff": "workspace:*",
     "@pi-ohm/memories": "workspace:*",
     "@pi-ohm/modes": "workspace:*",

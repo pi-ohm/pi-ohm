@@ -174,7 +174,7 @@ Scoped model discovery (`enabledModels`) uses deterministic config precedence:
 2. `${PI_CONFIG_DIR}/settings.json`
 3. `${PI_CODING_AGENT_DIR}/settings.json`
 4. `${PI_AGENT_DIR}/settings.json`
-5. resolved Pi agent dir (`@pi-ohm/config`)
+5. resolved Pi agent dir (`@pi-ohm/core/config`)
 6. `~/.pi/agent/settings.json`
 
 Provider/profile routing rules are config-driven from `ohm.providers.json`:

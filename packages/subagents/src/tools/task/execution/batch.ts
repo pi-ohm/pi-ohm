@@ -1,5 +1,5 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
+import type { LoadedOhmRuntimeConfig } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import { getTaskLiveUiMode } from "../../../runtime/live-ui";
 import { resolveRuntimeSubagentById } from "../../../runtime/subagent-profiles";

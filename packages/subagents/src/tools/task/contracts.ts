@@ -7,7 +7,7 @@ import type {
 } from "../../runtime/tasks/types";
 import type { SubagentInvocationMode } from "../../extension";
 import type { OhmSubagentDefinition } from "../../catalog";
-import type { LoadedOhmRuntimeConfig } from "@pi-ohm/config";
+import type { LoadedOhmRuntimeConfig } from "@pi-ohm/core/config";
 import type { TaskToolParameters } from "../../schema/task-tool";
 
 export type TaskToolStatus = TaskLifecycleState;

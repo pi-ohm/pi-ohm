@@ -29,7 +29,7 @@
   "packages": {
     "packages/config": {
       "component": "config",
-      "package-name": "@pi-ohm/config",
+      "package-name": "@pi-ohm/core/config",
       "skip-github-release": true
     },
     "packages/core": {

@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/config";
+import { loadOhmRuntimeConfig, registerOhmSettings } from "@pi-ohm/core/config";
 
 export default function registerPainterExtension(pi: ExtensionAPI): void {
   registerOhmSettings(pi);

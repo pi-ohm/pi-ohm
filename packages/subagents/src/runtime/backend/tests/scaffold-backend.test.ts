@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import type { OhmRuntimeConfig } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import { ScaffoldTaskExecutionBackend } from "../scaffold-backend";
 

@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { getDefaultOhmConfig } from "@pi-ohm/config";
+import { getDefaultOhmConfig } from "@pi-ohm/core/config";
 import { buildStartPrompt } from "../prompts";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {

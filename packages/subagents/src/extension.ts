@@ -4,7 +4,7 @@ import {
   loadOhmRuntimeConfig,
   registerOhmSettings,
   type OhmRuntimeConfig,
-} from "@pi-ohm/config";
+} from "@pi-ohm/core/config";
 import {
   getSubagentDescription,
   OHM_SUBAGENT_CATALOG,

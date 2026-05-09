@@ -86,7 +86,6 @@ pi-ohm/
 ├── extensions/
 │   └── index.ts                    # local dev entrypoint (registers bundle package)
 ├── packages/
-│   ├── config/                     # @pi-ohm/config
 │   ├── core/                       # @pi-ohm/core (shared runtime primitives)
 │   ├── tui/                        # @pi-ohm/tui
 │   ├── modes/                      # @pi-ohm/modes

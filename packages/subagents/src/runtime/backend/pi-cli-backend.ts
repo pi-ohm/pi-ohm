@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import type { OhmRuntimeConfig } from "@pi-ohm/core/config";
 import {
   getSubagentConfiguredModel,
   resolveSubagentProfileRuntimeConfig,
-} from "@pi-ohm/config/subagents";
+} from "@pi-ohm/core/config";
 import type { OhmSubagentDefinition } from "../../catalog";
 import { SubagentRuntimeError, type SubagentResult } from "../../errors";
 import { buildSendPrompt, buildStartPrompt, truncate } from "./prompts";

@@ -1,5 +1,5 @@
 import type { AgentToolResult } from "@earendil-works/pi-coding-agent";
-import type { OhmRuntimeConfig } from "@pi-ohm/config";
+import type { OhmRuntimeConfig } from "@pi-ohm/core/config";
 import { Result } from "better-result";
 import type { OhmSubagentDefinition } from "../../../catalog";
 import { SubagentRuntimeError } from "../../../errors";
