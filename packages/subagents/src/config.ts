@@ -51,6 +51,7 @@ export interface ResolvedSubagentProfileRuntimeConfig {
 }
 
 export interface SubagentRuntimeConfig {
+  backend: SubagentBackend;
   taskMaxConcurrency: number;
   taskRetentionMs: number;
   permissions: {
@@ -61,6 +62,8 @@ export interface SubagentRuntimeConfig {
   profiles: Record<string, SubagentProfileRuntimeConfig>;
 }
 
+export type SubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
+
 interface JsonMap {
   readonly [key: string]: unknown;
 }
@@ -70,6 +73,7 @@ interface RuntimeConfigWithSubagents {
 }
 
 export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
+  backend: "interactive-sdk",
   taskMaxConcurrency: 3,
   taskRetentionMs: 1000 * 60 * 60 * 24,
   permissions: {
@@ -97,6 +101,7 @@ export const subagentsConfigModule = registerConfig({
 const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
   "taskMaxConcurrency",
   "taskRetentionMs",
+  "backend",
   "permissions",
   "profiles",
 ]);
@@ -126,6 +131,19 @@ function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number") return fallback;
   if (!Number.isInteger(value) || value <= 0) return fallback;
   return value;
+}
+
+function normalizeSubagentBackend(value: unknown, fallback: SubagentBackend): SubagentBackend {
+  if (
+    value === "none" ||
+    value === "interactive-shell" ||
+    value === "interactive-sdk" ||
+    value === "custom-plugin"
+  ) {
+    return value;
+  }
+
+  return fallback;
 }
 
 function normalizePermissionDecision(value: unknown, fallback: "allow" | "deny"): "allow" | "deny" {
@@ -434,6 +452,8 @@ export function mergeSubagentRuntimeConfig(input: {
     defaults.taskRetentionMs,
   );
 
+  const backend = normalizeSubagentBackend(patch?.backend, defaults.backend);
+
   const permissionsPatch = isJsonMap(patch?.permissions) ? patch.permissions : undefined;
 
   const permissionsDefault = normalizePermissionDecision(
@@ -458,6 +478,7 @@ export function mergeSubagentRuntimeConfig(input: {
   const profiles = normalizeInlineSubagentProfiles(patch, explicitProfiles);
 
   return {
+    backend,
     taskMaxConcurrency,
     taskRetentionMs,
     permissions: {
@@ -567,6 +588,8 @@ export function resolveSubagentProfileRuntimeConfig(input: {
 export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntimeConfig {
   if (!isJsonMap(value)) return false;
   return (
+    normalizeSubagentBackend(value.backend, DEFAULT_SUBAGENT_RUNTIME_CONFIG.backend) ===
+      value.backend &&
     typeof value.taskMaxConcurrency === "number" &&
     typeof value.taskRetentionMs === "number" &&
     isJsonMap(value.permissions) &&

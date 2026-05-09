@@ -3607,6 +3607,8 @@ __metadata:
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/core": "workspace:*"
+    better-result: "catalog:"
+    typebox: "npm:^1.0.68"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3633,6 +3635,8 @@ __metadata:
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/core": "workspace:*"
+    better-result: "catalog:"
+    typebox: "npm:^1.0.68"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3645,6 +3649,8 @@ __metadata:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@earendil-works/pi-tui": "catalog:pi"
     "@pi-ohm/core": "workspace:*"
+    better-result: "catalog:"
+    typebox: "npm:^1.0.68"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
@@ -3656,6 +3662,8 @@ __metadata:
   dependencies:
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/core": "workspace:*"
+    better-result: "catalog:"
+    typebox: "npm:^1.0.68"
   peerDependencies:
     "@earendil-works/pi-coding-agent": 0.74.0
   languageName: unknown
