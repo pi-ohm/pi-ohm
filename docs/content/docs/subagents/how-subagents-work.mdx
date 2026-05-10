@@ -411,22 +411,7 @@ Config precedence is fixed: built-ins < global agent files < global `ohm.json` <
 
 ## Tool surface
 
-The preferred public tool is one flat discriminated controller:
-
-```ts
-interface AgentControllerArgs {
-  readonly action:
-    | "spawn_agent"
-    | "send_agent_input"
-    | "wait_agent"
-    | "close_agent"
-    | "resume_agent"
-    | "get_agent_result"
-    | "list_agents";
-}
-```
-
-The implementation schema should be a discriminated union by `action`, not nested action objects.
+Subagents exposes separate lifecycle tools. Do not collapse these into one `agent_controller` action router. Separate tool names are easier for models to discover and avoid provider schema issues with top-level unions.
 
 ### `spawn_agent`
 
@@ -434,7 +419,6 @@ Creates a new Pi session and submits initial input. It does not wait for complet
 
 ```ts
 interface SpawnAgentArgs {
-  readonly action: "spawn_agent";
   readonly task_name: string;
   readonly prompt: string;
   readonly summary: string;
@@ -471,7 +455,6 @@ Queues or steers input to an existing spawned Pi session.
 
 ```ts
 interface SendInputArgs {
-  readonly action: "send_agent_input";
   readonly target: string;
   readonly prompt: string;
   readonly mode?: "prompt" | "steer" | "follow_up";
@@ -489,7 +472,6 @@ Waits for agents to reach final status. If timed out, returns current known stat
 
 ```ts
 interface WaitAgentArgs {
-  readonly action: "wait_agent";
   readonly targets: readonly string[];
   readonly timeout_ms?: number;
 }
@@ -508,7 +490,6 @@ Closes an agent and any open descendants.
 
 ```ts
 interface CloseAgentArgs {
-  readonly action: "close_agent";
   readonly target: string;
 }
 
@@ -525,7 +506,6 @@ Resumes a previously closed agent by id so it can receive input and wait calls.
 
 ```ts
 interface ResumeAgentArgs {
-  readonly action: "resume_agent";
   readonly id: string;
 }
 
@@ -540,7 +520,6 @@ Checks status and retrieves results from a spawned Pi session if available.
 
 ```ts
 interface GetAgentResultArgs {
-  readonly action: "get_agent_result";
   readonly target: string;
 }
 
@@ -558,7 +537,6 @@ Lists live agents in the current root session tree. Can filter by task-path pref
 
 ```ts
 interface ListAgentsArgs {
-  readonly action: "list_agents";
   readonly path_prefix?: string;
 }
 
@@ -573,34 +551,15 @@ interface ListAgentsResult {
 }
 ```
 
-## Why one controller tool
-
-A single `agent_controller` tool keeps the tool namespace small and gives the model one lifecycle surface.
-
-Preferred shape:
+Use direct tool calls:
 
 ```ts
-agent_controller({
-  action: "spawn_agent",
+spawn_agent({
   task_name: "review-auth",
   prompt: "Review the auth changes for correctness.",
   summary: "Review auth changes",
 });
 ```
-
-Avoid nested action payloads:
-
-```ts
-agent_controller({
-  action: {
-    spawn_agent: {
-      task_name: "review-auth",
-    },
-  },
-});
-```
-
-Flat discriminated unions are easier for models, TypeBox, and Zod. If model behavior proves worse in practice, split tools later.
 
 ## Implementation modules
 
@@ -663,9 +622,9 @@ Tests:
 - Early lifecycle state survives even when the child file has not flushed yet.
 - Failed spawn releases registry reservations and writes a typed parent error entry.
 
-### Slice 3: Subagents controller tool
+### Slice 3: Subagents tools
 
-Add the flat `agent_controller` discriminated union:
+Register separate lifecycle tools:
 
 - `spawn_agent`
 - `send_agent_input`
@@ -675,7 +634,7 @@ Add the flat `agent_controller` discriminated union:
 - `get_agent_result`
 - `list_agents`
 
-The controller maps subagent concepts to PiP concepts:
+The shared tool runtime maps subagent concepts to PiP concepts:
 
 - `task_id` maps to `pipId`.
 - `agent_type` maps to PiP `role`.
@@ -685,7 +644,7 @@ The controller maps subagent concepts to PiP concepts:
 
 Tests:
 
-- Tool args parse as a discriminated union by `action`.
+- Each tool has a direct object schema with no top-level action union.
 - Every recoverable failure returns a typed `Result.err` and model-readable tool result.
 - `list_agents` can rebuild state from parent custom entries after restart.
 
@@ -699,7 +658,7 @@ Initial TUI contract:
 - Show one concise notification when an agent completes, errors, or is closed.
 - Render model-visible agent results through the normal parent transcript via `appendCustomMessageEntry`.
 - Let users inspect child sessions through existing Pi session files/session selector behavior.
-- Rely on `agent_controller({ action: "list_agents" })` for status inspection.
+- Rely on `list_agents` for status inspection.
 
 Defer:
 

@@ -23,9 +23,9 @@ void test(
     const extension = path.resolve("packages/subagents/src/extension.ts");
     const model = process.env.PI_OHM_SUBAGENTS_E2E_MODEL ?? defaultModel;
     const prompt = [
-      "Use the agent_controller tool to spawn a subagent named ping.",
+      "Use the spawn_agent tool to spawn a subagent named ping.",
       "The subagent should only reply pong.",
-      "Wait for it, then answer with exactly pong and no other text.",
+      "Use wait_agent if needed, then answer with exactly pong and no other text.",
     ].join(" ");
 
     const result = await runPi({

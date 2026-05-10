@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAgentControllerTool } from "../agent-controller";
+import { createSubagentToolRuntime, createSubagentTools } from "../agent-controller";
 
-void test("registerAgentControllerTool registers the flat controller tool", () => {
+void test("createSubagentTools registers individual lifecycle tools", () => {
   const pi = {
     appendEntry(customType: string, data?: unknown) {
       assert.equal(customType.length > 0, true);
@@ -10,8 +10,18 @@ void test("registerAgentControllerTool registers the flat controller tool", () =
     },
   };
 
-  const tool = createAgentControllerTool(pi);
+  const tools = createSubagentTools(createSubagentToolRuntime(pi));
 
-  assert.equal(tool.name, "agent_controller");
-  assert.equal(tool.label, "Agent Controller");
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    [
+      "spawn_agent",
+      "send_agent_input",
+      "wait_agent",
+      "close_agent",
+      "resume_agent",
+      "get_agent_result",
+      "list_agents",
+    ],
+  );
 });

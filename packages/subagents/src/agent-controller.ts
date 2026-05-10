@@ -1,7 +1,8 @@
-import type {
-  AgentToolResult,
-  ExtensionAPI,
-  ToolDefinition,
+import {
+  defineTool,
+  type AgentToolResult,
+  type ExtensionAPI,
+  type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
@@ -17,7 +18,7 @@ import { createSdkPipRunner, PipController, type PipStatus } from "@pi-ohm/core/
 
 const defaultModel = "openai-codex/gpt-5.4-mini:medium";
 
-const ThinkingSchema = Type.Union([
+const ThinkingLevelSchema = Type.Union([
   Type.Literal("off"),
   Type.Literal("minimal"),
   Type.Literal("low"),
@@ -26,33 +27,40 @@ const ThinkingSchema = Type.Union([
   Type.Literal("xhigh"),
 ]);
 
-const AgentControllerArgsSchema = Type.Object({
-  action: Type.Union([
-    Type.Literal("spawn_agent"),
-    Type.Literal("send_agent_input"),
-    Type.Literal("wait_agent"),
-    Type.Literal("close_agent"),
-    Type.Literal("resume_agent"),
-    Type.Literal("get_agent_result"),
-    Type.Literal("list_agents"),
-  ]),
-  task_name: Type.Optional(Type.String({ minLength: 1 })),
-  prompt: Type.Optional(Type.String({ minLength: 1 })),
-  summary: Type.Optional(Type.String({ minLength: 1 })),
+const SpawnAgentArgsSchema = Type.Object({
+  task_name: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
+  summary: Type.String({ minLength: 1 }),
   agent_type: Type.Optional(Type.String({ minLength: 1 })),
   model: Type.Optional(Type.String({ minLength: 1 })),
-  thinking: Type.Optional(ThinkingSchema),
+  thinking: Type.Optional(ThinkingLevelSchema),
+  max_turns: Type.Optional(Type.Number()),
   run_in_background: Type.Optional(Type.Boolean()),
   fork_context: Type.Optional(Type.Boolean()),
-  target: Type.Optional(Type.String({ minLength: 1 })),
-  targets: Type.Optional(Type.Array(Type.String({ minLength: 1 }))),
-  id: Type.Optional(Type.String({ minLength: 1 })),
+});
+const SendAgentInputArgsSchema = Type.Object({
+  target: Type.String({ minLength: 1 }),
+  prompt: Type.String({ minLength: 1 }),
   mode: Type.Optional(
     Type.Union([Type.Literal("prompt"), Type.Literal("steer"), Type.Literal("follow_up")]),
   ),
 });
+const WaitAgentArgsSchema = Type.Object({
+  targets: Type.Array(Type.String({ minLength: 1 })),
+  timeout_ms: Type.Optional(Type.Number()),
+});
+const CloseAgentArgsSchema = Type.Object({ target: Type.String({ minLength: 1 }) });
+const ResumeAgentArgsSchema = Type.Object({ id: Type.String({ minLength: 1 }) });
+const GetAgentResultArgsSchema = Type.Object({ target: Type.String({ minLength: 1 }) });
+const ListAgentsArgsSchema = Type.Object({ path_prefix: Type.Optional(Type.String()) });
 
-type AgentControllerArgs = Static<typeof AgentControllerArgsSchema>;
+type SpawnAgentArgs = Static<typeof SpawnAgentArgsSchema>;
+type SendAgentInputArgs = Static<typeof SendAgentInputArgsSchema>;
+type WaitAgentArgs = Static<typeof WaitAgentArgsSchema>;
+type CloseAgentArgs = Static<typeof CloseAgentArgsSchema>;
+type ResumeAgentArgs = Static<typeof ResumeAgentArgsSchema>;
+type GetAgentResultArgs = Static<typeof GetAgentResultArgsSchema>;
+type ListAgentsArgs = Static<typeof ListAgentsArgsSchema>;
 
 interface ControllerRecord {
   readonly taskIds: Map<string, string>;
@@ -61,137 +69,130 @@ interface ControllerRecord {
 }
 
 export function registerAgentControllerTool(
-  pi: Pick<ExtensionAPI, "registerTool" | "appendEntry">,
+  pi: Pick<ExtensionAPI, "registerTool" | "appendEntry" | "on">,
 ): void {
-  pi.registerTool(createAgentControllerTool(pi));
+  const runtime = createSubagentToolRuntime(pi);
+  for (const tool of createSubagentTools(runtime)) pi.registerTool(tool);
+  pi.on("session_shutdown", async () => {
+    await runtime.dispose();
+  });
 }
 
-export function createAgentControllerTool(
+export function createSubagentToolRuntime(
   pi: Pick<ExtensionAPI, "appendEntry">,
-): ToolDefinition<typeof AgentControllerArgsSchema, unknown> {
+): SubagentToolRuntime {
   const controllers = new Map<string, ControllerRecord>();
 
   return {
-    name: "agent_controller",
-    label: "Agent Controller",
-    description: "Spawn, inspect, wait, resume, and close Pi-backed subagent sessions.",
-    parameters: AgentControllerArgsSchema,
-    execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => {
+    async spawn(params, ctx) {
       const parentSessionId = ctx.sessionManager.getSessionId();
-      const current = controllers.get(parentSessionId);
-      const record = current ?? createControllerRecord();
-      if (!current) controllers.set(parentSessionId, record);
+      const record = getRecord(controllers, parentSessionId);
+      const key = controllerKey(params);
+      const currentController = record.controllers.get(key);
+      const created = currentController
+        ? Result.ok(currentController)
+        : createPipController({ pi, params });
+      if (Result.isError(created)) return toolError(created.error.message);
+      const controller = created.value;
+      if (!currentController) record.controllers.set(key, controller);
 
-      if (params.action === "spawn_agent") {
-        const taskName = params.task_name;
-        const prompt = params.prompt;
-        if (!taskName) return toolError("spawn_agent requires task_name");
-        if (!prompt) return toolError("spawn_agent requires prompt");
-        const key = controllerKey(params);
-        const currentController = record.controllers.get(key);
-        const created = currentController
-          ? Result.ok(currentController)
-          : createPipController({ pi, params });
-        if (Result.isError(created)) return toolError(created.error.message);
-        const controller = created.value;
-        if (!currentController) record.controllers.set(key, controller);
+      if (ctx.hasUI) ctx.ui.notify(`subagent spawned: ${params.task_name}`, "info");
+      const spawned = await controller.spawn({
+        ownerPackage: "@pi-ohm/subagents",
+        role: params.agent_type ?? "default",
+        parentSessionId,
+        cwd: ctx.cwd,
+        prompt: params.prompt,
+        parentSessionFile: params.fork_context ? ctx.sessionManager.getSessionFile() : undefined,
+      });
+      if (Result.isError(spawned)) return toolError(spawned.error.message);
 
-        if (ctx.hasUI) ctx.ui.notify(`subagent spawned: ${taskName}`, "info");
-        const spawned = await controller.spawn({
-          ownerPackage: "@pi-ohm/subagents",
-          role: params.agent_type ?? "default",
-          parentSessionId,
-          cwd: ctx.cwd,
-          prompt,
-          parentSessionFile: params.fork_context ? ctx.sessionManager.getSessionFile() : undefined,
-        });
-        if (Result.isError(spawned)) return toolError(spawned.error.message);
+      record.taskIds.set(params.task_name, spawned.value.pipId);
+      record.taskControllers.set(spawned.value.pipId, controller);
+      if (ctx.hasUI && spawned.value.status.state !== "running") {
+        ctx.ui.notify(
+          `subagent finished: ${params.task_name} (${spawned.value.status.state})`,
+          "info",
+        );
+      }
 
-        record.taskIds.set(taskName, spawned.value.pipId);
-        record.taskControllers.set(spawned.value.pipId, controller);
-        if (ctx.hasUI && spawned.value.status.state !== "running") {
-          ctx.ui.notify(`subagent finished: ${taskName} (${spawned.value.status.state})`, "info");
+      return toolOk({
+        task_name: params.task_name,
+        task_id: spawned.value.pipId,
+        nickname: null,
+        child_session_path: spawned.value.childSessionPath,
+        status: spawned.value.status,
+      });
+    },
+
+    async send(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const pipId = resolveTarget(record, params.target);
+      const controller = resolveController(record, pipId);
+      if (!controller) return toolError(`Subagent '${params.target}' was not found`);
+      const sent = await controller.send({ pipId, prompt: params.prompt, mode: params.mode });
+      if (Result.isError(sent)) return toolError(sent.error.message);
+      return toolOk(sent.value);
+    },
+
+    async wait(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const statuses: Record<string, PipStatus> = {};
+      for (const target of params.targets) {
+        const pipId = resolveTarget(record, target);
+        const controller = resolveController(record, pipId);
+        if (!controller) {
+          statuses[target] = { state: "not_found" };
+          continue;
         }
-
-        return toolOk({
-          task_name: taskName,
-          task_id: spawned.value.pipId,
-          nickname: null,
-          child_session_path: spawned.value.childSessionPath,
-          status: spawned.value.status,
-        });
+        const waited = await controller.wait({ pipIds: [pipId], timeoutMs: params.timeout_ms });
+        if (Result.isError(waited)) return toolError(waited.error.message);
+        statuses[target] = waited.value.statuses[pipId] ?? { state: "not_found" };
       }
+      return toolOk({ statuses, timedOut: false });
+    },
 
-      if (params.action === "get_agent_result") {
-        if (!params.target) return toolError("get_agent_result requires target");
-        const pipId = resolveTarget(record, params.target);
-        const controller = resolveController(record, pipId);
-        if (!controller) return toolError(`Subagent '${params.target}' was not found`);
-        const found = await controller.get({ pipId });
-        if (Result.isError(found)) return toolError(found.error.message);
-        return toolOk({
-          target: params.target,
-          status: found.value.status,
-          result: statusResult(found.value.status),
-          session_path: found.value.childSessionPath,
-        });
-      }
+    async close(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const pipId = resolveTarget(record, params.target);
+      const controller = resolveController(record, pipId);
+      if (!controller) return toolError(`Subagent '${params.target}' was not found`);
+      const closed = await controller.close({ pipId });
+      if (Result.isError(closed)) return toolError(closed.error.message);
+      if (ctx.hasUI) ctx.ui.notify(`subagent closed: ${params.target}`, "info");
+      return toolOk(closed.value);
+    },
 
-      if (params.action === "wait_agent") {
-        if (!params.targets) return toolError("wait_agent requires targets");
-        const statuses: Record<string, PipStatus> = {};
-        for (const target of params.targets) {
-          const pipId = resolveTarget(record, target);
-          const controller = resolveController(record, pipId);
-          if (!controller) {
-            statuses[target] = { state: "not_found" };
-            continue;
-          }
-          const waited = await controller.wait({ pipIds: [pipId] });
-          if (Result.isError(waited)) return toolError(waited.error.message);
-          statuses[target] = waited.value.statuses[pipId] ?? { state: "not_found" };
-        }
-        return toolOk({ statuses, timedOut: false });
-      }
+    async resume(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const pipId = resolveTarget(record, params.id);
+      const controller = resolveController(record, pipId);
+      if (!controller) return toolError(`Subagent '${params.id}' was not found`);
+      const resumed = await controller.resume({ pipId });
+      if (Result.isError(resumed)) return toolError(resumed.error.message);
+      return toolOk(resumed.value);
+    },
 
-      if (params.action === "close_agent") {
-        if (!params.target) return toolError("close_agent requires target");
-        const pipId = resolveTarget(record, params.target);
-        const controller = resolveController(record, pipId);
-        if (!controller) return toolError(`Subagent '${params.target}' was not found`);
-        const closed = await controller.close({ pipId });
-        if (Result.isError(closed)) return toolError(closed.error.message);
-        if (ctx.hasUI) ctx.ui.notify(`subagent closed: ${params.target}`, "info");
-        return toolOk(closed.value);
-      }
+    async get(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const pipId = resolveTarget(record, params.target);
+      const controller = resolveController(record, pipId);
+      if (!controller) return toolError(`Subagent '${params.target}' was not found`);
+      const found = await controller.get({ pipId });
+      if (Result.isError(found)) return toolError(found.error.message);
+      return toolOk({
+        target: params.target,
+        status: found.value.status,
+        result: statusResult(found.value.status),
+        session_path: found.value.childSessionPath,
+      });
+    },
 
-      if (params.action === "resume_agent") {
-        if (!params.id) return toolError("resume_agent requires id");
-        const pipId = resolveTarget(record, params.id);
-        const controller = resolveController(record, pipId);
-        if (!controller) return toolError(`Subagent '${params.id}' was not found`);
-        const resumed = await controller.resume({ pipId });
-        if (Result.isError(resumed)) return toolError(resumed.error.message);
-        return toolOk(resumed.value);
-      }
-
-      if (params.action === "send_agent_input") {
-        if (!params.target) return toolError("send_agent_input requires target");
-        if (!params.prompt) return toolError("send_agent_input requires prompt");
-        const pipId = resolveTarget(record, params.target);
-        const controller = resolveController(record, pipId);
-        if (!controller) return toolError(`Subagent '${params.target}' was not found`);
-        const sent = await controller.send({
-          pipId,
-          prompt: params.prompt,
-          mode: params.mode,
-        });
-        if (Result.isError(sent)) return toolError(sent.error.message);
-        return toolOk(sent.value);
-      }
-
+    async list(params, ctx) {
+      const record = getRecord(controllers, ctx.sessionManager.getSessionId());
       const agents = [];
       for (const [agentName, pipId] of record.taskIds.entries()) {
+        if (params.path_prefix && !agentName.startsWith(params.path_prefix)) continue;
         const controller = resolveController(record, pipId);
         const found = controller ? await controller.get({ pipId }) : Result.ok(undefined);
         const status =
@@ -205,7 +206,91 @@ export function createAgentControllerTool(
       }
       return toolOk({ agents });
     },
+
+    async dispose() {
+      for (const record of controllers.values()) {
+        for (const [pipId, controller] of record.taskControllers.entries()) {
+          await controller.close({ pipId });
+        }
+      }
+      controllers.clear();
+    },
   };
+}
+
+export interface SubagentToolRuntime {
+  spawn(params: SpawnAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  send(params: SendAgentInputArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  wait(params: WaitAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  close(params: CloseAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  resume(params: ResumeAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  get(params: GetAgentResultArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  list(params: ListAgentsArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  dispose(): Promise<void>;
+}
+
+type ToolContext = Parameters<ToolDefinition["execute"]>[4];
+
+export function createSubagentTools(runtime: SubagentToolRuntime): readonly ToolDefinition[] {
+  return [
+    defineTool({
+      name: "spawn_agent",
+      label: "Spawn Agent",
+      description: "Spawn a Pi-backed subagent session and submit the initial prompt.",
+      parameters: SpawnAgentArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.spawn(params, ctx),
+    }),
+    defineTool({
+      name: "send_agent_input",
+      label: "Send Agent Input",
+      description: "Send follow-up input to an existing subagent session.",
+      parameters: SendAgentInputArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.send(params, ctx),
+    }),
+    defineTool({
+      name: "wait_agent",
+      label: "Wait Agent",
+      description: "Wait for one or more subagents and return their current statuses.",
+      parameters: WaitAgentArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.wait(params, ctx),
+    }),
+    defineTool({
+      name: "close_agent",
+      label: "Close Agent",
+      description: "Close a subagent session.",
+      parameters: CloseAgentArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.close(params, ctx),
+    }),
+    defineTool({
+      name: "resume_agent",
+      label: "Resume Agent",
+      description: "Resume a known subagent session in the current parent session runtime.",
+      parameters: ResumeAgentArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.resume(params, ctx),
+    }),
+    defineTool({
+      name: "get_agent_result",
+      label: "Get Agent Result",
+      description: "Get status and result text for a subagent session.",
+      parameters: GetAgentResultArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.get(params, ctx),
+    }),
+    defineTool({
+      name: "list_agents",
+      label: "List Agents",
+      description: "List subagents known to the current parent session runtime.",
+      parameters: ListAgentsArgsSchema,
+      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.list(params, ctx),
+    }),
+  ];
+}
+
+function getRecord(map: Map<string, ControllerRecord>, parentSessionId: string): ControllerRecord {
+  const current = map.get(parentSessionId);
+  if (current) return current;
+  const record = createControllerRecord();
+  map.set(parentSessionId, record);
+  return record;
 }
 
 function createControllerRecord(): ControllerRecord {
@@ -214,18 +299,14 @@ function createControllerRecord(): ControllerRecord {
 
 function createPipController(input: {
   readonly pi: Pick<ExtensionAPI, "appendEntry">;
-  readonly params: AgentControllerArgs;
+  readonly params: SpawnAgentArgs;
 }): BetterResult<PipController, Error> {
   const modelSpec = Result.try({
-    try: () =>
-      parseModelSpec(input.params.action === "spawn_agent" ? input.params.model : undefined),
+    try: () => parseModelSpec(input.params.model),
     catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
   });
   if (Result.isError(modelSpec)) return Result.err(modelSpec.error);
-  const thinkingLevel =
-    input.params.action === "spawn_agent" && input.params.thinking
-      ? input.params.thinking
-      : modelSpec.value.thinkingLevel;
+  const thinkingLevel = input.params.thinking ?? modelSpec.value.thinkingLevel;
   return Result.ok(
     new PipController({
       runner: createSdkPipRunner({
@@ -242,7 +323,7 @@ function createPipController(input: {
   );
 }
 
-function controllerKey(params: AgentControllerArgs): string {
+function controllerKey(params: SpawnAgentArgs): string {
   return `${params.model ?? defaultModel}:${params.thinking ?? "default"}`;
 }
 
