@@ -1,9 +1,9 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { DocsLayout } from "@/components/layout/flux";
+import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { createServerFn } from "@tanstack/react-start";
 import { source } from "@/lib/source";
 import browserCollections from "fumadocs-mdx:collections/browser";
-import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "@/components/layout/flux/page";
+import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { baseOptions, gitConfig } from "@/lib/layout.shared";
 import { staticFunctionMiddleware } from "@tanstack/start-static-server-functions";
@@ -77,7 +77,15 @@ function Page() {
   const markdownUrl = `/llms.mdx/docs/${[...slugs, "index.mdx"].join("/")}`;
 
   return (
-    <DocsLayout {...baseOptions()} tree={pageTree}>
+    <DocsLayout
+      {...baseOptions()}
+      tree={pageTree}
+      sidebar={{
+        collapsible: false,
+        tabs: false,
+        className: "border-e-0 bg-transparent",
+      }}
+    >
       <Link to={markdownUrl} hidden />
       <Suspense>{clientLoader.useContent(path, { markdownUrl, path })}</Suspense>
     </DocsLayout>
