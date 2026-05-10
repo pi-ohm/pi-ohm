@@ -100,6 +100,7 @@ function Page() {
       }}
     >
       <Link to={markdownUrl} hidden />
+      <Link to={pageMarkdownUrl} hidden />
       <Suspense>{clientLoader.useContent(path, { markdownUrl, pageMarkdownUrl, path })}</Suspense>
     </DocsLayout>
   );
