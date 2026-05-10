@@ -2,6 +2,5 @@
   "title": "Subagents",
   "description": "",
   "icon": "Superscript",
-  "root": true,
-  "pages": ["index", "how-subagents-work"]
+  "pages": ["how-subagents-work"]
 }

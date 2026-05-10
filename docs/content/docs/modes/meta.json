@@ -2,6 +2,5 @@
   "title": "Modes",
   "description": "",
   "icon": "BatteryMedium",
-  "root": true,
   "pages": ["index"]
 }

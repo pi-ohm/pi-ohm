@@ -2,6 +2,5 @@
   "title": "Config",
   "description": "",
   "icon": "Settings",
-  "root": true,
   "pages": ["how-config-works"]
 }
