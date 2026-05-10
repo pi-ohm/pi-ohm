@@ -1602,7 +1602,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@earendil-works/pi-ai@npm:^0.74.0":
+"@earendil-works/pi-ai@npm:0.74.0, @earendil-works/pi-ai@npm:^0.74.0":
   version: 0.74.0
   resolution: "@earendil-works/pi-ai@npm:0.74.0"
   dependencies:
@@ -3595,6 +3595,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@pi-ohm/core@workspace:packages/core"
   dependencies:
+    "@earendil-works/pi-agent-core": "catalog:pi"
+    "@earendil-works/pi-ai": "catalog:pi"
+    "@earendil-works/pi-coding-agent": "catalog:pi"
     "@libsql/client": "catalog:"
     better-result: "catalog:"
     typebox: "npm:^1.0.68"

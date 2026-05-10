@@ -77,6 +77,14 @@ Debug logs are not durable state and are not model-visible context. Session cust
 
 ## Package boundaries
 
+Subagents consume Pi-in-Pi through `@pi-ohm/core/pip`:
+
+```ts
+import { PipController, createSdkPipRunner } from "@pi-ohm/core/pip";
+```
+
+PiP owns generic child Pi session lifecycle, graph metadata, parent session lifecycle entries, and SDK failure mapping. Subagents owns agent profiles, nicknames, task names, prompts, tools, model-facing responses, and subagent event contracts.
+
 DB moves into core as tree-shakeable subpath exports:
 
 ```ts
@@ -114,85 +122,34 @@ await migrateOhmDb({
 });
 ```
 
-## SDK-backed session runner
+## SDK-backed PiP runner
 
-Each subagent is created through the Pi SDK. The target import namespace is `@earendil-works/*`:
+Each subagent is created through the PiP SDK runner. The low-level SDK implementation lives in `@pi-ohm/core/pip` so subagents and memories share one child-session implementation.
 
 ```ts
-import type { Model } from "@earendil-works/pi-ai";
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  getAgentDir,
-  SessionManager,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+const pip = new PipController({
+  runner: createSdkPipRunner({ model, thinkingLevel, tools }),
+  graph: createPipGraphStore(db),
+  entries: createSessionEntryWriter(parentSession),
+});
 ```
 
 A subagent session is configured from resolved agent config, parent context, and spawn args:
 
 ```ts
-const agentDir = getAgentDir();
-const settings = SettingsManager.create(effectiveCwd, agentDir);
-
-settings.applyOverrides({
-  defaultProvider: model.provider,
-  defaultModel: model.modelId,
-  defaultThinkingLevel: thinking,
-});
-
-const loader = new DefaultResourceLoader({
+const spawned = await pip.spawn({
+  ownerPackage: "@pi-ohm/subagents",
+  role: agentType,
+  parentSessionId,
   cwd: effectiveCwd,
-  agentDir,
-  settingsManager: settings,
-  systemPromptOverride: () => agentSystemPrompt,
+  prompt: effectivePrompt,
+  parentSessionFile: forkContext ? parentSessionFile : undefined,
 });
-
-const manager = forkContext
-  ? SessionManager.forkFrom(parentSessionFile, effectiveCwd)
-  : SessionManager.create(effectiveCwd);
-
-const sessionOpts = {
-  cwd: effectiveCwd,
-  agentDir,
-  sessionManager: manager,
-  settingsManager: settings,
-  modelRegistry: ctx.modelRegistry,
-  authStorage: ctx.authStorage,
-  model,
-  tools,
-  resourceLoader: loader,
-};
-
-const { session } = await createAgentSession(sessionOpts);
-await session.prompt(effectivePrompt);
 ```
 
 Normal subagents should use persisted `SessionManager.create` or `SessionManager.forkFrom`, not `SessionManager.inMemory`. In-memory sessions are for tests or explicitly ephemeral agents.
 
-## Runner backends
-
-The implementation should hide process details behind a runner interface:
-
-```ts
-interface AgentRunner {
-  spawn(input: SpawnAgentArgs): Promise<Result<SpawnAgentResult, AgentRunnerError>>;
-  send(input: SendInputArgs): Promise<Result<SendInputResult, AgentRunnerError>>;
-  wait(input: WaitAgentArgs): Promise<Result<WaitAgentResult, AgentRunnerError>>;
-  close(input: CloseAgentArgs): Promise<Result<CloseAgentResult, AgentRunnerError>>;
-  resume(input: ResumeAgentArgs): Promise<Result<ResumeAgentResult, AgentRunnerError>>;
-  get(input: GetAgentResultArgs): Promise<Result<GetAgentResultResult, AgentRunnerError>>;
-  list(input: ListAgentsArgs): Promise<Result<ListAgentsResult, AgentRunnerError>>;
-}
-```
-
-Preferred backend:
-
-1. `sdk-process` - a child Node process running Pi SDK sessions, controlled over stdio JSON-RPC.
-2. `jsonrpc` - possible future backend if Pi exposes a stable native RPC server.
-3. `cli` - fallback/debug only.
-
-The SDK subprocess gives isolation, cancellation, session ownership, and typed control without reimplementing Pi.
+Subagents maps `PipSpawnResult` into `SpawnAgentResult`. PiP never exposes agent-specific names.
 
 ## Controller process lifecycle
 

@@ -12,5 +12,6 @@ Current module:
 - `@pi-ohm/core/config`
 - `@pi-ohm/core/events`
 - `@pi-ohm/core/logging`
+- `@pi-ohm/core/pip`
 
-`@pi-ohm/core/db`, `@pi-ohm/core/config`, `@pi-ohm/core/events`, and `@pi-ohm/core/logging` are subpath exports. Root `@pi-ohm/core` imports must stay DB-free so non-DB consumers do not pull libsql.
+`@pi-ohm/core/db`, `@pi-ohm/core/config`, `@pi-ohm/core/events`, `@pi-ohm/core/logging`, and `@pi-ohm/core/pip` are subpath exports. Root `@pi-ohm/core` imports must stay DB-free so non-DB consumers do not pull libsql.
