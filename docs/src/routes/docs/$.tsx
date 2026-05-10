@@ -63,14 +63,16 @@ const clientLoader = browserCollections.docs.createClientLoader({
           style: "clerk",
         }}
       >
-        <DocsTitle>{frontmatter.title}</DocsTitle>
-        <DocsDescription>{frontmatter.description}</DocsDescription>
-        <div className="flex flex-row gap-2 items-center border-b -mt-4 pb-6">
-          <LLMCopyButton markdownUrl={markdownUrl} />
-          <ViewOptions
-            pageMarkdownUrl={pageMarkdownUrl}
-            githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${path}`}
-          />
+        <div className="flex flex-row gap-2 justify-between pb-2">
+          <DocsTitle>{frontmatter.title}</DocsTitle>
+          {/** <DocsDescription>{frontmatter.description}</DocsDescription> */}
+          <div className="flex flex-row gap-2 items-center">
+            <LLMCopyButton markdownUrl={markdownUrl} />
+            <ViewOptions
+              pageMarkdownUrl={pageMarkdownUrl}
+              githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${path}`}
+            />
+          </div>
         </div>
         <DocsBody>
           <MDX
