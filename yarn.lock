@@ -3838,6 +3838,7 @@ __metadata:
   resolution: "@pi-ohm/subagents@workspace:packages/subagents"
   dependencies:
     "@earendil-works/pi-agent-core": "catalog:pi"
+    "@earendil-works/pi-ai": "catalog:pi"
     "@earendil-works/pi-coding-agent": "catalog:pi"
     "@pi-ohm/core": "workspace:*"
     "@pi-ohm/tui": "workspace:*"

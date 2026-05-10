@@ -5,8 +5,12 @@ import { ExtensionDb } from "../../db";
 import {
   createInMemoryPipGraphStore,
   createPipGraphStore,
+  extractPipParentEntries,
+  parsePipParentEntry,
   PipController,
   pipDbModule,
+  resolvePipNamespace,
+  resolvePipSessionFile,
   type PipRunner,
 } from "../index";
 
@@ -19,7 +23,7 @@ function createFakeRunner(): PipRunner {
         role: input.role,
         parentSessionId: input.parentSessionId,
         childSessionId: `child-${input.pipId}`,
-        childSessionFile: `/tmp/${input.pipId}.jsonl`,
+        childSessionPath: `sessions/demo/${input.pipId}.jsonl`,
         status: { state: "completed", result: "ok" },
       });
     },
@@ -39,7 +43,7 @@ function createFakeRunner(): PipRunner {
         pipId: input.pipId,
         status: { state: "completed", result: "ok" },
         childSessionId: `child-${input.pipId}`,
-        childSessionFile: `/tmp/${input.pipId}.jsonl`,
+        childSessionPath: `sessions/demo/${input.pipId}.jsonl`,
       });
     },
     async close(input) {
@@ -54,7 +58,7 @@ function createFakeRunner(): PipRunner {
   };
 }
 
-void test("PipController spawns through runner and stores graph metadata", async () => {
+void test("PipController spawns through runner and writes hidden lifecycle entries", async () => {
   const graph = createInMemoryPipGraphStore();
   const entries: unknown[] = [];
   const controller = new PipController({
@@ -87,7 +91,49 @@ void test("PipController spawns through runner and stores graph metadata", async
   if (Result.isError(stored)) assert.fail(stored.error.message);
   assert.equal(stored.value?.ownerPackage, "@demo/subagents");
   assert.equal(stored.value?.role, "reviewer");
-  assert.equal(entries.length, 1);
+  assert.equal(entries.length, 2);
+  assert.deepEqual(
+    entries.map((entry) =>
+      typeof entry === "object" && entry ? Reflect.get(entry, "kind") : null,
+    ),
+    ["pip_spawn_requested", "pip_spawned"],
+  );
+});
+
+void test("PiP storage resolves safe namespaces and rejects escaped child paths", () => {
+  const namespace = resolvePipNamespace({ ownerPackage: "@Demo/Subagents" });
+  assert.equal(Result.isOk(namespace), true);
+  if (Result.isError(namespace)) assert.fail(namespace.error.message);
+  assert.equal(namespace.value, "demo_subagents");
+
+  const escaped = resolvePipSessionFile({ dataDir: "/tmp/ohm", childSessionPath: "../bad.jsonl" });
+  assert.equal(Result.isError(escaped), true);
+});
+
+void test("PiP parent entries parse hidden custom entry data", () => {
+  const parsed = parsePipParentEntry({
+    kind: "pip_spawned",
+    pipId: "pip-1",
+    ownerPackage: "@demo/subagents",
+    role: "reviewer",
+    parentSessionId: "parent-1",
+    childSessionId: "child-1",
+    childSessionPath: "sessions/demo/pip-1/child.jsonl",
+    status: { state: "running" },
+    atEpochMs: 1,
+  });
+
+  assert.equal(Result.isOk(parsed), true);
+  if (Result.isError(parsed)) assert.fail(parsed.error.message);
+  assert.equal(parsed.value.kind, "pip_spawned");
+
+  const entries = extractPipParentEntries([
+    { type: "custom", customType: "other", data: {} },
+    { type: "custom", customType: "pi-ohm.pip", data: parsed.value },
+  ]);
+  assert.equal(Result.isOk(entries), true);
+  if (Result.isError(entries)) assert.fail(entries.error.message);
+  assert.equal(entries.value.length, 1);
 });
 
 void test("createPipGraphStore persists and reads PiP edges", async () => {
@@ -106,7 +152,7 @@ void test("createPipGraphStore persists and reads PiP edges", async () => {
     role: "memory-writer",
     parentSessionId: "parent-db",
     childSessionId: "child-db",
-    childSessionFile: "/tmp/child.jsonl",
+    childSessionPath: "sessions/demo/child.jsonl",
     status: { state: "completed", result: "done" },
     createdAtEpochMs: 1,
     updatedAtEpochMs: 2,

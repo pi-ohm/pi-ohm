@@ -30,10 +30,11 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/extension.ts src/config.ts"
+    "build": "vp pack src/extension.ts src/config.ts src/agent-controller.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "catalog:pi",
+    "@earendil-works/pi-ai": "catalog:pi",
     "@earendil-works/pi-coding-agent": "catalog:pi",
     "@pi-ohm/core": "workspace:*",
     "@pi-ohm/tui": "workspace:*",

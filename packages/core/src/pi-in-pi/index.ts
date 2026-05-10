@@ -1,3 +1,5 @@
+import { mkdirSync, readdirSync, statSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -11,6 +13,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { debugResult, type Debug, createDebug } from "../logging";
 import type { ExtensionDb, ExtensionDbModule } from "../db";
+import { resolveOhmAgentDataHome } from "../paths";
 
 export type PipId = string;
 
@@ -29,7 +32,7 @@ export interface PipSessionMetadata {
   readonly role: string;
   readonly parentSessionId: string;
   readonly childSessionId: string;
-  readonly childSessionFile: string | null;
+  readonly childSessionPath: string | null;
   readonly status: PipStatus;
 }
 
@@ -88,7 +91,7 @@ export interface PipGetResult {
   readonly pipId: PipId;
   readonly status: PipStatus;
   readonly childSessionId: string | null;
-  readonly childSessionFile: string | null;
+  readonly childSessionPath: string | null;
 }
 
 export interface PipCloseInput {
@@ -138,12 +141,22 @@ export interface PipSessionEntryWriter {
 
 export type PipSessionEntry =
   | {
+      readonly kind: "pip_spawn_requested";
+      readonly pipId: PipId;
+      readonly ownerPackage: string;
+      readonly role: string;
+      readonly parentSessionId: string;
+      readonly atEpochMs: number;
+    }
+  | {
       readonly kind: "pip_spawned";
       readonly pipId: PipId;
       readonly ownerPackage: string;
       readonly role: string;
+      readonly parentSessionId: string;
       readonly childSessionId: string;
-      readonly childSessionFile: string | null;
+      readonly childSessionPath: string | null;
+      readonly status: PipStatus;
       readonly atEpochMs: number;
     }
   | {
@@ -151,13 +164,49 @@ export type PipSessionEntry =
       readonly pipId: PipId;
       readonly ownerPackage: string;
       readonly role: string;
+      readonly parentSessionId: string;
       readonly status: PipStatus;
+      readonly atEpochMs: number;
+    }
+  | {
+      readonly kind: "pip_error";
+      readonly pipId: PipId;
+      readonly ownerPackage: string;
+      readonly role: string;
+      readonly parentSessionId: string;
+      readonly error: string;
+      readonly status: Extract<PipStatus, { readonly state: "errored" }>;
       readonly atEpochMs: number;
     };
 
+export interface PipChildIdentityEntry {
+  readonly kind: "pip_child_identity";
+  readonly pipId: PipId;
+  readonly ownerPackage: string;
+  readonly role: string;
+  readonly parentSessionId: string;
+}
+
+export interface ResolvePipStorageInput {
+  readonly dataDir?: string;
+}
+
+export interface ResolvePipNamespaceInput {
+  readonly ownerPackage: string;
+}
+
+export interface ResolvePipSessionDirInput extends ResolvePipStorageInput {
+  readonly ownerPackage: string;
+  readonly pipId: PipId;
+}
+
+export interface ResolvePipSessionFileInput extends ResolvePipStorageInput {
+  readonly childSessionPath: string;
+}
+
 export interface PipControllerInput {
   readonly runner: PipRunner;
-  readonly graph: PipGraphStore;
+  readonly graph?: PipGraphStore;
   readonly entries?: PipSessionEntryWriter;
   readonly debug?: Debug;
   readonly now?: () => number;
@@ -166,6 +215,7 @@ export interface PipControllerInput {
 
 export interface CreateSdkPipRunnerInput {
   readonly agentDir?: string;
+  readonly dataDir?: string;
   readonly sessionDir?: string;
   readonly model?: Model<Api>;
   readonly thinkingLevel?: ThinkingLevel;
@@ -187,6 +237,7 @@ interface SdkSessionRecord {
 }
 
 const ENTRY_TYPE = "pi-ohm.pip";
+const CHILD_ENTRY_TYPE = "pi-ohm.pip.child";
 const PIP_TABLE = "ohm_pip_session";
 const PIP_MIGRATIONS_FOLDER = new URL("../../drizzle/core-pip", import.meta.url).pathname;
 
@@ -194,6 +245,216 @@ export const pipDbModule: ExtensionDbModule = {
   id: "core-pip",
   migrationsFolder: PIP_MIGRATIONS_FOLDER,
 };
+
+export function resolvePipStorageRoot(input: ResolvePipStorageInput = {}): string {
+  return resolve(input.dataDir ?? resolveOhmAgentDataHome(), "sessions");
+}
+
+export function resolvePipNamespace(input: ResolvePipNamespaceInput): PipResult<string> {
+  const namespace = input.ownerPackage
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, "")
+    .replace(/[^a-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (namespace.length === 0) {
+    return Result.err(
+      new PipError({
+        code: "pip_namespace_invalid",
+        stage: "storage.namespace",
+        message: `Invalid PiP owner package '${input.ownerPackage}'`,
+      }),
+    );
+  }
+
+  return Result.ok(namespace);
+}
+
+export function resolvePipSessionDir(input: ResolvePipSessionDirInput): PipResult<string> {
+  return Result.gen(function* () {
+    const namespace = yield* resolvePipNamespace({ ownerPackage: input.ownerPackage });
+    const dir = resolve(resolvePipStorageRoot(input), namespace, input.pipId);
+    return Result.ok(dir);
+  });
+}
+
+export function resolvePipSessionFile(input: ResolvePipSessionFileInput): PipResult<string> {
+  if (isAbsolute(input.childSessionPath)) {
+    return Result.err(
+      new PipError({
+        code: "pip_child_session_path_absolute",
+        stage: "storage.resolve_file",
+        message: "PiP child session path must be relative to the Ohm data dir",
+      }),
+    );
+  }
+
+  const dataDir = resolve(input.dataDir ?? resolveOhmAgentDataHome());
+  const file = resolve(dataDir, input.childSessionPath);
+  const rel = relative(dataDir, file);
+  if (rel.startsWith("..") || rel === ".." || rel.includes(`${sep}..${sep}`)) {
+    return Result.err(
+      new PipError({
+        code: "pip_child_session_path_escape",
+        stage: "storage.resolve_file",
+        message: "PiP child session path escapes the Ohm data dir",
+      }),
+    );
+  }
+
+  return Result.ok(file);
+}
+
+export function listPipSessionFiles(
+  input: ResolvePipSessionDirInput,
+): PipResult<readonly string[]> {
+  return Result.gen(function* () {
+    const dir = yield* resolvePipSessionDir(input);
+    const files = Result.try({
+      try: () =>
+        readdirSync(dir)
+          .filter((entry) => entry.endsWith(".jsonl"))
+          .map((entry) => join(dir, entry))
+          .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs),
+      catch: (cause) =>
+        new PipError({
+          code: "pip_session_list_failed",
+          stage: "storage.list",
+          message: `Failed to list PiP session files: ${messageFromCause(cause)}`,
+          cause,
+        }),
+    });
+    const listed = yield* files;
+    return Result.ok(listed);
+  });
+}
+
+export function createPipChildSessionPath(input: {
+  readonly dataDir?: string;
+  readonly childSessionFile: string;
+}): PipResult<string> {
+  const dataDir = resolve(input.dataDir ?? resolveOhmAgentDataHome());
+  const file = resolve(input.childSessionFile);
+  const path = relative(dataDir, file);
+
+  if (path.startsWith("..") || path === ".." || path.includes(`${sep}..${sep}`)) {
+    return Result.err(
+      new PipError({
+        code: "pip_child_session_path_outside_data_dir",
+        stage: "storage.relative_file",
+        message: "PiP child session file is outside the Ohm data dir",
+      }),
+    );
+  }
+
+  return Result.ok(path);
+}
+
+export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> {
+  if (!isRecord(input)) return invalidEntry("parent entry is not an object");
+
+  const kind = readStringField(input, "kind");
+  const pipId = readStringField(input, "pipId");
+  const ownerPackage = readStringField(input, "ownerPackage");
+  const role = readStringField(input, "role");
+  const parentSessionId = readStringField(input, "parentSessionId");
+  const atEpochMs = readNumberField(input, "atEpochMs");
+
+  if (!kind || !pipId || !ownerPackage || !role || !parentSessionId || atEpochMs === undefined) {
+    return invalidEntry("parent entry is missing required fields", pipId);
+  }
+
+  if (kind === "pip_spawn_requested") {
+    return Result.ok({ kind, pipId, ownerPackage, role, parentSessionId, atEpochMs });
+  }
+
+  if (kind === "pip_spawned") {
+    const childSessionId = readStringField(input, "childSessionId");
+    const childSessionPath = readNullableStringField(input, "childSessionPath");
+    const status = parsePipStatus(Reflect.get(input, "status"));
+    if (!childSessionId || Result.isError(status)) {
+      return invalidEntry("spawned entry is missing child session data", pipId);
+    }
+
+    return Result.ok({
+      kind,
+      pipId,
+      ownerPackage,
+      role,
+      parentSessionId,
+      childSessionId,
+      childSessionPath,
+      status: status.value,
+      atEpochMs,
+    });
+  }
+
+  if (kind === "pip_status_changed" || kind === "pip_closed" || kind === "pip_resumed") {
+    const status = parsePipStatus(Reflect.get(input, "status"));
+    if (Result.isError(status)) return invalidEntry("status entry has invalid status", pipId);
+    return Result.ok({
+      kind,
+      pipId,
+      ownerPackage,
+      role,
+      parentSessionId,
+      status: status.value,
+      atEpochMs,
+    });
+  }
+
+  if (kind === "pip_error") {
+    const error = readStringField(input, "error");
+    const status = parsePipStatus(Reflect.get(input, "status"));
+    if (!error || Result.isError(status) || status.value.state !== "errored") {
+      return invalidEntry("error entry has invalid error status", pipId);
+    }
+    return Result.ok({
+      kind,
+      pipId,
+      ownerPackage,
+      role,
+      parentSessionId,
+      error,
+      status: status.value,
+      atEpochMs,
+    });
+  }
+
+  return invalidEntry(`unknown parent entry kind '${kind}'`, pipId);
+}
+
+export function parsePipChildEntry(input: unknown): PipResult<PipChildIdentityEntry> {
+  if (!isRecord(input)) return invalidEntry("child entry is not an object");
+  const kind = readStringField(input, "kind");
+  const pipId = readStringField(input, "pipId");
+  const ownerPackage = readStringField(input, "ownerPackage");
+  const role = readStringField(input, "role");
+  const parentSessionId = readStringField(input, "parentSessionId");
+
+  if (kind !== "pip_child_identity" || !pipId || !ownerPackage || !role || !parentSessionId) {
+    return invalidEntry("invalid child identity entry", pipId);
+  }
+
+  return Result.ok({ kind, pipId, ownerPackage, role, parentSessionId });
+}
+
+export function extractPipParentEntries(
+  entries: readonly unknown[],
+): PipResult<readonly PipSessionEntry[]> {
+  const parsed: PipSessionEntry[] = [];
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+    if (readStringField(entry, "type") !== "custom") continue;
+    if (readStringField(entry, "customType") !== ENTRY_TYPE) continue;
+    const data = parsePipParentEntry(Reflect.get(entry, "data"));
+    if (Result.isError(data)) return Result.err(data.error);
+    parsed.push(data.value);
+  }
+
+  return Result.ok(parsed);
+}
 
 export class PipRegistry {
   readonly #reserved = new Set<PipId>();
@@ -233,7 +494,7 @@ export class PipRegistry {
 
 export class PipController {
   readonly #runner: PipRunner;
-  readonly #graph: PipGraphStore;
+  readonly #graph?: PipGraphStore;
   readonly #entries?: PipSessionEntryWriter;
   readonly #registry: PipRegistry;
   readonly #debug: Debug;
@@ -241,7 +502,7 @@ export class PipController {
 
   constructor(input: PipControllerInput) {
     this.#runner = input.runner;
-    this.#graph = input.graph;
+    this.#graph = input.graph ?? createInMemoryPipGraphStore();
     this.#entries = input.entries;
     this.#registry = new PipRegistry(input.createId);
     this.#debug = input.debug ?? createDebug("@pi-ohm/core/pip");
@@ -258,24 +519,38 @@ export class PipController {
 
     const spawned = await Result.gen(async function* (this: PipController) {
       const reserved = yield* reservation;
+      const requestedAt = this.#now();
+      yield* this.writeEntry({
+        kind: "pip_spawn_requested",
+        pipId: reserved.pipId,
+        ownerPackage: input.ownerPackage,
+        role: input.role,
+        parentSessionId: input.parentSessionId,
+        atEpochMs: requestedAt,
+      });
+
       const child = yield* Result.await(this.#runner.spawn({ ...input, pipId: reserved.pipId }));
       const now = this.#now();
 
-      yield* Result.await(
-        this.#graph.upsert({
-          ...child,
-          createdAtEpochMs: now,
-          updatedAtEpochMs: now,
-        }),
-      );
+      if (this.#graph) {
+        yield* Result.await(
+          this.#graph.upsert({
+            ...child,
+            createdAtEpochMs: now,
+            updatedAtEpochMs: now,
+          }),
+        );
+      }
 
       yield* this.writeEntry({
         kind: "pip_spawned",
         pipId: child.pipId,
         ownerPackage: child.ownerPackage,
         role: child.role,
+        parentSessionId: child.parentSessionId,
         childSessionId: child.childSessionId,
-        childSessionFile: child.childSessionFile,
+        childSessionPath: child.childSessionPath,
+        status: child.status,
         atEpochMs: now,
       });
 
@@ -285,6 +560,16 @@ export class PipController {
 
     if (Result.isError(spawned) && Result.isOk(reservation)) {
       reservation.value.releaseIfUncommitted();
+      this.writeEntry({
+        kind: "pip_error",
+        pipId: reservation.value.pipId,
+        ownerPackage: input.ownerPackage,
+        role: input.role,
+        parentSessionId: input.parentSessionId,
+        error: spawned.error.message,
+        status: { state: "errored", error: spawned.error.message },
+        atEpochMs: this.#now(),
+      });
     }
 
     return debugResult(this.#debug, "pip.spawn", spawned, fields);
@@ -309,6 +594,7 @@ export class PipController {
     const fields = { pipId: input.pipId };
     const closed = await Result.gen(async function* (this: PipController) {
       const result = yield* Result.await(this.#runner.close(input));
+      if (!this.#graph) return Result.ok(result);
       const edge = yield* Result.await(this.#graph.get(input.pipId));
       if (!edge) return Result.ok(result);
 
@@ -326,6 +612,7 @@ export class PipController {
         pipId: input.pipId,
         ownerPackage: edge.ownerPackage,
         role: edge.role,
+        parentSessionId: edge.parentSessionId,
         status: { state: "shutdown" },
         atEpochMs: now,
       });
@@ -443,7 +730,7 @@ export function createPipGraphStore(db: ExtensionDb): PipGraphStore {
               edge.role,
               edge.parentSessionId,
               edge.childSessionId,
-              edge.childSessionFile,
+              edge.childSessionPath,
               edge.status.state,
               statusResult(edge.status),
               statusError(edge.status),
@@ -516,15 +803,32 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
   const sessions = new Map<PipId, SdkSessionRecord>();
   const debug = input.debug ?? createDebug("@pi-ohm/core/pip");
   const agentDir = input.agentDir ?? getAgentDir();
+  const dataDir = input.dataDir ?? resolveOhmAgentDataHome();
 
   return {
     async spawn(spawn) {
       const created = await Result.tryPromise({
         try: async () => {
           const settings = SettingsManager.create(spawn.cwd, agentDir);
+          const resolvedSessionDir = input.sessionDir
+            ? Result.ok(input.sessionDir)
+            : resolvePipSessionDir({
+                dataDir,
+                ownerPackage: spawn.ownerPackage,
+                pipId: spawn.pipId,
+              });
+          if (Result.isError(resolvedSessionDir)) throw resolvedSessionDir.error;
+          mkdirSync(resolvedSessionDir.value, { recursive: true });
           const manager = spawn.parentSessionFile
-            ? SessionManager.forkFrom(spawn.parentSessionFile, spawn.cwd, input.sessionDir)
-            : SessionManager.create(spawn.cwd, input.sessionDir);
+            ? SessionManager.forkFrom(spawn.parentSessionFile, spawn.cwd, resolvedSessionDir.value)
+            : SessionManager.create(spawn.cwd, resolvedSessionDir.value);
+          manager.appendCustomEntry(CHILD_ENTRY_TYPE, {
+            kind: "pip_child_identity",
+            pipId: spawn.pipId,
+            ownerPackage: spawn.ownerPackage,
+            role: spawn.role,
+            parentSessionId: spawn.parentSessionId,
+          } satisfies PipChildIdentityEntry);
           const loader = new DefaultResourceLoader({
             cwd: spawn.cwd,
             agentDir,
@@ -549,13 +853,18 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
           const status: PipStatus = spawn.prompt
             ? { state: "completed", result: latestAssistantText(session.session) }
             : { state: "running" };
+          const childSessionFile = manager.getSessionFile() ?? session.session.sessionFile;
+          const childSessionPath = childSessionFile
+            ? createPipChildSessionPath({ dataDir, childSessionFile })
+            : Result.ok(null);
+          if (Result.isError(childSessionPath)) throw childSessionPath.error;
           const metadata: PipSessionMetadata = {
             pipId: spawn.pipId,
             ownerPackage: spawn.ownerPackage,
             role: spawn.role,
             parentSessionId: spawn.parentSessionId,
             childSessionId: session.session.sessionId,
-            childSessionFile: session.session.sessionFile ?? null,
+            childSessionPath: childSessionPath.value,
             status,
           };
           sessions.set(spawn.pipId, { session: session.session, metadata });
@@ -615,14 +924,14 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
           pipId: get.pipId,
           status: { state: "not_found" },
           childSessionId: null,
-          childSessionFile: null,
+          childSessionPath: null,
         });
       }
       return Result.ok({
         pipId: get.pipId,
         status: currentStatus(record.session),
         childSessionId: record.session.sessionId,
-        childSessionFile: record.session.sessionFile ?? null,
+        childSessionPath: record.metadata.childSessionPath,
       });
     },
     async close(close) {
@@ -739,7 +1048,7 @@ function parseEdge(row: unknown): PipResult<PipGraphEdge> {
     role,
     parentSessionId,
     childSessionId,
-    childSessionFile: readStringField(row, "child_session_file") ?? null,
+    childSessionPath: readStringField(row, "child_session_file") ?? null,
     status,
     createdAtEpochMs,
     updatedAtEpochMs,
@@ -761,12 +1070,53 @@ function parseStatus(
   return undefined;
 }
 
+function parsePipStatus(input: unknown): PipResult<PipStatus> {
+  if (!isRecord(input)) return invalidEntry("status is not an object");
+  const state = readStringField(input, "state");
+  const result = readNullableStringField(input, "result");
+  const error = readStringField(input, "error");
+
+  if (state === "pending_init") return Result.ok({ state });
+  if (state === "running") return Result.ok({ state });
+  if (state === "interrupted") return Result.ok({ state });
+  if (state === "completed") return Result.ok({ state, result });
+  if (state === "errored" && error) return Result.ok({ state, error });
+  if (state === "shutdown") return Result.ok({ state });
+  if (state === "not_found") return Result.ok({ state });
+  return invalidEntry("unknown PiP status state");
+}
+
+function invalidEntry(message: string, pipId?: string): PipResult<never> {
+  return Result.err(
+    new PipError({
+      code: "pip_session_entry_invalid",
+      stage: "session.parse_entry",
+      message,
+      pipId,
+    }),
+  );
+}
+
+function isRecord(value: unknown): value is object {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function readStringField(value: unknown, field: string): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const fieldValue = Reflect.get(value, field);
   if (typeof fieldValue !== "string") return undefined;
   const trimmed = fieldValue.trim();
   if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
+function readNullableStringField(value: unknown, field: string): string | null {
+  if (typeof value !== "object" || value === null) return null;
+  const fieldValue = Reflect.get(value, field);
+  if (fieldValue === null || fieldValue === undefined) return null;
+  if (typeof fieldValue !== "string") return null;
+  const trimmed = fieldValue.trim();
+  if (trimmed.length === 0) return null;
   return trimmed;
 }
 
