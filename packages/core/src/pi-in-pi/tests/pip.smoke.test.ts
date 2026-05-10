@@ -64,6 +64,12 @@ void test("PiP SDK smoke: creates a real persisted Pi child session path without
     parsed.value.map((entry) => entry.kind),
     ["pip_spawn_requested", "pip_spawned"],
   );
+
+  const waited = await controller.wait({ pipIds: [spawned.value.pipId], timeoutMs: 1 });
+  assert.equal(Result.isOk(waited), true);
+  if (Result.isError(waited)) assert.fail(waited.error.message);
+  assert.equal(waited.value.timedOut, true);
+  assert.deepEqual(waited.value.statuses[spawned.value.pipId], { state: "running" });
 });
 
 void test("PiP SDK smoke: configurable real model", { skip: !shouldRunModel }, async () => {

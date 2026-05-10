@@ -58,6 +58,45 @@ function createFakeRunner(): PipRunner {
   };
 }
 
+function createRunningRunner(): PipRunner {
+  return {
+    async spawn(input) {
+      return Result.ok({
+        pipId: input.pipId,
+        ownerPackage: input.ownerPackage,
+        role: input.role,
+        parentSessionId: input.parentSessionId,
+        childSessionId: `child-${input.pipId}`,
+        childSessionPath: `sessions/demo/${input.pipId}.jsonl`,
+        status: { state: "running" },
+      });
+    },
+    async send(input) {
+      return Result.ok({ pipId: input.pipId, status: { state: "running" } });
+    },
+    async wait(input) {
+      return Result.ok({
+        statuses: Object.fromEntries(input.pipIds.map((pipId) => [pipId, { state: "running" }])),
+        timedOut: true,
+      });
+    },
+    async get(input) {
+      return Result.ok({
+        pipId: input.pipId,
+        status: { state: "running" },
+        childSessionId: `child-${input.pipId}`,
+        childSessionPath: `sessions/demo/${input.pipId}.jsonl`,
+      });
+    },
+    async close(input) {
+      return Result.ok({ pipId: input.pipId, previousStatus: { state: "running" } });
+    },
+    async resume(input) {
+      return Result.ok({ pipId: input.pipId, status: { state: "running" } });
+    },
+  };
+}
+
 void test("PipController spawns through runner and writes hidden lifecycle entries", async () => {
   const graph = createInMemoryPipGraphStore();
   const entries: unknown[] = [];
@@ -98,6 +137,57 @@ void test("PipController spawns through runner and writes hidden lifecycle entri
     ),
     ["pip_spawn_requested", "pip_spawned"],
   );
+});
+
+void test("PipController forwards background spawn intent to runner", async () => {
+  const seen: boolean[] = [];
+  const runner = createFakeRunner();
+  const controller = new PipController({
+    runner: {
+      ...runner,
+      async spawn(input) {
+        seen.push(input.runInBackground ?? false);
+        return runner.spawn(input);
+      },
+    },
+    createId: () => "pip-bg",
+  });
+
+  const spawned = await controller.spawn({
+    ownerPackage: "@demo/subagents",
+    role: "reviewer",
+    parentSessionId: "parent-1",
+    cwd: "/tmp/demo",
+    prompt: "review this",
+    runInBackground: true,
+  });
+
+  assert.equal(Result.isOk(spawned), true);
+  if (Result.isError(spawned)) assert.fail(spawned.error.message);
+  assert.deepEqual(seen, [true]);
+});
+
+void test("PipController wait returns runner timeout status", async () => {
+  const controller = new PipController({
+    runner: createRunningRunner(),
+    createId: () => "pip-running",
+  });
+  const spawned = await controller.spawn({
+    ownerPackage: "@demo/subagents",
+    role: "reviewer",
+    parentSessionId: "parent-1",
+    cwd: "/tmp/demo",
+    prompt: "review this",
+    runInBackground: true,
+  });
+  assert.equal(Result.isOk(spawned), true);
+  if (Result.isError(spawned)) assert.fail(spawned.error.message);
+
+  const waited = await controller.wait({ pipIds: [spawned.value.pipId], timeoutMs: 1 });
+  assert.equal(Result.isOk(waited), true);
+  if (Result.isError(waited)) assert.fail(waited.error.message);
+  assert.equal(waited.value.timedOut, true);
+  assert.deepEqual(waited.value.statuses[spawned.value.pipId], { state: "running" });
 });
 
 void test("PiP storage resolves safe namespaces and rejects escaped child paths", () => {

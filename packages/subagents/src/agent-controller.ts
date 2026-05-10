@@ -103,6 +103,7 @@ export function createSubagentToolRuntime(
         parentSessionId,
         cwd: ctx.cwd,
         prompt: params.prompt,
+        runInBackground: params.run_in_background ?? true,
         parentSessionFile: params.fork_context ? ctx.sessionManager.getSessionFile() : undefined,
       });
       if (Result.isError(spawned)) return toolError(spawned.error.message);

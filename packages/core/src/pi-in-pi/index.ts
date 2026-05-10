@@ -57,6 +57,7 @@ export interface PipSpawnInput {
   readonly parentSessionId: string;
   readonly cwd: string;
   readonly prompt?: string;
+  readonly runInBackground?: boolean;
   readonly parentSessionFile?: string;
 }
 
@@ -234,6 +235,7 @@ interface PipReservation {
 interface SdkSessionRecord {
   readonly session: AgentSession;
   readonly metadata: PipSessionMetadata;
+  readonly backgroundPrompt?: Promise<void>;
 }
 
 const ENTRY_TYPE = "pi-ohm.pip";
@@ -848,16 +850,22 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
             noTools: input.noTools,
           });
 
-          if (spawn.prompt) await session.session.prompt(spawn.prompt);
-
-          const status: PipStatus = spawn.prompt
-            ? { state: "completed", result: latestAssistantText(session.session) }
-            : { state: "running" };
           const childSessionFile = manager.getSessionFile() ?? session.session.sessionFile;
           const childSessionPath = childSessionFile
             ? createPipChildSessionPath({ dataDir, childSessionFile })
             : Result.ok(null);
           if (Result.isError(childSessionPath)) throw childSessionPath.error;
+          const backgroundPrompt =
+            spawn.prompt && spawn.runInBackground
+              ? session.session.prompt(spawn.prompt).catch(() => undefined)
+              : undefined;
+          if (spawn.prompt && !spawn.runInBackground) await session.session.prompt(spawn.prompt);
+
+          const status: PipStatus = spawn.prompt
+            ? spawn.runInBackground
+              ? { state: "running" }
+              : { state: "completed", result: latestAssistantText(session.session) }
+            : { state: "running" };
           const metadata: PipSessionMetadata = {
             pipId: spawn.pipId,
             ownerPackage: spawn.ownerPackage,
@@ -867,7 +875,7 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
             childSessionPath: childSessionPath.value,
             status,
           };
-          sessions.set(spawn.pipId, { session: session.session, metadata });
+          sessions.set(spawn.pipId, { session: session.session, metadata, backgroundPrompt });
           return metadata;
         },
         catch: (cause) =>
@@ -908,14 +916,17 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
       return debugResult(debug, "pip.runner.send", sent, { pipId: send.pipId });
     },
     async wait(wait) {
-      const statuses = wait.pipIds.reduce<Record<PipId, PipStatus>>((state, pipId) => {
-        const record = sessions.get(pipId);
-        return {
-          ...state,
-          [pipId]: record ? currentStatus(record.session) : { state: "not_found" },
-        };
-      }, {});
-      return Result.ok({ statuses, timedOut: false });
+      const deadline = wait.timeoutMs === undefined ? undefined : Date.now() + wait.timeoutMs;
+      const poll = async (): Promise<PipWaitResult> => {
+        const statuses = currentStatuses(sessions, wait.pipIds);
+        const done = Object.values(statuses).every(isTerminalStatus);
+        if (done) return { statuses, timedOut: false };
+        if (deadline !== undefined && Date.now() >= deadline) return { statuses, timedOut: true };
+        await sleep(100);
+        return poll();
+      };
+
+      return Result.ok(await poll());
     },
     async get(get) {
       const record = sessions.get(get.pipId);
@@ -958,7 +969,31 @@ function currentStatus(session: AgentSession): PipStatus {
   if (session.isStreaming) return { state: "running" };
   const error = readStringField(session.state, "errorMessage");
   if (error) return { state: "errored", error };
+  if (session.messages.length === 0) return { state: "running" };
   return { state: "completed", result: latestAssistantText(session) };
+}
+
+function currentStatuses(
+  sessions: ReadonlyMap<PipId, SdkSessionRecord>,
+  pipIds: readonly PipId[],
+): Readonly<Record<PipId, PipStatus>> {
+  return pipIds.reduce<Record<PipId, PipStatus>>((state, pipId) => {
+    const record = sessions.get(pipId);
+    return {
+      ...state,
+      [pipId]: record ? currentStatus(record.session) : { state: "not_found" },
+    };
+  }, {});
+}
+
+function isTerminalStatus(status: PipStatus): boolean {
+  if (status.state === "pending_init") return false;
+  if (status.state === "running") return false;
+  return true;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolveSleep) => setTimeout(resolveSleep, ms));
 }
 
 function latestAssistantText(session: AgentSession): string | null {
