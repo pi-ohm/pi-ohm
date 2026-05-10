@@ -8,6 +8,8 @@ pre-commit:
   commands:
     oxfmt-write:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs,json,yml,yaml,md}"
+      exclude:
+        - "packages/*/CHANGELOG.md"
       run: vp fmt {staged_files} --write
       stage_fixed: true
 

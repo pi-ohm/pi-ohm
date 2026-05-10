@@ -20,7 +20,7 @@ export default defineConfig({
     report: false,
   },
   fmt: {
-    ignorePatterns: ["docs/src/routeTree.gen.ts"],
+    ignorePatterns: ["docs/src/routeTree.gen.ts", "packages/*/CHANGELOG.md"],
   },
   test: {
     include: ["**/*.vitest.ts"],
