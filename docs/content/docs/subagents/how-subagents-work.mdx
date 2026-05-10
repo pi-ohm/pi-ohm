@@ -94,8 +94,7 @@ Target layout:
   sessions/
     <namespace>/
       <pip-id>/
-        session.jsonl
-        meta.json
+        <timestamp>_<child-session-id>.jsonl
 ```
 
 Use Pi APIs with an explicit namespace-scoped `sessionDir` in runtime code:
@@ -110,6 +109,8 @@ SessionManager.open(childSessionFile);
 ```
 
 The namespace should be path-safe and deterministic. Prefer `ownerPackage`, for example `@pi-ohm/subagents`, sanitized for filesystem use. Fall back to `core` only for core-owned internal PiPs.
+
+Pi controls the session filename, so PiP should not require deterministic filenames. Use one directory per PiP id and discover the child JSONL by listing that directory. Store the relative child session path in the parent session once the file path is known.
 
 ## SDK-backed PiP runner
 
@@ -139,23 +140,45 @@ Normal subagents should use persisted `SessionManager.create` or `SessionManager
 
 Subagents maps `PipSpawnResult` into `SpawnAgentResult`. PiP never exposes agent-specific names.
 
-## PiP file storage
+## PiP session storage
 
-PiP should not require SQLite for child session context. File-backed metadata is enough for the non-LLM state needed to reconnect a child session to its parent-visible lifecycle.
+PiP should not require SQLite or sidecar metadata files for child session context. Pi session JSONL plus hidden custom entries is enough for the non-LLM state needed to reconnect a child session to its parent-visible lifecycle.
 
-Store one `meta.json` next to each child session:
+Parent session entries are the source of truth for PiP lifecycle and lookup data:
+
+```ts
+appendCustomEntry("pi-ohm.pip", {
+  kind: "pip_spawned",
+  pipId,
+  ownerPackage,
+  role,
+  parentSessionId,
+  childSessionId,
+  childSessionPath,
+  status,
+  atEpochMs,
+});
+```
+
+Child sessions may also store a self-identifying hidden entry for recovery from the child side:
+
+```ts
+appendCustomEntry("pi-ohm.pip.child", {
+  pipId,
+  ownerPackage,
+  role,
+  parentSessionId,
+});
+```
+
+The child session header already stores native lineage:
 
 ```json
 {
-  "pipId": "pip_...",
-  "ownerPackage": "@pi-ohm/subagents",
-  "role": "finder",
-  "parentSessionId": "parent-session-id",
-  "childSessionId": "child-session-id",
-  "childSessionPath": "sessions/_pi-ohm_subagents/pip_.../session.jsonl",
-  "createdAtEpochMs": 123,
-  "updatedAtEpochMs": 456,
-  "status": { "state": "running" }
+  "type": "session",
+  "id": "child-session-id",
+  "cwd": "/repo/path",
+  "parentSession": "/absolute/path/to/parent.jsonl"
 }
 ```
 
@@ -163,10 +186,14 @@ Rules:
 
 - Store `childSessionPath` relative to the Ohm data dir.
 - Resolve relative paths to absolute paths only at runtime boundaries.
-- Treat `meta.json` as untrusted input. Parse it into a typed `PipSessionMeta` before use.
+- Treat session JSONL and custom entry data as untrusted input when loading from disk. Parse them into typed PiP lifecycle ADTs before use.
 - Do not leak raw JSON or raw session paths into subagents code.
+- Parent session custom entries are authoritative for `pipId`, owner package, role, task mapping, child session path, and lifecycle status.
+- The child session JSONL is authoritative for transcript, child session id, cwd, and native `parentSession` lineage.
 - Keep SQLite out of the basic spawn/get/resume path.
-- If fast cross-session queries become necessary later, add SQLite as an index over parsed metadata, not as the source of truth.
+- If fast cross-session queries become necessary later, add SQLite as an index over parsed session/custom-entry data, not as the source of truth.
+- Do not add sidecar metadata files to the initial implementation. Add them later only if session JSONL/custom entries prove insufficient.
+- Pi's `SessionManager` only flushes the session file after an assistant message. Parent custom entries must represent early lifecycle states like `pip_spawn_requested` and `running` even if the child JSONL is not durable yet.
 
 Suggested core modules:
 
@@ -176,12 +203,13 @@ packages/core/src/pi-in-pi/
     resolvePipStorageRoot(...)
     resolvePipNamespace(...)
     resolvePipSessionDir(...)
-    parsePipSessionMeta(...)
-    readPipSessionMeta(...)
-    writePipSessionMeta(...)
+    resolvePipSessionFile(...)
+    listPipSessionFiles(...)
+    parsePipParentEntry(...)
+    parsePipChildEntry(...)
 ```
 
-This is a parse-don't-validate boundary: `unknown JSON -> PipSessionMeta`. Internal code should only work with parsed IDs, relative paths, timestamps, and status ADTs.
+This is a parse-don't-validate boundary: `unknown session entries -> Pip lifecycle ADTs`. Internal code should only work with parsed IDs, relative paths, timestamps, and status ADTs.
 
 ## Controller process lifecycle
 
@@ -191,7 +219,7 @@ Reasons:
 
 - One shared registry naturally enforces `agent_max_threads`, nicknames, and path reservations.
 - Child sessions stay isolated from the parent extension process without creating one controller process per agent.
-- Resume can rebuild live state from parent session custom entries, PiP `meta.json` files, and native child session headers.
+- Resume can rebuild live state from parent session custom entries, optional child identity custom entries, and native child session headers.
 
 Per-agent subprocesses are allowed only as an internal fallback/debug mode if the controller process proves too coupled or hard to recover.
 
@@ -288,7 +316,7 @@ Rules:
 - On spawn, create the child through `SessionManager.create(cwd, sessionDir)` or `SessionManager.forkFrom(parentSessionFile, cwd, sessionDir)`.
 - Always choose a namespace-scoped child session directory under `<ohm-data-dir>/sessions/<namespace>/<pip-id>/` in production.
 - Record PiP lifecycle state in the parent session with `appendCustomEntry`.
-- Record non-LLM child context in the adjacent `meta.json` file.
+- Optionally mirror child identity in the child session with `appendCustomEntry("pi-ohm.pip.child", ...)`.
 - Session files remain the transcript source of truth.
 - DB may be added later as an optional index/cache, not required runtime state.
 
@@ -592,3 +620,112 @@ packages/subagents/src/
 ```
 
 The old task runtime should be replaced incrementally by this PiP/session model.
+
+## Implementation plan
+
+Ship the implementation in small vertical slices. Each slice should be testable without requiring a polished TUI.
+
+### Slice 1: Core PiP storage and entries
+
+Add `@pi-ohm/core/pip` storage helpers:
+
+- Resolve the Ohm data dir.
+- Resolve path-safe namespaces from `ownerPackage`.
+- Resolve `sessions/<namespace>/<pip-id>/` session dirs.
+- List child `.jsonl` files inside one PiP session dir.
+- Resolve relative `childSessionPath` values to absolute paths at runtime boundaries.
+- Parse parent custom entries into typed lifecycle ADTs.
+- Parse optional child identity custom entries into typed identity ADTs.
+
+Tests:
+
+- Namespace sanitization is deterministic.
+- Relative child session paths cannot escape the Ohm data dir.
+- Unknown custom-entry JSON is rejected at the parse boundary.
+- Multiple PiP ids under the same namespace do not collide.
+
+### Slice 2: SDK runner creates real Pi sessions
+
+Implement the runner with Pi's `SessionManager`:
+
+- `spawn` creates `SessionManager.create(cwd, sessionDir)` for fresh child sessions.
+- `spawn` uses `SessionManager.forkFrom(parentSessionFile, cwd, sessionDir)` when `fork_context` is enabled.
+- The runner records the generated child JSONL path as soon as `SessionManager.getSessionFile()` returns it.
+- The runner writes parent custom entries for `pip_spawn_requested`, `pip_spawned`, `pip_status_changed`, and `pip_error`.
+- The runner never requires the child JSONL file to exist before reporting early lifecycle state.
+
+Tests:
+
+- Fresh spawn stores the child session under the namespace-scoped Ohm data dir.
+- Fork spawn writes a child session header with native `parentSession` lineage.
+- Early lifecycle state survives even when the child file has not flushed yet.
+- Failed spawn releases registry reservations and writes a typed parent error entry.
+
+### Slice 3: Subagents controller tool
+
+Add the flat `agent_controller` discriminated union:
+
+- `spawn_agent`
+- `send_agent_input`
+- `wait_agent`
+- `close_agent`
+- `resume_agent`
+- `get_agent_result`
+- `list_agents`
+
+The controller maps subagent concepts to PiP concepts:
+
+- `task_id` maps to `pipId`.
+- `agent_type` maps to PiP `role`.
+- `child_session_path` comes from PiP storage.
+- Model-visible results use `appendCustomMessageEntry("pi-ohm.agent.result", ...)`.
+- Lifecycle-only state uses `appendCustomEntry("pi-ohm.pip", ...)`.
+
+Tests:
+
+- Tool args parse as a discriminated union by `action`.
+- Every recoverable failure returns a typed `Result.err` and model-readable tool result.
+- `list_agents` can rebuild state from parent custom entries after restart.
+
+### Slice 4: Minimal TUI
+
+The first TUI should be intentionally small. Do not build a dashboard, tree browser, terminal multiplexer, or live child-output panel yet.
+
+Initial TUI contract:
+
+- Show one concise parent-session notification when an agent is spawned.
+- Show one concise notification when an agent completes, errors, or is closed.
+- Render model-visible agent results through the normal parent transcript via `appendCustomMessageEntry`.
+- Let users inspect child sessions through existing Pi session files/session selector behavior.
+- Rely on `agent_controller({ action: "list_agents" })` for status inspection.
+
+Defer:
+
+- Live streaming child transcript UI.
+- Inline child session trees.
+- Clickable agent dashboards.
+- Rich per-agent progress views.
+- Manual TUI controls for pause/resume/kill beyond the controller tool.
+
+Tests:
+
+- Spawn and completion notifications render without requiring a live dashboard.
+- Hidden lifecycle custom entries do not appear as model-visible transcript text.
+- Result custom messages appear in the parent transcript when requested.
+
+### Slice 5: Resume and recovery
+
+Resume should rebuild live controller state from durable session data:
+
+- Read parent custom entries.
+- Parse lifecycle entries into typed state.
+- Resolve known child session paths relative to the Ohm data dir.
+- If a child path is missing, inspect the PiP session dir for JSONL files.
+- Optionally read child identity custom entries if present.
+- Do not require SQLite or sidecar files.
+
+Tests:
+
+- Restart rebuilds registry state from parent entries only.
+- Missing child files produce typed recoverable errors, not silent fallbacks.
+- Multiple lifecycle entries collapse to the latest status per `pipId`.
