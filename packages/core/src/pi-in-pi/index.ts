@@ -10,7 +10,7 @@ import {
   type AgentSession,
 } from "@earendil-works/pi-coding-agent";
 import { debugResult, type Debug, createDebug } from "../logging";
-import type { OhmDbClient, OhmDbModule } from "../db";
+import type { ExtensionDb, ExtensionDbModule } from "../db";
 
 export type PipId = string;
 
@@ -188,34 +188,11 @@ interface SdkSessionRecord {
 
 const ENTRY_TYPE = "pi-ohm.pip";
 const PIP_TABLE = "ohm_pip_session";
+const PIP_MIGRATIONS_FOLDER = new URL("../../drizzle/core-pip", import.meta.url).pathname;
 
-export const pipDbModule: OhmDbModule = {
+export const pipDbModule: ExtensionDbModule = {
   id: "core-pip",
-  migrations: [
-    {
-      id: "0001_create_pip_session",
-      async up(db) {
-        return Result.gen(async function* () {
-          yield* Result.await(
-            db.execute(`CREATE TABLE IF NOT EXISTS ${PIP_TABLE} (
-              pip_id TEXT PRIMARY KEY,
-              owner_package TEXT NOT NULL,
-              role TEXT NOT NULL,
-              parent_session_id TEXT NOT NULL,
-              child_session_id TEXT NOT NULL,
-              child_session_file TEXT,
-              status_state TEXT NOT NULL,
-              status_result TEXT,
-              status_error TEXT,
-              created_at_epoch_ms INTEGER NOT NULL,
-              updated_at_epoch_ms INTEGER NOT NULL
-            )`),
-          );
-          return Result.ok(undefined);
-        });
-      },
-    },
-  ],
+  migrationsFolder: PIP_MIGRATIONS_FOLDER,
 };
 
 export class PipRegistry {
@@ -420,11 +397,11 @@ export function createInMemoryPipGraphStore(): PipGraphStore {
   };
 }
 
-export function createPipGraphStore(db: OhmDbClient): PipGraphStore {
+export function createPipGraphStore(db: ExtensionDb): PipGraphStore {
   const execute = async (
     stage: string,
-    statement: Parameters<OhmDbClient["execute"]>[0],
-    args?: Parameters<OhmDbClient["execute"]>[1],
+    statement: Parameters<ExtensionDb["execute"]>[0],
+    args?: Parameters<ExtensionDb["execute"]>[1],
   ) => {
     const result = await db.execute(statement, args);
     if (Result.isError(result)) return fromDbError(stage, result.error);

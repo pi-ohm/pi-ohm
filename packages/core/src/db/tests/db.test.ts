@@ -1,108 +1,108 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
-import { createOhmDb, migrateOhmDb, OhmDbRuntimeError, type OhmDbModule } from "../index";
+import { ExtensionDb, type ExtensionDbModule } from "../index";
 
 function defineTest(name: string, run: () => void | Promise<void>): void {
   void test(name, run);
 }
 
-defineTest("migrateOhmDb applies module migrations once in module order", async () => {
-  const db = await createOhmDb({ url: "file::memory:" });
-  assert.equal(Result.isOk(db), true);
-  if (Result.isError(db)) return assert.fail(db.error.message);
+async function writeMigration(input: {
+  readonly root: string;
+  readonly tag: string;
+  readonly sql: string;
+  readonly when: number;
+}): Promise<string> {
+  await fs.mkdir(path.join(input.root, "meta"), { recursive: true });
+  await fs.writeFile(path.join(input.root, `${input.tag}.sql`), input.sql, "utf8");
+  await fs.writeFile(
+    path.join(input.root, "meta", "_journal.json"),
+    JSON.stringify(
+      {
+        version: "7",
+        dialect: "sqlite",
+        entries: [
+          {
+            idx: 0,
+            version: "6",
+            when: input.when,
+            tag: input.tag,
+            breakpoints: true,
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+  return input.root;
+}
 
-  const applied: string[] = [];
-  const modules: readonly OhmDbModule[] = [
-    {
-      id: "zeta",
-      migrations: [
-        {
-          id: "001_create_zeta",
-          up: async (client) => {
-            applied.push("zeta");
-            const result = await client.execute("CREATE TABLE zeta_value (id TEXT PRIMARY KEY)");
-            if (Result.isError(result)) return Result.err(result.error);
-            return Result.ok(undefined);
-          },
-        },
-      ],
-    },
-    {
-      id: "alpha",
-      migrations: [
-        {
-          id: "001_create_alpha",
-          up: async (client) => {
-            applied.push("alpha");
-            const result = await client.execute("CREATE TABLE alpha_value (id TEXT PRIMARY KEY)");
-            if (Result.isError(result)) return Result.err(result.error);
-            return Result.ok(undefined);
-          },
-        },
-      ],
-    },
+defineTest("ExtensionDb opens, migrates modules, and keeps migrations idempotent", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "extension-db-"));
+  const alpha = await writeMigration({
+    root: path.join(dir, "alpha"),
+    tag: "0000_create_alpha",
+    when: 1000,
+    sql: "CREATE TABLE alpha_value (id TEXT PRIMARY KEY);",
+  });
+  const zeta = await writeMigration({
+    root: path.join(dir, "zeta"),
+    tag: "0000_create_zeta",
+    when: 1000,
+    sql: "CREATE TABLE zeta_value (id TEXT PRIMARY KEY);",
+  });
+
+  const db = await ExtensionDb.open({ url: "file::memory:" });
+  assert.equal(Result.isOk(db), true);
+  if (Result.isError(db)) assert.fail(db.error.message);
+
+  const modules: readonly ExtensionDbModule[] = [
+    { id: "zeta", migrationsFolder: zeta },
+    { id: "alpha", migrationsFolder: alpha },
   ];
 
-  const migrated = await migrateOhmDb({ db: db.value, modules, now: () => 123 });
+  const migrated = await db.value.migrate({ modules });
   assert.equal(Result.isOk(migrated), true);
-  assert.deepEqual(applied, ["alpha", "zeta"]);
+  if (Result.isError(migrated)) assert.fail(migrated.error.message);
 
-  const remigrated = await migrateOhmDb({ db: db.value, modules, now: () => 456 });
+  const remigrated = await db.value.migrate({ modules });
   assert.equal(Result.isOk(remigrated), true);
-  assert.deepEqual(applied, ["alpha", "zeta"]);
+  if (Result.isError(remigrated)) assert.fail(remigrated.error.message);
 
-  const rows = await db.value.execute(
-    "SELECT module_id, migration_id, applied_at_epoch_ms FROM ohm_db_migration ORDER BY module_id",
+  const tables = await db.value.execute(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('alpha_value', 'zeta_value') ORDER BY name",
   );
-  assert.equal(Result.isOk(rows), true);
-  if (Result.isError(rows)) return assert.fail(rows.error.message);
-  assert.deepEqual(rows.value.rows, [
-    { module_id: "alpha", migration_id: "001_create_alpha", applied_at_epoch_ms: 123 },
-    { module_id: "zeta", migration_id: "001_create_zeta", applied_at_epoch_ms: 123 },
-  ]);
+  assert.equal(Result.isOk(tables), true);
+  if (Result.isError(tables)) assert.fail(tables.error.message);
+  assert.deepEqual(tables.value.rows, [{ name: "alpha_value" }, { name: "zeta_value" }]);
 
   db.value.close();
 });
 
-defineTest("migrateOhmDb rolls back failed migrations", async () => {
-  const db = await createOhmDb({ url: "file::memory:" });
+defineTest("ExtensionDb reports migration failures through Result", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "extension-db-broken-"));
+  const broken = await writeMigration({
+    root: path.join(dir, "broken"),
+    tag: "0000_broken",
+    when: 1000,
+    sql: "CREATE TABLE broken_value (id TEXT PRIMARY KEY);\n--> statement-breakpoint\nNOT VALID SQL;",
+  });
+
+  const db = await ExtensionDb.open({ url: "file::memory:" });
   assert.equal(Result.isOk(db), true);
-  if (Result.isError(db)) return assert.fail(db.error.message);
+  if (Result.isError(db)) assert.fail(db.error.message);
 
-  const modules: readonly OhmDbModule[] = [
-    {
-      id: "broken",
-      migrations: [
-        {
-          id: "001_broken",
-          up: async (client) => {
-            const created = await client.execute(
-              "CREATE TABLE rollback_probe (id TEXT PRIMARY KEY)",
-            );
-            if (Result.isError(created)) return Result.err(created.error);
-            return Result.err(
-              new OhmDbRuntimeError({
-                code: "db_test_failure",
-                stage: "test",
-                message: "intentional failure",
-              }),
-            );
-          },
-        },
-      ],
-    },
-  ];
-
-  const migrated = await migrateOhmDb({ db: db.value, modules });
+  const migrated = await db.value.migrate({
+    modules: [{ id: "broken", migrationsFolder: broken }],
+  });
   assert.equal(Result.isError(migrated), true);
-
-  const probe = await db.value.execute(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'rollback_probe'",
-  );
-  assert.equal(Result.isOk(probe), true);
-  if (Result.isError(probe)) return assert.fail(probe.error.message);
-  assert.deepEqual(probe.value.rows, []);
+  if (Result.isOk(migrated)) assert.fail("Expected migration failure");
+  assert.equal(migrated.error.code, "db_migrate_failed");
 
   db.value.close();
 });

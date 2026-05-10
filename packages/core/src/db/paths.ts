@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { resolveOhmAgentDataHome, type ResolveOhmDataHomeInput } from "../paths";
 
-export interface ResolveOhmDbPathInput extends ResolveOhmDataHomeInput {}
+export interface ResolveExtensionDbPathInput extends ResolveOhmDataHomeInput {}
 
 function readNonEmptyEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
   const raw = env[name];
@@ -11,11 +11,11 @@ function readNonEmptyEnv(env: NodeJS.ProcessEnv, name: string): string | undefin
   return trimmed;
 }
 
-export function resolveOhmDbPath(input: ResolveOhmDbPathInput = {}): string {
+export function resolveExtensionDbPath(input: ResolveExtensionDbPathInput = {}): string {
   const env = input.env ?? process.env;
-  const explicit = readNonEmptyEnv(env, "OHM_DB_PATH");
+  const explicit = readNonEmptyEnv(env, "EXTENSION_DB_PATH");
   if (explicit) return explicit;
-  return join(resolveOhmAgentDataHome({ env }), "ohm.db");
+  return join(resolveOhmAgentDataHome({ env }), "extensions.db");
 }
 
 export function toLibsqlUrl(pathValue: string): string {

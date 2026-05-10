@@ -9,6 +9,7 @@
   },
   "files": [
     "dist/",
+    "drizzle/",
     "README.md"
   ],
   "type": "module",
@@ -64,6 +65,7 @@
     "@earendil-works/pi-coding-agent": "catalog:pi",
     "@libsql/client": "catalog:",
     "better-result": "catalog:",
+    "drizzle-orm": "catalog:",
     "typebox": "^1.0.68"
   }
 }

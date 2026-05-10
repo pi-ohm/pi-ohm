@@ -88,38 +88,34 @@ PiP owns generic child Pi session lifecycle, graph metadata, parent session life
 DB moves into core as tree-shakeable subpath exports:
 
 ```ts
-import { createOhmDb, migrateOhmDb } from "@pi-ohm/core/db";
+import { ExtensionDb } from "@pi-ohm/core/db";
 ```
 
 Rules:
 
 - `@pi-ohm/core` must not import DB code.
 - DB code is only imported through `@pi-ohm/core/db`.
-- Packages may define their own tables and migrations.
-- Core DB owns connection, Turso/libsql config, migration ordering, locking, and applied migration records.
+- Packages define their own Drizzle schema and generated migration folders.
+- Core DB owns the libsql/Drizzle connection and Result-first migration runner.
+- Drizzle owns the applied migration records through per-module migration tables.
 
 Example module shape:
 
 ```ts
-interface OhmDbModule {
+interface ExtensionDbModule {
   readonly id: string;
-  readonly tables: readonly unknown[];
-  readonly migrations: readonly OhmDbMigration[];
-}
-
-interface OhmDbMigration {
-  readonly id: string;
-  readonly up: (db: OhmDbClient) => Promise<Result<void, OhmDbMigrationError>>;
+  readonly migrationsFolder: string;
+  readonly migrationsTable?: string;
 }
 ```
 
 Packages register modules:
 
 ```ts
-await migrateOhmDb({
-  db,
-  modules: [subagentsDbModule, memoriesDbModule],
-});
+const db = await ExtensionDb.open({ url, schema });
+if (Result.isError(db)) return db;
+
+await db.value.migrate({ modules: [pipDbModule, memoriesDbModule] });
 ```
 
 ## SDK-backed PiP runner

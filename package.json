@@ -62,6 +62,7 @@
     "@earendil-works/pi-tui": "catalog:pi",
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
+    "drizzle-kit": "catalog:",
     "lefthook": "^2.1.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3",

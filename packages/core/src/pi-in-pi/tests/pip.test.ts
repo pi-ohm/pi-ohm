@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Result } from "better-result";
-import { createOhmDb, migrateOhmDb } from "../../db";
+import { ExtensionDb } from "../../db";
 import {
   createInMemoryPipGraphStore,
   createPipGraphStore,
@@ -91,11 +91,11 @@ void test("PipController spawns through runner and stores graph metadata", async
 });
 
 void test("createPipGraphStore persists and reads PiP edges", async () => {
-  const db = await createOhmDb({ url: "file::memory:" });
+  const db = await ExtensionDb.open({ url: "file::memory:" });
   assert.equal(Result.isOk(db), true);
   if (Result.isError(db)) assert.fail(db.error.message);
 
-  const migrated = await migrateOhmDb({ db: db.value, modules: [pipDbModule] });
+  const migrated = await db.value.migrate({ modules: [pipDbModule] });
   assert.equal(Result.isOk(migrated), true);
   if (Result.isError(migrated)) assert.fail(migrated.error.message);
 

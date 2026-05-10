@@ -6,7 +6,7 @@ function messageFromCause(cause: unknown): string {
   return String(cause);
 }
 
-export class OhmDbValidationError extends TaggedError("OhmDbValidationError")<{
+export class ExtensionDbValidationError extends TaggedError("ExtensionDbValidationError")<{
   readonly code: string;
   readonly message: string;
   readonly field?: string;
@@ -25,13 +25,13 @@ export class OhmDbValidationError extends TaggedError("OhmDbValidationError")<{
       message:
         input.message ??
         (input.cause
-          ? `DB validation failure (${input.code}): ${messageFromCause(input.cause)}`
-          : `DB validation failure (${input.code})`),
+          ? `Extension DB validation failure (${input.code}): ${messageFromCause(input.cause)}`
+          : `Extension DB validation failure (${input.code})`),
     });
   }
 }
 
-export class OhmDbRuntimeError extends TaggedError("OhmDbRuntimeError")<{
+export class ExtensionDbRuntimeError extends TaggedError("ExtensionDbRuntimeError")<{
   readonly code: string;
   readonly message: string;
   readonly stage?: string;
@@ -50,11 +50,11 @@ export class OhmDbRuntimeError extends TaggedError("OhmDbRuntimeError")<{
       message:
         input.message ??
         (input.cause
-          ? `DB runtime failure (${input.code}): ${messageFromCause(input.cause)}`
-          : `DB runtime failure (${input.code})`),
+          ? `Extension DB runtime failure (${input.code}): ${messageFromCause(input.cause)}`
+          : `Extension DB runtime failure (${input.code})`),
     });
   }
 }
 
-export type OhmDbError = OhmDbValidationError | OhmDbRuntimeError;
-export type OhmDbResult<T, E extends OhmDbError = OhmDbError> = Result<T, E>;
+export type ExtensionDbError = ExtensionDbValidationError | ExtensionDbRuntimeError;
+export type ExtensionDbResult<T, E extends ExtensionDbError = ExtensionDbError> = Result<T, E>;

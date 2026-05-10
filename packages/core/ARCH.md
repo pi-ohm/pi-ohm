@@ -32,5 +32,5 @@ Package boundary notes:
 - `@pi-ohm/core/events` owns typed wrappers for Pi `pi.events` interop and cross-extension RPC envelopes.
 - `@pi-ohm/core/logging` owns opt-in structured debug helpers gated by `PI_OHM_DEBUG_MODE`.
 - `@pi-ohm/core/pip` owns generic Pi-in-Pi child session orchestration primitives. Source lives in `src/pi-in-pi`.
-- Feature packages own their tables/repositories and register migrations through `OhmDbModule`.
+- Feature packages own their Drizzle schemas/repositories and register migration folders through `ExtensionDbModule`.
 - `@pi-ohm/subagents` owns task-domain adapters that bind core primitives to task detail contracts.
