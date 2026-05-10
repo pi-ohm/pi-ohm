@@ -11,7 +11,6 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import {
   ExtensionDbRuntimeError,
   ExtensionDbValidationError,
-  type ExtensionDbError,
   type ExtensionDbResult,
 } from "./errors";
 import { resolveExtensionDbPath, toLibsqlUrl, type ResolveExtensionDbPathInput } from "./paths";
