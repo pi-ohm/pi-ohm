@@ -3,7 +3,7 @@ import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { createServerFn } from "@tanstack/react-start";
 import { slugsToMarkdownPath } from "@/lib/markdown-path";
 import browserCollections from "fumadocs-mdx:collections/browser";
-import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
+import { DocsBody, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import { baseOptions, gitConfig } from "@/lib/layout.shared";
 import { staticFunctionMiddleware } from "@tanstack/start-static-server-functions";
