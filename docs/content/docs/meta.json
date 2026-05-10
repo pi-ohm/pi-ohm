@@ -4,11 +4,13 @@
     "index",
     "installation",
     "getting-started",
-    "config",
-    "subagents",
-    "modes",
-    "painter",
-    "handoff",
-    "session-search"
+    "---Configuration---",
+    "...config",
+    "---Packages---",
+    "...subagents",
+    "...modes",
+    "...painter",
+    "...handoff",
+    "...session-search"
   ]
 }
