@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { createServerFn } from "@tanstack/react-start";
-import { source } from "@/lib/source";
+import { slugsToMarkdownPath } from "@/lib/markdown-path";
 import browserCollections from "fumadocs-mdx:collections/browser";
 import { DocsBody, DocsDescription, DocsPage, DocsTitle } from "fumadocs-ui/layouts/docs/page";
 import defaultMdxComponents from "fumadocs-ui/mdx";
@@ -28,6 +28,7 @@ const loader = createServerFn({
   .inputValidator((slugs: string[]) => slugs)
   .middleware([staticFunctionMiddleware])
   .handler(async ({ data: slugs }) => {
+    const { source } = await import("@/lib/source");
     const page = source.getPage(slugs);
     if (!page) throw notFound();
 
@@ -44,9 +45,11 @@ const clientLoader = browserCollections.docs.createClientLoader({
     // you can define props for the component
     {
       markdownUrl,
+      pageMarkdownUrl,
       path,
     }: {
       markdownUrl: string;
+      pageMarkdownUrl: string;
       path: string;
     },
   ) {
@@ -65,7 +68,7 @@ const clientLoader = browserCollections.docs.createClientLoader({
         <div className="flex flex-row gap-2 items-center border-b -mt-4 pb-6">
           <LLMCopyButton markdownUrl={markdownUrl} />
           <ViewOptions
-            markdownUrl={markdownUrl}
+            pageMarkdownUrl={pageMarkdownUrl}
             githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/content/docs/${path}`}
           />
         </div>
@@ -84,6 +87,7 @@ const clientLoader = browserCollections.docs.createClientLoader({
 function Page() {
   const { pageTree, slugs, path } = useFumadocsLoader(Route.useLoaderData());
   const markdownUrl = `/llms.mdx/docs/${[...slugs, "index.mdx"].join("/")}`;
+  const pageMarkdownUrl = slugsToMarkdownPath(slugs).url;
 
   return (
     <DocsLayout
@@ -96,7 +100,7 @@ function Page() {
       }}
     >
       <Link to={markdownUrl} hidden />
-      <Suspense>{clientLoader.useContent(path, { markdownUrl, path })}</Suspense>
+      <Suspense>{clientLoader.useContent(path, { markdownUrl, pageMarkdownUrl, path })}</Suspense>
     </DocsLayout>
   );
 }

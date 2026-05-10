@@ -1,10 +1,10 @@
-import { source } from "@/lib/source";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/llms.txt")({
   server: {
     handlers: {
       GET: async () => {
+        const { source } = await import("@/lib/source");
         const lines: string[] = [];
         lines.push("# Documentation");
         lines.push("");

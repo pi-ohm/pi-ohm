@@ -43,3 +43,11 @@ pre code {
 .shiki > div:first-child > figcaption {
   font-family: var(--font-mono);
 }
+
+#nd-sidebar p {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--fd-muted-foreground);
+}

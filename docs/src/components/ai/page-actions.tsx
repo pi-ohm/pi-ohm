@@ -58,13 +58,13 @@ export function LLMCopyButton({
 }
 
 export function ViewOptions({
-  markdownUrl,
+  pageMarkdownUrl,
   githubUrl,
 }: {
   /**
-   * A URL to the raw Markdown/MDX content of page
+   * Public Markdown URL for AI tools.
    */
-  markdownUrl: string;
+  pageMarkdownUrl: string;
 
   /**
    * Source file URL on GitHub
@@ -73,7 +73,7 @@ export function ViewOptions({
 }) {
   const items = useMemo(() => {
     const fullMarkdownUrl =
-      typeof window !== "undefined" ? new URL(markdownUrl, window.location.origin) : "loading";
+      typeof window !== "undefined" ? new URL(pageMarkdownUrl, window.location.origin) : "loading";
     const q = `Read ${fullMarkdownUrl}, I want to ask questions about it.`;
 
     return [
@@ -204,7 +204,7 @@ export function ViewOptions({
         })}`,
       },
     ];
-  }, [githubUrl, markdownUrl]);
+  }, [githubUrl, pageMarkdownUrl]);
 
   return (
     <Popover>
