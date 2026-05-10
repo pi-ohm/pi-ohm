@@ -89,7 +89,7 @@ interface ResolvedSpawnConfig {
 }
 
 export function registerAgentControllerTool(
-  pi: Pick<ExtensionAPI, "registerTool" | "appendEntry" | "on">,
+  pi: Pick<ExtensionAPI, "registerTool" | "appendEntry" | "getThinkingLevel" | "on">,
 ): void {
   const runtime = createSubagentToolRuntime(pi);
   for (const tool of createSubagentTools(runtime)) pi.registerTool(tool);
@@ -99,7 +99,7 @@ export function registerAgentControllerTool(
 }
 
 export function createSubagentToolRuntime(
-  pi: Pick<ExtensionAPI, "appendEntry">,
+  pi: Pick<ExtensionAPI, "appendEntry" | "getThinkingLevel">,
 ): SubagentToolRuntime {
   const controllers = new Map<string, ControllerRecord>();
 
@@ -107,7 +107,12 @@ export function createSubagentToolRuntime(
     async spawn(params, ctx) {
       const parentSessionId = ctx.sessionManager.getSessionId();
       const record = getRecord(controllers, parentSessionId);
-      const config = await resolveSpawnConfig({ cwd: ctx.cwd, params });
+      const config = await resolveSpawnConfig({
+        cwd: ctx.cwd,
+        params,
+        currentModel: ctx.model,
+        currentThinking: pi.getThinkingLevel(),
+      });
       if (Result.isError(config)) return toolError(config.error.message);
       const key = controllerKey(config.value);
       const currentController = record.controllers.get(key);
@@ -349,6 +354,8 @@ function controllerKey(config: ResolvedSpawnConfig): string {
 export async function resolveSpawnConfig(input: {
   readonly cwd: string;
   readonly params: SpawnAgentArgs;
+  readonly currentModel?: Model<Api>;
+  readonly currentThinking?: ThinkingLevel;
 }): Promise<BetterResult<ResolvedSpawnConfig, Error>> {
   const loaded = await loadConfig({ cwd: input.cwd, modules: [subagentsConfigModule] });
   if (Result.isError(loaded)) return Result.err(loaded.error);
@@ -361,15 +368,16 @@ export async function resolveSpawnConfig(input: {
   if (Result.isError(subagents)) return Result.err(subagents.error);
 
   const agentType = input.params.agent_type?.trim() || input.params.task_name.trim();
+  const currentModelPattern = input.currentModel ? modelKey(input.currentModel) : undefined;
   const baseProfile = resolveSubagentProfileRuntimeConfig({
     config: { subagents: subagents.value },
     subagentId: agentType,
-    modelPattern: input.params.model,
+    modelPattern: input.params.model ?? currentModelPattern,
   });
   const profile = resolveSubagentProfileRuntimeConfig({
     config: { subagents: subagents.value },
     subagentId: agentType,
-    modelPattern: input.params.model ?? baseProfile?.model,
+    modelPattern: input.params.model ?? baseProfile?.model ?? currentModelPattern,
   });
   const agentDir = resolveExtensionConfigDir();
   const modelSpec = Result.try({
@@ -377,11 +385,18 @@ export async function resolveSpawnConfig(input: {
       parseModelSpec({
         agentDir,
         spec: input.params.model ?? profile?.model,
+        currentModel: input.currentModel,
       }),
     catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
   });
   if (Result.isError(modelSpec)) return Result.err(modelSpec.error);
-  const thinking = input.params.thinking ?? profile?.thinking ?? modelSpec.value.thinkingLevel;
+  const thinking =
+    input.params.thinking ??
+    profile?.thinking ??
+    (input.params.model || profile?.model
+      ? modelSpec.value.thinkingLevel
+      : input.currentThinking) ??
+    modelSpec.value.thinkingLevel;
 
   return Result.ok({
     agentType,
@@ -392,6 +407,10 @@ export async function resolveSpawnConfig(input: {
     tools: resolveTools(profile),
     prompt: resolvePrompt({ profile, prompt: input.params.prompt }),
   });
+}
+
+function modelKey(model: Model<Api>): string {
+  return `${model.provider}/${model.id}`;
 }
 
 function resolveTools(
@@ -425,11 +444,23 @@ function resolveController(record: ControllerRecord, pipId: string): PipControll
   return record.taskControllers.get(pipId);
 }
 
-function parseModelSpec(input: { readonly agentDir: string; readonly spec: string | undefined }): {
+function parseModelSpec(input: {
+  readonly agentDir: string;
+  readonly spec: string | undefined;
+  readonly currentModel?: Model<Api>;
+}): {
   readonly model: Model<Api>;
   readonly modelKey: string;
   readonly thinkingLevel: ThinkingLevel;
 } {
+  if (!input.spec && input.currentModel) {
+    return {
+      model: input.currentModel,
+      modelKey: modelKey(input.currentModel),
+      thinkingLevel: "medium",
+    };
+  }
+
   const spec = input.spec ?? defaultModel;
   const slash = spec.indexOf("/");
   if (slash <= 0 || slash >= spec.length - 1) {

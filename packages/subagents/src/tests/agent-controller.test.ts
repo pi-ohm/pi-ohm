@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { Result } from "better-result";
 import {
   createSubagentToolRuntime,
@@ -15,6 +16,9 @@ void test("createSubagentTools registers individual lifecycle tools", () => {
     appendEntry(customType: string, data?: unknown) {
       assert.equal(customType.length > 0, true);
       assert.equal(data !== undefined, true);
+    },
+    getThinkingLevel(): "medium" {
+      return "medium";
     },
   };
 
@@ -162,6 +166,63 @@ void test("resolveSpawnConfig uses Pi model registry custom providers before ext
     assert.equal(config.value.model.api, "openai-completions");
     assert.equal(config.value.model.baseUrl, "https://registry-provider.example/v1");
     assert.equal(config.value.model.contextWindow, 32000);
+  });
+});
+
+void test("resolveSpawnConfig defaults to current session model when no model is configured", async () => {
+  await withConfig(async ({ cwd }) => {
+    await fs.writeFile(
+      path.join(cwd, ".pi", "ohm.json"),
+      JSON.stringify({
+        subagents: {
+          profiles: {
+            reviewer: {
+              tools: ["read"],
+              prompt: "profile prompt",
+            },
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const currentModel = {
+      id: "main-model",
+      name: "Main Model",
+      api: "external-main-provider",
+      provider: "external-main-provider",
+      baseUrl: "https://main-provider.example/v1",
+      reasoning: true,
+      input: ["text"],
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+      contextWindow: 200000,
+      maxTokens: 20000,
+    } satisfies Model<Api>;
+
+    const config = await resolveSpawnConfig({
+      cwd,
+      currentModel,
+      currentThinking: "xhigh",
+      params: {
+        task_name: "reviewer",
+        agent_type: "reviewer",
+        prompt: "inspect this diff",
+        summary: "review summary",
+      },
+    });
+
+    assert.equal(Result.isOk(config), true);
+    if (Result.isError(config)) assert.fail(config.error.message);
+    assert.equal(config.value.model, currentModel);
+    assert.equal(config.value.modelKey, "external-main-provider/main-model");
+    assert.equal(config.value.thinking, "xhigh");
+    assert.deepEqual(config.value.tools, ["read"]);
+    assert.equal(config.value.prompt, "profile prompt\n\nTask:\ninspect this diff");
   });
 });
 
