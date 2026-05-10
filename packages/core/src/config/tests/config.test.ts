@@ -64,6 +64,35 @@ async function withConfigEnv<T>(
   });
 }
 
+async function withSingleConfigDir<T>(
+  env: "PI_CONFIG_DIR" | "PI_CODING_AGENT_DIR" | "PI_AGENT_DIR",
+  run: (input: { readonly cwd: string; readonly agent: string }) => Promise<T>,
+): Promise<T> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-config-dir-"));
+  const cwd = path.join(dir, "repo");
+  const agent = path.join(dir, "agent");
+  await fs.mkdir(path.join(cwd, ".pi"), { recursive: true });
+  await fs.mkdir(agent, { recursive: true });
+
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  const previousCoding = process.env.PI_CODING_AGENT_DIR;
+  const previousAgent = process.env.PI_AGENT_DIR;
+  delete process.env.PI_CONFIG_DIR;
+  delete process.env.PI_CODING_AGENT_DIR;
+  delete process.env.PI_AGENT_DIR;
+  process.env[env] = agent;
+
+  return run({ cwd, agent }).finally(async () => {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    if (previousConfig !== undefined) process.env.PI_CONFIG_DIR = previousConfig;
+    if (previousCoding === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    if (previousCoding !== undefined) process.env.PI_CODING_AGENT_DIR = previousCoding;
+    if (previousAgent === undefined) delete process.env.PI_AGENT_DIR;
+    if (previousAgent !== undefined) process.env.PI_AGENT_DIR = previousAgent;
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+}
+
 void test("resolveExtensionConfigPaths uses PI_CODING_AGENT_DIR as the agent directory", async () => {
   await withConfigEnv(async ({ cwd, agent }) => {
     const paths = resolveExtensionConfigPaths(cwd);
@@ -71,6 +100,61 @@ void test("resolveExtensionConfigPaths uses PI_CODING_AGENT_DIR as the agent dir
     assert.equal(paths.globalConfigFile, path.join(agent, "ohm.json"));
     assert.equal(paths.projectConfigFile, path.join(cwd, ".pi", "ohm.json"));
   });
+});
+
+for (const env of ["PI_CONFIG_DIR", "PI_CODING_AGENT_DIR", "PI_AGENT_DIR"] as const) {
+  void test(`loadConfig resolves arbitrary global config from ${env}`, async () => {
+    await withSingleConfigDir(env, async ({ cwd, agent }) => {
+      await fs.writeFile(
+        path.join(agent, "ohm.json"),
+        JSON.stringify({ demo: { enabled: false, count: 11, label: env } }),
+        "utf8",
+      );
+
+      const paths = resolveExtensionConfigPaths(cwd);
+      const loaded = await loadConfig({ cwd, modules: [demo] });
+
+      assert.equal(paths.configDir, agent);
+      assert.equal(paths.globalConfigFile, path.join(agent, "ohm.json"));
+      assert.equal(Result.isOk(loaded), true);
+      if (Result.isError(loaded)) assert.fail(loaded.error.message);
+      assert.deepEqual(loaded.value.config.demo, {
+        enabled: false,
+        count: 11,
+        label: env,
+      });
+      assert.deepEqual(loaded.value.loadedFrom, [path.join(agent, "ohm.json")]);
+    });
+  });
+}
+
+void test("resolveExtensionConfigPaths prefers PI_CONFIG_DIR over other config dirs", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-config-precedence-"));
+  const cwd = path.join(dir, "repo");
+  const preferred = path.join(dir, "preferred");
+  await fs.mkdir(path.join(cwd, ".pi"), { recursive: true });
+  await fs.mkdir(preferred, { recursive: true });
+
+  const previousConfig = process.env.PI_CONFIG_DIR;
+  const previousCoding = process.env.PI_CODING_AGENT_DIR;
+  const previousAgent = process.env.PI_AGENT_DIR;
+  process.env.PI_CONFIG_DIR = preferred;
+  process.env.PI_CODING_AGENT_DIR = path.join(dir, "coding");
+  process.env.PI_AGENT_DIR = path.join(dir, "agent");
+
+  try {
+    const paths = resolveExtensionConfigPaths(cwd);
+    assert.equal(paths.configDir, preferred);
+    assert.equal(paths.globalConfigFile, path.join(preferred, "ohm.json"));
+  } finally {
+    if (previousConfig === undefined) delete process.env.PI_CONFIG_DIR;
+    if (previousConfig !== undefined) process.env.PI_CONFIG_DIR = previousConfig;
+    if (previousCoding === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    if (previousCoding !== undefined) process.env.PI_CODING_AGENT_DIR = previousCoding;
+    if (previousAgent === undefined) delete process.env.PI_AGENT_DIR;
+    if (previousAgent !== undefined) process.env.PI_AGENT_DIR = previousAgent;
+    await fs.rm(dir, { recursive: true, force: true });
+  }
 });
 
 void test("loadConfig merges defaults, global config, then project config", async () => {

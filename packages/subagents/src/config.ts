@@ -24,6 +24,9 @@ export interface SubagentsConfig {
 
 export interface SubagentProfileRuntimeConfig {
   model?: string;
+  thinking?: SubagentThinkingLevel;
+  tools?: readonly string[];
+  maxTurns?: number;
   prompt?: string;
   description?: string;
   whenToUse?: readonly string[];
@@ -35,6 +38,9 @@ export type SubagentToolPermissionDecision = "allow" | "deny" | "inherit";
 
 export interface SubagentProfileVariantRuntimeConfig {
   model?: string;
+  thinking?: SubagentThinkingLevel;
+  tools?: readonly string[];
+  maxTurns?: number;
   prompt?: string;
   description?: string;
   whenToUse?: readonly string[];
@@ -43,6 +49,9 @@ export interface SubagentProfileVariantRuntimeConfig {
 
 export interface ResolvedSubagentProfileRuntimeConfig {
   model?: string;
+  thinking?: SubagentThinkingLevel;
+  tools?: readonly string[];
+  maxTurns?: number;
   prompt?: string;
   description?: string;
   whenToUse?: readonly string[];
@@ -63,6 +72,7 @@ export interface SubagentRuntimeConfig {
 }
 
 export type SubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
+export type SubagentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 interface JsonMap {
   readonly [key: string]: unknown;
@@ -106,8 +116,6 @@ const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
   "profiles",
 ]);
 
-const SUBAGENT_THINKING_LEVELS = new Set(["off", "minimal", "low", "medium", "high", "xhigh"]);
-
 function isJsonMap(value: unknown): value is JsonMap {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -131,6 +139,40 @@ function normalizePositiveInteger(value: unknown, fallback: number): number {
   if (typeof value !== "number") return fallback;
   if (!Number.isInteger(value) || value <= 0) return fallback;
   return value;
+}
+
+function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  return value;
+}
+
+function isSubagentThinkingLevel(value: string): value is SubagentThinkingLevel {
+  return (
+    value === "off" ||
+    value === "minimal" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh"
+  );
+}
+
+function normalizeThinking(value: unknown): SubagentThinkingLevel | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (!isSubagentThinkingLevel(normalized)) return undefined;
+  return normalized;
+}
+
+function normalizeStringList(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const normalized = value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0);
+  if (normalized.length === 0) return undefined;
+  return normalized;
 }
 
 function normalizeSubagentBackend(value: unknown, fallback: SubagentBackend): SubagentBackend {
@@ -246,7 +288,7 @@ function stripThinkingSuffix(modelId: string): string {
     .slice(colonIndex + 1)
     .trim()
     .toLowerCase();
-  if (!SUBAGENT_THINKING_LEVELS.has(suffix)) {
+  if (!isSubagentThinkingLevel(suffix)) {
     return trimmed;
   }
 
@@ -261,6 +303,9 @@ function mergeSubagentVariantConfig(
   if (!parsedPatch) return fallback;
 
   const model = normalizeSubagentModelOverride(parsedPatch.model);
+  const thinking = normalizeThinking(parsedPatch.thinking);
+  const tools = normalizeStringList(parsedPatch.tools);
+  const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
   const description = parsedPatch.description;
   const whenToUse = parsedPatch.whenToUse;
@@ -280,6 +325,9 @@ function mergeSubagentVariantConfig(
   const merged: SubagentProfileVariantRuntimeConfig = {
     ...fallback,
     ...(model ? { model } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(tools ? { tools } : {}),
+    ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
     ...(whenToUse ? { whenToUse } : {}),
@@ -288,6 +336,9 @@ function mergeSubagentVariantConfig(
 
   const hasValues =
     merged.model !== undefined ||
+    merged.thinking !== undefined ||
+    merged.tools !== undefined ||
+    merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
     merged.description !== undefined ||
     merged.whenToUse !== undefined ||
@@ -325,6 +376,9 @@ function mergeSubagentProfileConfig(
   if (!parsedPatch) return fallback;
 
   const model = normalizeSubagentModelOverride(parsedPatch.model);
+  const thinking = normalizeThinking(parsedPatch.thinking);
+  const tools = normalizeStringList(parsedPatch.tools);
+  const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
   const description = parsedPatch.description;
   const whenToUse = parsedPatch.whenToUse;
@@ -345,6 +399,9 @@ function mergeSubagentProfileConfig(
   const merged: SubagentProfileRuntimeConfig = {
     ...fallback,
     ...(model ? { model } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(tools ? { tools } : {}),
+    ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
     ...(whenToUse ? { whenToUse } : {}),
@@ -354,6 +411,9 @@ function mergeSubagentProfileConfig(
 
   const hasValues =
     merged.model !== undefined ||
+    merged.thinking !== undefined ||
+    merged.tools !== undefined ||
+    merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
     merged.description !== undefined ||
     merged.whenToUse !== undefined ||
@@ -577,6 +637,9 @@ export function resolveSubagentProfileRuntimeConfig(input: {
 
   return {
     model: variant?.model ?? profile.model,
+    thinking: variant?.thinking ?? profile.thinking,
+    tools: variant?.tools ?? profile.tools,
+    maxTurns: variant?.maxTurns ?? profile.maxTurns,
     prompt: variant?.prompt ?? profile.prompt,
     description: variant?.description ?? profile.description,
     whenToUse: variant?.whenToUse ?? profile.whenToUse,

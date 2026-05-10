@@ -19,6 +19,18 @@ export const SubagentToolPermissionMapSchema = Type.Record(
 export const SubagentProfileVariantPatchSchema = Type.Object(
   {
     model: Type.Optional(NonEmptyStringSchema),
+    thinking: Type.Optional(
+      Type.Union([
+        Type.Literal("off"),
+        Type.Literal("minimal"),
+        Type.Literal("low"),
+        Type.Literal("medium"),
+        Type.Literal("high"),
+        Type.Literal("xhigh"),
+      ]),
+    ),
+    tools: Type.Optional(NonEmptyStringArraySchema),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
     whenToUse: Type.Optional(NonEmptyStringArraySchema),
@@ -35,6 +47,18 @@ export const SubagentProfileVariantMapPatchSchema = Type.Record(
 export const SubagentProfilePatchSchema = Type.Object(
   {
     model: Type.Optional(NonEmptyStringSchema),
+    thinking: Type.Optional(
+      Type.Union([
+        Type.Literal("off"),
+        Type.Literal("minimal"),
+        Type.Literal("low"),
+        Type.Literal("medium"),
+        Type.Literal("high"),
+        Type.Literal("xhigh"),
+      ]),
+    ),
+    tools: Type.Optional(NonEmptyStringArraySchema),
+    maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
     whenToUse: Type.Optional(NonEmptyStringArraySchema),
@@ -69,6 +93,28 @@ function toTrimmedStringArray(value: unknown): readonly string[] | undefined {
     .filter((entry): entry is string => entry !== undefined);
   if (normalized.length === 0) return undefined;
   return normalized;
+}
+
+function toPositiveInteger(value: unknown): number | undefined {
+  if (typeof value !== "number") return undefined;
+  if (!Number.isInteger(value) || value <= 0) return undefined;
+  return value;
+}
+
+function toThinking(value: unknown): string | undefined {
+  const trimmed = toTrimmedString(value)?.toLowerCase();
+  if (!trimmed) return undefined;
+  if (
+    trimmed !== "off" &&
+    trimmed !== "minimal" &&
+    trimmed !== "low" &&
+    trimmed !== "medium" &&
+    trimmed !== "high" &&
+    trimmed !== "xhigh"
+  ) {
+    return undefined;
+  }
+  return trimmed;
 }
 
 function normalizeSubagentPermissionMapInput(
@@ -106,6 +152,9 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
+  const thinking = toThinking(Reflect.get(input, "thinking"));
+  const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
+  const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
   const whenToUse = toTrimmedStringArray(Reflect.get(input, "whenToUse"));
@@ -113,6 +162,9 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
 
   return {
     ...(model ? { model } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(tools ? { tools } : {}),
+    ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
     ...(whenToUse ? { whenToUse } : {}),
@@ -149,6 +201,9 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
+  const thinking = toThinking(Reflect.get(input, "thinking"));
+  const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
+  const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
   const whenToUse = toTrimmedStringArray(Reflect.get(input, "whenToUse"));
@@ -157,6 +212,9 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
 
   return {
     ...(model ? { model } : {}),
+    ...(thinking ? { thinking } : {}),
+    ...(tools ? { tools } : {}),
+    ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
     ...(whenToUse ? { whenToUse } : {}),
