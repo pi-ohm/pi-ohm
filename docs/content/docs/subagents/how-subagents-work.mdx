@@ -142,7 +142,7 @@ Subagents maps `PipSpawnResult` into `SpawnAgentResult`. PiP never exposes agent
 
 ## PiP session storage
 
-PiP should not require SQLite or sidecar metadata files for child session context. Pi session JSONL plus hidden custom entries is enough for the non-LLM state needed to reconnect a child session to its parent-visible lifecycle.
+PiP must not use SQLite or metadata sidecars for child session context. Pi session JSONL plus hidden custom entries is the storage contract for reconnecting child sessions to parent-visible subagent lifecycle.
 
 Parent session entries are the source of truth for PiP lifecycle and lookup data:
 
@@ -159,6 +159,8 @@ appendCustomEntry("pi-ohm.pip", {
   atEpochMs,
 });
 ```
+
+This hidden entry is the durable subagent mapping: `task_id -> pipId -> childSessionPath -> childSessionId -> role/status`. Do not duplicate that mapping into external metadata files.
 
 Child sessions may also store a self-identifying hidden entry for recovery from the child side:
 
@@ -190,9 +192,9 @@ Rules:
 - Do not leak raw JSON or raw session paths into subagents code.
 - Parent session custom entries are authoritative for `pipId`, owner package, role, task mapping, child session path, and lifecycle status.
 - The child session JSONL is authoritative for transcript, child session id, cwd, and native `parentSession` lineage.
-- Keep SQLite out of the basic spawn/get/resume path.
-- If fast cross-session queries become necessary later, add SQLite as an index over parsed session/custom-entry data, not as the source of truth.
-- Do not add sidecar metadata files to the initial implementation. Add them later only if session JSONL/custom entries prove insufficient.
+- Keep SQLite out of spawn/get/resume and out of subagent mapping.
+- If fast cross-session queries become necessary later, any DB must be a rebuildable search cache over parsed session/custom-entry data, not durable state.
+- Do not add metadata sidecars. Subagent mapping belongs in hidden Pi session custom entries.
 - Pi's `SessionManager` only flushes the session file after an assistant message. Parent custom entries must represent early lifecycle states like `pip_spawn_requested` and `running` even if the child JSONL is not durable yet.
 
 Suggested core modules:
@@ -722,7 +724,7 @@ Resume should rebuild live controller state from durable session data:
 - Resolve known child session paths relative to the Ohm data dir.
 - If a child path is missing, inspect the PiP session dir for JSONL files.
 - Optionally read child identity custom entries if present.
-- Do not require SQLite or sidecar files.
+- Do not require SQLite or metadata sidecars.
 
 Tests:
 
