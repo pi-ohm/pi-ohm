@@ -1,7 +1,10 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  lint: { options: { typeAware: true, typeCheck: true } },
+  lint: {
+    ignorePatterns: ["**/dist/**", "**/src_legacy/**"],
+    options: { typeAware: true, typeCheck: true },
+  },
   pack: {
     format: ["esm"],
     outDir: "dist",
@@ -17,7 +20,7 @@ export default defineConfig({
     report: false,
   },
   fmt: {
-    ignorePatterns: [],
+    ignorePatterns: ["docs/src/routeTree.gen.ts"],
   },
   test: {
     include: ["**/*.vitest.ts"],
