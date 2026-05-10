@@ -1,6 +1,5 @@
 {
   "title": "Config",
   "description": "",
-  "icon": "Settings",
   "pages": ["how-config-works"]
 }

@@ -1,6 +1,5 @@
 {
   "title": "Session Search",
   "description": "",
-  "icon": "Search",
   "pages": ["index"]
 }
