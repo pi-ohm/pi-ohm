@@ -23,7 +23,7 @@ pre-push:
   parallel: true
   commands:
     oxfmt-check:
-      run: yarn format:check
+      run: yarn format
 
     oxlint:
       run: yarn lint
