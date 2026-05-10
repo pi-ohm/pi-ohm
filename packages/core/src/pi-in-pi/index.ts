@@ -208,7 +208,7 @@ export const pipDbModule: OhmDbModule = {
           created_at_epoch_ms INTEGER NOT NULL,
           updated_at_epoch_ms INTEGER NOT NULL
         )`);
-        if (Result.isError(created)) return created;
+        if (Result.isError(created)) return Result.err(created.error);
         return Result.ok(undefined);
       },
     },
@@ -270,7 +270,7 @@ export class PipController {
 
   async spawn(input: PipSpawnInput): Promise<PipResult<PipSpawnResult>> {
     const reservation = this.#registry.reserve();
-    if (Result.isError(reservation)) return reservation;
+    if (Result.isError(reservation)) return Result.err(reservation.error);
 
     const spawned = await this.#runner.spawn({ ...input, pipId: reservation.value.pipId });
     if (Result.isError(spawned)) {
@@ -516,7 +516,7 @@ export function createPipGraphStore(db: OhmDbClient): PipGraphStore {
 
       const parsed = selected.value.rows.map(parseEdge);
       const error = parsed.find(Result.isError);
-      if (error) return error;
+      if (error) return Result.err(error.error);
 
       const edges = parsed.flatMap((edge) => (Result.isOk(edge) ? [edge.value] : []));
       return Result.ok(

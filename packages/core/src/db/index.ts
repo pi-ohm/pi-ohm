@@ -99,7 +99,7 @@ function validateModules(
 
   for (const module of modules) {
     const moduleId = trimIdentifier({ value: module.id, field: "module.id" });
-    if (Result.isError(moduleId)) return moduleId;
+    if (Result.isError(moduleId)) return Result.err(moduleId.error);
     if (moduleIds.has(moduleId.value)) {
       return Result.err(
         createValidationError({
@@ -113,7 +113,7 @@ function validateModules(
 
     for (const migration of module.migrations) {
       const migrationId = trimIdentifier({ value: migration.id, field: "migration.id" });
-      if (Result.isError(migrationId)) return migrationId;
+      if (Result.isError(migrationId)) return Result.err(migrationId.error);
       const key = `${moduleId.value}/${migrationId.value}`;
       if (migrationIds.has(key)) {
         return Result.err(
@@ -171,7 +171,7 @@ export async function createOhmDb(
       }),
   });
 
-  if (Result.isError(opened)) return opened;
+  if (Result.isError(opened)) return Result.err(opened.error);
 
   const client = createDbClient(opened.value);
   return Result.ok({
@@ -192,7 +192,7 @@ async function ensureMigrationTable(
     applied_at_epoch_ms INTEGER NOT NULL,
     PRIMARY KEY (module_id, migration_id)
   )`);
-  if (Result.isError(created)) return created;
+  if (Result.isError(created)) return Result.err(created.error);
   return Result.ok(undefined);
 }
 
@@ -205,7 +205,7 @@ async function hasAppliedMigration(input: {
     `SELECT COUNT(*) AS count FROM ${MIGRATIONS_TABLE} WHERE module_id = ? AND migration_id = ?`,
     [input.moduleId, input.migrationId],
   );
-  if (Result.isError(selected)) return selected;
+  if (Result.isError(selected)) return Result.err(selected.error);
   const first = selected.value.rows[0];
   const count = first ? first.count : 0;
   return Result.ok(sqlValueToBoolean(count));
@@ -222,7 +222,7 @@ async function applyMigration(input: {
   readonly nowEpochMs: number;
 }): Promise<OhmDbResult<void, OhmDbError>> {
   const begun = await input.db.execute("BEGIN IMMEDIATE");
-  if (Result.isError(begun)) return begun;
+  if (Result.isError(begun)) return Result.err(begun.error);
 
   const migrated = await input.migration.up(input.db);
   if (Result.isError(migrated)) {
@@ -236,13 +236,13 @@ async function applyMigration(input: {
   );
   if (Result.isError(recorded)) {
     await rollback(input.db);
-    return recorded;
+    return Result.err(recorded.error);
   }
 
   const committed = await input.db.execute("COMMIT");
   if (Result.isError(committed)) {
     await rollback(input.db);
-    return committed;
+    return Result.err(committed.error);
   }
 
   return Result.ok(undefined);
@@ -250,7 +250,7 @@ async function applyMigration(input: {
 
 export async function migrateOhmDb(input: MigrateOhmDbInput): Promise<OhmDbResult<void>> {
   const valid = validateModules(input.modules);
-  if (Result.isError(valid)) return valid;
+  if (Result.isError(valid)) return Result.err(valid.error);
 
   const ensured = await ensureMigrationTable(input.db);
   if (Result.isError(ensured)) return ensured;
@@ -267,7 +267,7 @@ export async function migrateOhmDb(input: MigrateOhmDbInput): Promise<OhmDbResul
         moduleId,
         migrationId,
       });
-      if (Result.isError(applied)) return applied;
+      if (Result.isError(applied)) return Result.err(applied.error);
       if (applied.value) continue;
 
       const migrated = await applyMigration({

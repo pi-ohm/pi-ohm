@@ -94,7 +94,7 @@ export class MemoryDb {
     const client = createClient({ url: `file:${paths.state}` });
     const db = new MemoryDb(client);
     const initialized = await db.init();
-    if (Result.isError(initialized)) return initialized;
+    if (Result.isError(initialized)) return Result.err(initialized.error);
     return Result.ok(db);
   }
 
@@ -187,9 +187,9 @@ export class MemoryDb {
           cause,
         }),
     });
-    if (Result.isError(result)) return result;
+    if (Result.isError(result)) return Result.err(result.error);
     const rows = parseRows(stage1Row, result.value.rows);
-    if (Result.isError(rows)) return rows;
+    if (Result.isError(rows)) return Result.err(rows.error);
     const row = rows.value[0];
     return Result.ok(row ? toStage1(row) : undefined);
   }
@@ -229,7 +229,7 @@ export class MemoryDb {
           cause,
         }),
     });
-    if (Result.isError(result)) return result;
+    if (Result.isError(result)) return Result.err(result.error);
     const value = result.value.rows[0]?.last_success_watermark;
     if (typeof value === "number") return Result.ok(value);
     return Result.ok(undefined);
@@ -375,9 +375,9 @@ export class MemoryDb {
           cause,
         }),
     });
-    if (Result.isError(result)) return result;
+    if (Result.isError(result)) return Result.err(result.error);
     const rows = parseRows(stage1Row, result.value.rows);
-    if (Result.isError(rows)) return rows;
+    if (Result.isError(rows)) return Result.err(rows.error);
     return Result.ok(rows.value.map(toStage1).sort((a, b) => a.threadId.localeCompare(b.threadId)));
   }
 
@@ -391,9 +391,9 @@ export class MemoryDb {
           cause,
         }),
     });
-    if (Result.isError(result)) return result;
+    if (Result.isError(result)) return Result.err(result.error);
     const rows = parseRows(countRow, result.value.rows);
-    if (Result.isError(rows)) return rows;
+    if (Result.isError(rows)) return Result.err(rows.error);
     return Result.ok(rows.value[0]?.count ?? 0);
   }
 
@@ -474,9 +474,9 @@ export class MemoryDb {
       catch: (cause) =>
         new MemoryDbError({ code: "db_query_failed", message: "Failed to get memory mode", cause }),
     });
-    if (Result.isError(result)) return result;
+    if (Result.isError(result)) return Result.err(result.error);
     const rows = parseRows(modeRow, result.value.rows);
-    if (Result.isError(rows)) return rows;
+    if (Result.isError(rows)) return Result.err(rows.error);
     const row = rows.value[0];
     if (!row) return Result.ok(undefined);
     return Result.ok({ threadId: row.thread_id, mode: row.mode, updatedAt: row.updated_at });

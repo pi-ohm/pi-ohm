@@ -53,7 +53,7 @@ export function debugResult<T, E>(
   result: BetterResult<T, E>,
   fields?: DebugFields,
 ): BetterResult<T, E> {
-  result.match({
+  return result.tapBoth({
     ok: () => {
       debug(event, {
         ...fields,
@@ -68,8 +68,6 @@ export function debugResult<T, E>(
       });
     },
   });
-
-  return result;
 }
 
 export function serializeDebugError(error: unknown): DebugError {

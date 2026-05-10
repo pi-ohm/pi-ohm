@@ -22,7 +22,7 @@ defineTest("migrateOhmDb applies module migrations once in module order", async 
           up: async (client) => {
             applied.push("zeta");
             const result = await client.execute("CREATE TABLE zeta_value (id TEXT PRIMARY KEY)");
-            if (Result.isError(result)) return result;
+            if (Result.isError(result)) return Result.err(result.error);
             return Result.ok(undefined);
           },
         },
@@ -36,7 +36,7 @@ defineTest("migrateOhmDb applies module migrations once in module order", async 
           up: async (client) => {
             applied.push("alpha");
             const result = await client.execute("CREATE TABLE alpha_value (id TEXT PRIMARY KEY)");
-            if (Result.isError(result)) return result;
+            if (Result.isError(result)) return Result.err(result.error);
             return Result.ok(undefined);
           },
         },
@@ -80,7 +80,7 @@ defineTest("migrateOhmDb rolls back failed migrations", async () => {
             const created = await client.execute(
               "CREATE TABLE rollback_probe (id TEXT PRIMARY KEY)",
             );
-            if (Result.isError(created)) return created;
+            if (Result.isError(created)) return Result.err(created.error);
             return Result.err(
               new OhmDbRuntimeError({
                 code: "db_test_failure",

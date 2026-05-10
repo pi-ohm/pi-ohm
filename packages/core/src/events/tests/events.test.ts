@@ -86,7 +86,7 @@ function parseStartedEvent(payload: unknown): OhmPiEventResult<DemoStartedEvent>
 function parseDemoSpawnRequest(payload: unknown): OhmPiEventResult<DemoSpawnRequest> {
   const channel = "demo:rpc:spawn";
   const request = parsePiRpcRequest(payload, channel);
-  if (Result.isError(request)) return request;
+  if (Result.isError(request)) return Result.err(request.error);
   if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
     return invalidPiEventRequest({
       code: "spawn_not_object",

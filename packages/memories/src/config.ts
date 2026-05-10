@@ -102,7 +102,7 @@ async function readConfigJson(file: string): Promise<MemoryConfigResult<Json | u
   });
   if (Result.isError(raw)) {
     if (errorCode(raw.error.cause) === "ENOENT") return Result.ok(undefined);
-    return raw;
+    return Result.err(raw.error);
   }
 
   const parsed = Result.try({
@@ -195,13 +195,13 @@ function applyExtensionSettings(config: MemoriesConfig): MemoriesConfig {
 export async function loadMemoriesConfig(cwd: string): Promise<MemoryConfigResult<MemoriesConfig>> {
   const paths = resolveConfigPaths(cwd);
   const globalOhm = await readConfigJson(paths.globalOhm);
-  if (Result.isError(globalOhm)) return globalOhm;
+  if (Result.isError(globalOhm)) return Result.err(globalOhm.error);
   const projectOhm = await readConfigJson(paths.projectOhm);
-  if (Result.isError(projectOhm)) return projectOhm;
+  if (Result.isError(projectOhm)) return Result.err(projectOhm.error);
   const globalSettings = await readConfigJson(paths.globalSettings);
-  if (Result.isError(globalSettings)) return globalSettings;
+  if (Result.isError(globalSettings)) return Result.err(globalSettings.error);
   const projectSettings = await readConfigJson(paths.projectSettings);
-  if (Result.isError(projectSettings)) return projectSettings;
+  if (Result.isError(projectSettings)) return Result.err(projectSettings.error);
   const merged = [
     globalOhm.value,
     globalSettings.value,

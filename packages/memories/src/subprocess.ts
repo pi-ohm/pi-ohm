@@ -73,7 +73,7 @@ export async function runPiPrint(input: {
         cause,
       }),
   });
-  if (Result.isError(workspace)) return workspace;
+  if (Result.isError(workspace)) return Result.err(workspace.error);
 
   const args = piPrintArgs(input, workspace.value.promptPath);
 
@@ -122,7 +122,7 @@ export async function runPiPrint(input: {
       }),
   });
   if (Result.isError(result)) return result;
-  if (Result.isError(cleaned)) return cleaned;
+  if (Result.isError(cleaned)) return Result.err(cleaned.error);
   return result;
 }
 
@@ -170,7 +170,7 @@ export async function runStage1Extractor(input: {
     timeoutMs: input.timeoutMs,
     systemPrompt: CODEX_STAGE_ONE_SYSTEM_PROMPT,
   });
-  if (Result.isError(result)) return result;
+  if (Result.isError(result)) return Result.err(result.error);
 
   return Result.try({
     try: () => {

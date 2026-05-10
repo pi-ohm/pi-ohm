@@ -415,11 +415,11 @@ export async function loadConfig(
   input: LoadConfigInput,
 ): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
   const registry = ConfigRegistry.create({ cwd: input.cwd });
-  if (Result.isError(registry)) return registry;
+  if (Result.isError(registry)) return Result.err(registry.error);
 
   for (const module of input.modules) {
     const registered = registry.value.register(module);
-    if (Result.isError(registered)) return registered;
+    if (Result.isError(registered)) return Result.err(registered.error);
   }
 
   return registry.value.load();

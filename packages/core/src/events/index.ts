@@ -77,7 +77,7 @@ export class PiEventRegistry {
 
   static create(input: PiEventRegistryInput): OhmPiEventResult<PiEventRegistry> {
     const namespace = validateName(input.namespace, "namespace");
-    if (Result.isError(namespace)) return namespace;
+    if (Result.isError(namespace)) return Result.err(namespace.error);
     if (!isPiEventBus(input.pi.events)) {
       return Result.err(
         new OhmPiEventValidationError({
@@ -118,7 +118,7 @@ export class PiEventRegistry {
     const channel = name.startsWith(`${this.namespace}:`)
       ? validateChannel(name)
       : this.channel(name);
-    if (Result.isError(channel)) return channel;
+    if (Result.isError(channel)) return Result.err(channel.error);
 
     const emitted = Result.try({
       try: () => this.bus.emit(channel.value, payload),
@@ -140,7 +140,7 @@ export class PiEventRegistry {
     handler: (payload: T) => OhmPiEventResult<void> | Promise<OhmPiEventResult<void>>,
   ): OhmPiEventResult<PiEventCleanup> {
     const channel = this.channel(name);
-    if (Result.isError(channel)) return channel;
+    if (Result.isError(channel)) return Result.err(channel.error);
 
     const subscribed = Result.try({
       try: () =>
@@ -171,7 +171,7 @@ export class PiEventRegistry {
     handler: (request: Request) => OhmPiEventResult<Response> | Promise<OhmPiEventResult<Response>>,
   ): OhmPiEventResult<PiEventCleanup> {
     const channel = this.rpcChannel(name);
-    if (Result.isError(channel)) return channel;
+    if (Result.isError(channel)) return Result.err(channel.error);
 
     const subscribed = Result.try({
       try: () =>
@@ -494,6 +494,6 @@ export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventRes
   }
 
   const validRequest = validateRequestId(requestId, channel);
-  if (Result.isError(validRequest)) return validRequest;
+  if (Result.isError(validRequest)) return Result.err(validRequest.error);
   return Result.ok({ requestId: validRequest.value });
 }
