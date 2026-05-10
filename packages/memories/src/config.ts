@@ -194,24 +194,17 @@ function applyExtensionSettings(config: MemoriesConfig): MemoriesConfig {
 
 export async function loadMemoriesConfig(cwd: string): Promise<MemoryConfigResult<MemoriesConfig>> {
   const paths = resolveConfigPaths(cwd);
-  const globalOhm = await readConfigJson(paths.globalOhm);
-  if (Result.isError(globalOhm)) return Result.err(globalOhm.error);
-  const projectOhm = await readConfigJson(paths.projectOhm);
-  if (Result.isError(projectOhm)) return Result.err(projectOhm.error);
-  const globalSettings = await readConfigJson(paths.globalSettings);
-  if (Result.isError(globalSettings)) return Result.err(globalSettings.error);
-  const projectSettings = await readConfigJson(paths.projectSettings);
-  if (Result.isError(projectSettings)) return Result.err(projectSettings.error);
-  const merged = [
-    globalOhm.value,
-    globalSettings.value,
-    projectOhm.value,
-    projectSettings.value,
-  ].reduce(
-    (config, source) => mergeMemoriesConfig(config, memoriesPatch(source)),
-    DEFAULT_MEMORIES_CONFIG,
-  );
-  return Result.ok(applyExtensionSettings(merged));
+  return Result.gen(async function* () {
+    const globalOhm = yield* Result.await(readConfigJson(paths.globalOhm));
+    const projectOhm = yield* Result.await(readConfigJson(paths.projectOhm));
+    const globalSettings = yield* Result.await(readConfigJson(paths.globalSettings));
+    const projectSettings = yield* Result.await(readConfigJson(paths.projectSettings));
+    const merged = [globalOhm, globalSettings, projectOhm, projectSettings].reduce(
+      (config, source) => mergeMemoriesConfig(config, memoriesPatch(source)),
+      DEFAULT_MEMORIES_CONFIG,
+    );
+    return Result.ok(applyExtensionSettings(merged));
+  });
 }
 
 export function registerMemoriesSettings(_pi: ExtensionAPI): void {}

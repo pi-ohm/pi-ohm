@@ -94,41 +94,37 @@ function trimIdentifier(input: {
 function validateModules(
   modules: readonly OhmDbModule[],
 ): OhmDbResult<readonly OhmDbModule[], OhmDbValidationError> {
-  const moduleIds = new Set<string>();
-  const migrationIds = new Set<string>();
+  return Result.gen(function* () {
+    const moduleIds = new Set<string>();
+    const migrationIds = new Set<string>();
 
-  for (const module of modules) {
-    const moduleId = trimIdentifier({ value: module.id, field: "module.id" });
-    if (Result.isError(moduleId)) return Result.err(moduleId.error);
-    if (moduleIds.has(moduleId.value)) {
-      return Result.err(
-        createValidationError({
+    for (const module of modules) {
+      const moduleId = yield* trimIdentifier({ value: module.id, field: "module.id" });
+      if (moduleIds.has(moduleId)) {
+        yield* createValidationError({
           code: "db_duplicate_module_id",
           field: "module.id",
-          message: `Duplicate DB module id '${moduleId.value}'`,
-        }),
-      );
-    }
-    moduleIds.add(moduleId.value);
+          message: `Duplicate DB module id '${moduleId}'`,
+        });
+      }
+      moduleIds.add(moduleId);
 
-    for (const migration of module.migrations) {
-      const migrationId = trimIdentifier({ value: migration.id, field: "migration.id" });
-      if (Result.isError(migrationId)) return Result.err(migrationId.error);
-      const key = `${moduleId.value}/${migrationId.value}`;
-      if (migrationIds.has(key)) {
-        return Result.err(
-          createValidationError({
+      for (const migration of module.migrations) {
+        const migrationId = yield* trimIdentifier({ value: migration.id, field: "migration.id" });
+        const key = `${moduleId}/${migrationId}`;
+        if (migrationIds.has(key)) {
+          yield* createValidationError({
             code: "db_duplicate_migration_id",
             field: "migration.id",
             message: `Duplicate DB migration id '${key}'`,
-          }),
-        );
+          });
+        }
+        migrationIds.add(key);
       }
-      migrationIds.add(key);
     }
-  }
 
-  return Result.ok(modules);
+    return Result.ok(modules);
+  });
 }
 
 function sqlValueToBoolean(value: unknown): boolean {
@@ -161,39 +157,42 @@ export async function createOhmDb(
   input: CreateOhmDbInput = {},
 ): Promise<OhmDbResult<OhmDb, OhmDbRuntimeError>> {
   const url = input.url ?? toLibsqlUrl(resolveOhmDbPath(input));
-  const opened = Result.try({
-    try: () => createClient({ url, authToken: input.authToken }),
-    catch: (cause) =>
-      createRuntimeError({
-        code: "db_open_failed",
-        stage: "open",
-        cause,
-      }),
-  });
+  return Result.gen(function* () {
+    const opened = yield* Result.try({
+      try: () => createClient({ url, authToken: input.authToken }),
+      catch: (cause) =>
+        createRuntimeError({
+          code: "db_open_failed",
+          stage: "open",
+          cause,
+        }),
+    });
 
-  if (Result.isError(opened)) return Result.err(opened.error);
-
-  const client = createDbClient(opened.value);
-  return Result.ok({
-    ...client,
-    url,
-    close() {
-      opened.value.close();
-    },
+    const client = createDbClient(opened);
+    return Result.ok({
+      ...client,
+      url,
+      close() {
+        opened.close();
+      },
+    });
   });
 }
 
 async function ensureMigrationTable(
   db: OhmDbClient,
 ): Promise<OhmDbResult<void, OhmDbRuntimeError>> {
-  const created = await db.execute(`CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
-    module_id TEXT NOT NULL,
-    migration_id TEXT NOT NULL,
-    applied_at_epoch_ms INTEGER NOT NULL,
-    PRIMARY KEY (module_id, migration_id)
-  )`);
-  if (Result.isError(created)) return Result.err(created.error);
-  return Result.ok(undefined);
+  return Result.gen(async function* () {
+    yield* Result.await(
+      db.execute(`CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
+        module_id TEXT NOT NULL,
+        migration_id TEXT NOT NULL,
+        applied_at_epoch_ms INTEGER NOT NULL,
+        PRIMARY KEY (module_id, migration_id)
+      )`),
+    );
+    return Result.ok(undefined);
+  });
 }
 
 async function hasAppliedMigration(input: {
@@ -201,14 +200,17 @@ async function hasAppliedMigration(input: {
   readonly moduleId: string;
   readonly migrationId: string;
 }): Promise<OhmDbResult<boolean, OhmDbRuntimeError>> {
-  const selected = await input.db.execute(
-    `SELECT COUNT(*) AS count FROM ${MIGRATIONS_TABLE} WHERE module_id = ? AND migration_id = ?`,
-    [input.moduleId, input.migrationId],
-  );
-  if (Result.isError(selected)) return Result.err(selected.error);
-  const first = selected.value.rows[0];
-  const count = first ? first.count : 0;
-  return Result.ok(sqlValueToBoolean(count));
+  return Result.gen(async function* () {
+    const selected = yield* Result.await(
+      input.db.execute(
+        `SELECT COUNT(*) AS count FROM ${MIGRATIONS_TABLE} WHERE module_id = ? AND migration_id = ?`,
+        [input.moduleId, input.migrationId],
+      ),
+    );
+    const first = selected.rows[0];
+    const count = first ? first.count : 0;
+    return Result.ok(sqlValueToBoolean(count));
+  });
 }
 
 async function rollback(db: OhmDbClient): Promise<void> {
@@ -224,61 +226,55 @@ async function applyMigration(input: {
   const begun = await input.db.execute("BEGIN IMMEDIATE");
   if (Result.isError(begun)) return Result.err(begun.error);
 
-  const migrated = await input.migration.up(input.db);
-  if (Result.isError(migrated)) {
-    await rollback(input.db);
-    return migrated;
-  }
+  const applied = await Result.gen(async function* () {
+    yield* Result.await(input.migration.up(input.db));
+    yield* Result.await(
+      input.db.execute(
+        `INSERT INTO ${MIGRATIONS_TABLE} (module_id, migration_id, applied_at_epoch_ms) VALUES (?, ?, ?)`,
+        [input.moduleId, input.migration.id.trim(), input.nowEpochMs],
+      ),
+    );
+    yield* Result.await(input.db.execute("COMMIT"));
+    return Result.ok(undefined);
+  });
 
-  const recorded = await input.db.execute(
-    `INSERT INTO ${MIGRATIONS_TABLE} (module_id, migration_id, applied_at_epoch_ms) VALUES (?, ?, ?)`,
-    [input.moduleId, input.migration.id.trim(), input.nowEpochMs],
-  );
-  if (Result.isError(recorded)) {
-    await rollback(input.db);
-    return Result.err(recorded.error);
-  }
-
-  const committed = await input.db.execute("COMMIT");
-  if (Result.isError(committed)) {
-    await rollback(input.db);
-    return Result.err(committed.error);
-  }
-
-  return Result.ok(undefined);
+  if (Result.isOk(applied)) return applied;
+  await rollback(input.db);
+  return Result.err(applied.error);
 }
 
 export async function migrateOhmDb(input: MigrateOhmDbInput): Promise<OhmDbResult<void>> {
-  const valid = validateModules(input.modules);
-  if (Result.isError(valid)) return Result.err(valid.error);
+  return Result.gen(async function* () {
+    const valid = yield* validateModules(input.modules);
+    yield* Result.await(ensureMigrationTable(input.db));
 
-  const ensured = await ensureMigrationTable(input.db);
-  if (Result.isError(ensured)) return ensured;
+    const now = input.now ?? (() => Date.now());
+    const modules = [...valid].sort((left, right) => left.id.localeCompare(right.id));
 
-  const now = input.now ?? (() => Date.now());
-  const modules = [...valid.value].sort((left, right) => left.id.localeCompare(right.id));
+    for (const module of modules) {
+      const moduleId = module.id.trim();
+      for (const migration of module.migrations) {
+        const migrationId = migration.id.trim();
+        const applied = yield* Result.await(
+          hasAppliedMigration({
+            db: input.db,
+            moduleId,
+            migrationId,
+          }),
+        );
+        if (applied) continue;
 
-  for (const module of modules) {
-    const moduleId = module.id.trim();
-    for (const migration of module.migrations) {
-      const migrationId = migration.id.trim();
-      const applied = await hasAppliedMigration({
-        db: input.db,
-        moduleId,
-        migrationId,
-      });
-      if (Result.isError(applied)) return Result.err(applied.error);
-      if (applied.value) continue;
-
-      const migrated = await applyMigration({
-        db: input.db,
-        moduleId,
-        migration: { id: migrationId, up: migration.up },
-        nowEpochMs: now(),
-      });
-      if (Result.isError(migrated)) return migrated;
+        yield* Result.await(
+          applyMigration({
+            db: input.db,
+            moduleId,
+            migration: { id: migrationId, up: migration.up },
+            nowEpochMs: now(),
+          }),
+        );
+      }
     }
-  }
 
-  return Result.ok(undefined);
+    return Result.ok(undefined);
+  });
 }

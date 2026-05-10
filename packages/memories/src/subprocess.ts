@@ -163,29 +163,41 @@ export async function runStage1Extractor(input: {
     rolloutCwd: input.rolloutCwd,
     rolloutContents: input.rolloutContents,
   });
-  const result = await runPiPrint({
-    cwd: input.cwd,
-    model: input.model,
-    prompt,
-    timeoutMs: input.timeoutMs,
-    systemPrompt: CODEX_STAGE_ONE_SYSTEM_PROMPT,
-  });
-  if (Result.isError(result)) return Result.err(result.error);
-
-  return Result.try({
-    try: () => {
-      const parsed = parseJsonObject(result.value);
-      if (!isStage1ModelOutput(parsed)) throw new Error("Invalid Stage 1 JSON shape");
-      if (parsed.raw_memory.trim().length === 0 && parsed.rollout_summary.trim().length === 0)
-        return undefined;
-      return parsed;
-    },
-    catch: (cause) =>
-      new MemorySubprocessError({
-        code: "output_parse_failed",
-        message: "Failed to parse Stage 1 JSON output",
-        cause,
+  return Result.gen(async function* () {
+    const result = yield* Result.await(
+      runPiPrint({
+        cwd: input.cwd,
+        model: input.model,
+        prompt,
+        timeoutMs: input.timeoutMs,
+        systemPrompt: CODEX_STAGE_ONE_SYSTEM_PROMPT,
       }),
+    );
+
+    const parsed = yield* Result.try({
+      try: () => parseJsonObject(result),
+      catch: (cause) =>
+        new MemorySubprocessError({
+          code: "output_parse_failed",
+          message: "Failed to parse Stage 1 JSON output",
+          cause,
+        }),
+    });
+
+    return Result.try({
+      try: () => {
+        if (!isStage1ModelOutput(parsed)) throw new Error("Invalid Stage 1 JSON shape");
+        if (parsed.raw_memory.trim().length === 0 && parsed.rollout_summary.trim().length === 0)
+          return undefined;
+        return parsed;
+      },
+      catch: (cause) =>
+        new MemorySubprocessError({
+          code: "output_parse_failed",
+          message: "Failed to parse Stage 1 JSON output",
+          cause,
+        }),
+    });
   });
 }
 

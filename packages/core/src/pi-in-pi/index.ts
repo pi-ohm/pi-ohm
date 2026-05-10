@@ -195,21 +195,24 @@ export const pipDbModule: OhmDbModule = {
     {
       id: "0001_create_pip_session",
       async up(db) {
-        const created = await db.execute(`CREATE TABLE IF NOT EXISTS ${PIP_TABLE} (
-          pip_id TEXT PRIMARY KEY,
-          owner_package TEXT NOT NULL,
-          role TEXT NOT NULL,
-          parent_session_id TEXT NOT NULL,
-          child_session_id TEXT NOT NULL,
-          child_session_file TEXT,
-          status_state TEXT NOT NULL,
-          status_result TEXT,
-          status_error TEXT,
-          created_at_epoch_ms INTEGER NOT NULL,
-          updated_at_epoch_ms INTEGER NOT NULL
-        )`);
-        if (Result.isError(created)) return Result.err(created.error);
-        return Result.ok(undefined);
+        return Result.gen(async function* () {
+          yield* Result.await(
+            db.execute(`CREATE TABLE IF NOT EXISTS ${PIP_TABLE} (
+              pip_id TEXT PRIMARY KEY,
+              owner_package TEXT NOT NULL,
+              role TEXT NOT NULL,
+              parent_session_id TEXT NOT NULL,
+              child_session_id TEXT NOT NULL,
+              child_session_file TEXT,
+              status_state TEXT NOT NULL,
+              status_result TEXT,
+              status_error TEXT,
+              created_at_epoch_ms INTEGER NOT NULL,
+              updated_at_epoch_ms INTEGER NOT NULL
+            )`),
+          );
+          return Result.ok(undefined);
+        });
       },
     },
   ],
@@ -270,59 +273,44 @@ export class PipController {
 
   async spawn(input: PipSpawnInput): Promise<PipResult<PipSpawnResult>> {
     const reservation = this.#registry.reserve();
-    if (Result.isError(reservation)) return Result.err(reservation.error);
-
-    const spawned = await this.#runner.spawn({ ...input, pipId: reservation.value.pipId });
-    if (Result.isError(spawned)) {
-      reservation.value.releaseIfUncommitted();
-      return debugResult(this.#debug, "pip.spawn", spawned, {
-        pipId: reservation.value.pipId,
-        ownerPackage: input.ownerPackage,
-        role: input.role,
-      });
-    }
-
-    const now = this.#now();
-    const stored = await this.#graph.upsert({
-      ...spawned.value,
-      createdAtEpochMs: now,
-      updatedAtEpochMs: now,
-    });
-    if (Result.isError(stored)) {
-      reservation.value.releaseIfUncommitted();
-      debugResult(this.#debug, "pip.spawn", stored, {
-        pipId: reservation.value.pipId,
-        ownerPackage: input.ownerPackage,
-        role: input.role,
-      });
-      return Result.err(stored.error);
-    }
-
-    const entry = this.writeEntry({
-      kind: "pip_spawned",
-      pipId: spawned.value.pipId,
-      ownerPackage: spawned.value.ownerPackage,
-      role: spawned.value.role,
-      childSessionId: spawned.value.childSessionId,
-      childSessionFile: spawned.value.childSessionFile,
-      atEpochMs: now,
-    });
-    if (Result.isError(entry)) {
-      reservation.value.releaseIfUncommitted();
-      debugResult(this.#debug, "pip.spawn", entry, {
-        pipId: spawned.value.pipId,
-        ownerPackage: input.ownerPackage,
-        role: input.role,
-      });
-      return Result.err(entry.error);
-    }
-
-    reservation.value.commit();
-    return debugResult(this.#debug, "pip.spawn", spawned, {
-      pipId: spawned.value.pipId,
+    const fields = {
+      pipId: Result.isOk(reservation) ? reservation.value.pipId : undefined,
       ownerPackage: input.ownerPackage,
       role: input.role,
-    });
+    };
+
+    const spawned = await Result.gen(async function* (this: PipController) {
+      const reserved = yield* reservation;
+      const child = yield* Result.await(this.#runner.spawn({ ...input, pipId: reserved.pipId }));
+      const now = this.#now();
+
+      yield* Result.await(
+        this.#graph.upsert({
+          ...child,
+          createdAtEpochMs: now,
+          updatedAtEpochMs: now,
+        }),
+      );
+
+      yield* this.writeEntry({
+        kind: "pip_spawned",
+        pipId: child.pipId,
+        ownerPackage: child.ownerPackage,
+        role: child.role,
+        childSessionId: child.childSessionId,
+        childSessionFile: child.childSessionFile,
+        atEpochMs: now,
+      });
+
+      reserved.commit();
+      return Result.ok(child);
+    }, this);
+
+    if (Result.isError(spawned) && Result.isOk(reservation)) {
+      reservation.value.releaseIfUncommitted();
+    }
+
+    return debugResult(this.#debug, "pip.spawn", spawned, fields);
   }
 
   async send(input: PipSendInput): Promise<PipResult<PipSendResult>> {
@@ -341,40 +329,33 @@ export class PipController {
   }
 
   async close(input: PipCloseInput): Promise<PipResult<PipCloseResult>> {
-    const closed = await this.#runner.close(input);
     const fields = { pipId: input.pipId };
-    if (Result.isError(closed)) return debugResult(this.#debug, "pip.close", closed, fields);
+    const closed = await Result.gen(async function* (this: PipController) {
+      const result = yield* Result.await(this.#runner.close(input));
+      const edge = yield* Result.await(this.#graph.get(input.pipId));
+      if (!edge) return Result.ok(result);
 
-    const edge = await this.#graph.get(input.pipId);
-    if (Result.isError(edge)) {
-      debugResult(this.#debug, "pip.close", edge, fields);
-      return Result.err(edge.error);
-    }
-    if (!edge.value) return debugResult(this.#debug, "pip.close", closed, fields);
+      const now = this.#now();
+      yield* Result.await(
+        this.#graph.updateStatus({
+          pipId: input.pipId,
+          status: { state: "shutdown" },
+          updatedAtEpochMs: now,
+        }),
+      );
 
-    const now = this.#now();
-    const stored = await this.#graph.updateStatus({
-      pipId: input.pipId,
-      status: { state: "shutdown" },
-      updatedAtEpochMs: now,
-    });
-    if (Result.isError(stored)) {
-      debugResult(this.#debug, "pip.close", stored, fields);
-      return Result.err(stored.error);
-    }
+      yield* this.writeEntry({
+        kind: "pip_closed",
+        pipId: input.pipId,
+        ownerPackage: edge.ownerPackage,
+        role: edge.role,
+        status: { state: "shutdown" },
+        atEpochMs: now,
+      });
 
-    const entry = this.writeEntry({
-      kind: "pip_closed",
-      pipId: input.pipId,
-      ownerPackage: edge.value.ownerPackage,
-      role: edge.value.role,
-      status: { state: "shutdown" },
-      atEpochMs: now,
-    });
-    if (Result.isError(entry)) {
-      debugResult(this.#debug, "pip.close", entry, fields);
-      return Result.err(entry.error);
-    }
+      return Result.ok(result);
+    }, this);
+
     return debugResult(this.#debug, "pip.close", closed, fields);
   }
 
@@ -440,91 +421,116 @@ export function createInMemoryPipGraphStore(): PipGraphStore {
 }
 
 export function createPipGraphStore(db: OhmDbClient): PipGraphStore {
+  const execute = async (
+    stage: string,
+    statement: Parameters<OhmDbClient["execute"]>[0],
+    args?: Parameters<OhmDbClient["execute"]>[1],
+  ) => {
+    const result = await db.execute(statement, args);
+    if (Result.isError(result)) return fromDbError(stage, result.error);
+    return Result.ok(result.value);
+  };
+
   return {
     async upsert(edge) {
-      const inserted = await db.execute(
-        `INSERT INTO ${PIP_TABLE} (
-          pip_id,
-          owner_package,
-          role,
-          parent_session_id,
-          child_session_id,
-          child_session_file,
-          status_state,
-          status_result,
-          status_error,
-          created_at_epoch_ms,
-          updated_at_epoch_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(pip_id) DO UPDATE SET
-          owner_package = excluded.owner_package,
-          role = excluded.role,
-          parent_session_id = excluded.parent_session_id,
-          child_session_id = excluded.child_session_id,
-          child_session_file = excluded.child_session_file,
-          status_state = excluded.status_state,
-          status_result = excluded.status_result,
-          status_error = excluded.status_error,
-          updated_at_epoch_ms = excluded.updated_at_epoch_ms`,
-        [
-          edge.pipId,
-          edge.ownerPackage,
-          edge.role,
-          edge.parentSessionId,
-          edge.childSessionId,
-          edge.childSessionFile,
-          edge.status.state,
-          statusResult(edge.status),
-          statusError(edge.status),
-          edge.createdAtEpochMs,
-          edge.updatedAtEpochMs,
-        ],
-      );
-      if (Result.isError(inserted)) return fromDbError("db.upsert", inserted.error);
-      return Result.ok(undefined);
+      return Result.gen(async function* () {
+        yield* Result.await(
+          execute(
+            "db.upsert",
+            `INSERT INTO ${PIP_TABLE} (
+              pip_id,
+              owner_package,
+              role,
+              parent_session_id,
+              child_session_id,
+              child_session_file,
+              status_state,
+              status_result,
+              status_error,
+              created_at_epoch_ms,
+              updated_at_epoch_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(pip_id) DO UPDATE SET
+              owner_package = excluded.owner_package,
+              role = excluded.role,
+              parent_session_id = excluded.parent_session_id,
+              child_session_id = excluded.child_session_id,
+              child_session_file = excluded.child_session_file,
+              status_state = excluded.status_state,
+              status_result = excluded.status_result,
+              status_error = excluded.status_error,
+              updated_at_epoch_ms = excluded.updated_at_epoch_ms`,
+            [
+              edge.pipId,
+              edge.ownerPackage,
+              edge.role,
+              edge.parentSessionId,
+              edge.childSessionId,
+              edge.childSessionFile,
+              edge.status.state,
+              statusResult(edge.status),
+              statusError(edge.status),
+              edge.createdAtEpochMs,
+              edge.updatedAtEpochMs,
+            ],
+          ),
+        );
+        return Result.ok(undefined);
+      });
     },
     async updateStatus(input) {
-      const updated = await db.execute(
-        `UPDATE ${PIP_TABLE}
-         SET status_state = ?, status_result = ?, status_error = ?, updated_at_epoch_ms = ?
-         WHERE pip_id = ?`,
-        [
-          input.status.state,
-          statusResult(input.status),
-          statusError(input.status),
-          input.updatedAtEpochMs,
-          input.pipId,
-        ],
-      );
-      if (Result.isError(updated)) return fromDbError("db.update_status", updated.error);
-      return Result.ok(undefined);
+      return Result.gen(async function* () {
+        yield* Result.await(
+          execute(
+            "db.update_status",
+            `UPDATE ${PIP_TABLE}
+             SET status_state = ?, status_result = ?, status_error = ?, updated_at_epoch_ms = ?
+             WHERE pip_id = ?`,
+            [
+              input.status.state,
+              statusResult(input.status),
+              statusError(input.status),
+              input.updatedAtEpochMs,
+              input.pipId,
+            ],
+          ),
+        );
+        return Result.ok(undefined);
+      });
     },
     async get(pipId) {
-      const selected = await db.execute(`SELECT * FROM ${PIP_TABLE} WHERE pip_id = ?`, [pipId]);
-      if (Result.isError(selected)) return fromDbError("db.get", selected.error);
-      const row = selected.value.rows[0];
-      if (!row) return Result.ok(undefined);
-      return parseEdge(row);
+      return Result.gen(async function* () {
+        const selected = yield* Result.await(
+          execute("db.get", `SELECT * FROM ${PIP_TABLE} WHERE pip_id = ?`, [pipId]),
+        );
+        const row = selected.rows[0];
+        if (!row) return Result.ok(undefined);
+        const edge = yield* parseEdge(row);
+        return Result.ok(edge);
+      });
     },
     async list(input = {}) {
-      const selected = input.ownerPackage
-        ? await db.execute(`SELECT * FROM ${PIP_TABLE} WHERE owner_package = ?`, [
-            input.ownerPackage,
-          ])
-        : await db.execute(`SELECT * FROM ${PIP_TABLE}`);
-      if (Result.isError(selected)) return fromDbError("db.list", selected.error);
+      return Result.gen(async function* () {
+        const selected = yield* Result.await(
+          input.ownerPackage
+            ? execute("db.list", `SELECT * FROM ${PIP_TABLE} WHERE owner_package = ?`, [
+                input.ownerPackage,
+              ])
+            : execute("db.list", `SELECT * FROM ${PIP_TABLE}`),
+        );
 
-      const parsed = selected.value.rows.map(parseEdge);
-      const error = parsed.find(Result.isError);
-      if (error) return Result.err(error.error);
+        const edges = selected.rows.map((row) => parseEdge(row));
+        const parsed: PipGraphEdge[] = [];
+        for (const edge of edges) parsed.push(yield* edge);
 
-      const edges = parsed.flatMap((edge) => (Result.isOk(edge) ? [edge.value] : []));
-      return Result.ok(
-        edges.filter((edge) => {
-          if (input.parentSessionId && edge.parentSessionId !== input.parentSessionId) return false;
-          return true;
-        }),
-      );
+        return Result.ok(
+          parsed.filter((edge) => {
+            if (input.parentSessionId && edge.parentSessionId !== input.parentSessionId)
+              return false;
+            return true;
+          }),
+        );
+      });
     },
   };
 }

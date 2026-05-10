@@ -93,9 +93,10 @@ export class MemoryDb {
   static async open(paths: MemoryPaths): Promise<MemoryDbResult<MemoryDb>> {
     const client = createClient({ url: `file:${paths.state}` });
     const db = new MemoryDb(client);
-    const initialized = await db.init();
-    if (Result.isError(initialized)) return Result.err(initialized.error);
-    return Result.ok(db);
+    return Result.gen(async function* () {
+      yield* Result.await(db.init());
+      return Result.ok(db);
+    });
   }
 
   async close(): Promise<void> {
@@ -174,24 +175,26 @@ export class MemoryDb {
   }
 
   async getStage1(threadId: string): Promise<MemoryDbResult<Stage1Output | undefined>> {
-    const result = await Result.tryPromise({
-      try: async () =>
-        this.client.execute({
-          sql: "SELECT * FROM stage1_outputs WHERE thread_id = ?",
-          args: [threadId],
+    return Result.gen(async function* (this: MemoryDb) {
+      const result = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            this.client.execute({
+              sql: "SELECT * FROM stage1_outputs WHERE thread_id = ?",
+              args: [threadId],
+            }),
+          catch: (cause) =>
+            new MemoryDbError({
+              code: "db_query_failed",
+              message: "Failed to get stage1 output",
+              cause,
+            }),
         }),
-      catch: (cause) =>
-        new MemoryDbError({
-          code: "db_query_failed",
-          message: "Failed to get stage1 output",
-          cause,
-        }),
-    });
-    if (Result.isError(result)) return Result.err(result.error);
-    const rows = parseRows(stage1Row, result.value.rows);
-    if (Result.isError(rows)) return Result.err(rows.error);
-    const row = rows.value[0];
-    return Result.ok(row ? toStage1(row) : undefined);
+      );
+      const rows = yield* parseRows(stage1Row, result.rows);
+      const row = rows[0];
+      return Result.ok(row ? toStage1(row) : undefined);
+    }, this);
   }
 
   async deleteStage1(threadId: string): Promise<MemoryDbResult<true>> {
@@ -216,23 +219,26 @@ export class MemoryDb {
     kind: string,
     key: string,
   ): Promise<MemoryDbResult<number | undefined>> {
-    const result = await Result.tryPromise({
-      try: async () =>
-        this.client.execute({
-          sql: "SELECT last_success_watermark FROM jobs WHERE kind = ? AND job_key = ? AND status = 'succeeded'",
-          args: [kind, key],
+    return Result.gen(async function* (this: MemoryDb) {
+      const result = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            this.client.execute({
+              sql: "SELECT last_success_watermark FROM jobs WHERE kind = ? AND job_key = ? AND status = 'succeeded'",
+              args: [kind, key],
+            }),
+          catch: (cause) =>
+            new MemoryDbError({
+              code: "db_query_failed",
+              message: "Failed to get job success watermark",
+              cause,
+            }),
         }),
-      catch: (cause) =>
-        new MemoryDbError({
-          code: "db_query_failed",
-          message: "Failed to get job success watermark",
-          cause,
-        }),
-    });
-    if (Result.isError(result)) return Result.err(result.error);
-    const value = result.value.rows[0]?.last_success_watermark;
-    if (typeof value === "number") return Result.ok(value);
-    return Result.ok(undefined);
+      );
+      const value = result.rows[0]?.last_success_watermark;
+      if (typeof value === "number") return Result.ok(value);
+      return Result.ok(undefined);
+    }, this);
   }
 
   async claimJob(input: {
@@ -359,42 +365,46 @@ export class MemoryDb {
   }
 
   async listStage1(limit: number): Promise<MemoryDbResult<Stage1Output[]>> {
-    const result = await Result.tryPromise({
-      try: async () =>
-        this.client.execute({
-          sql: `SELECT * FROM stage1_outputs
-            WHERE length(raw_memory) > 0 OR length(rollout_summary) > 0
-            ORDER BY usage_count DESC, COALESCE(last_usage, source_updated_at) DESC, source_updated_at DESC, thread_id DESC
-            LIMIT ?`,
-          args: [limit],
+    return Result.gen(async function* (this: MemoryDb) {
+      const result = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            this.client.execute({
+              sql: `SELECT * FROM stage1_outputs
+                WHERE length(raw_memory) > 0 OR length(rollout_summary) > 0
+                ORDER BY usage_count DESC, COALESCE(last_usage, source_updated_at) DESC, source_updated_at DESC, thread_id DESC
+                LIMIT ?`,
+              args: [limit],
+            }),
+          catch: (cause) =>
+            new MemoryDbError({
+              code: "db_query_failed",
+              message: "Failed to list stage1 outputs",
+              cause,
+            }),
         }),
-      catch: (cause) =>
-        new MemoryDbError({
-          code: "db_query_failed",
-          message: "Failed to list stage1 outputs",
-          cause,
-        }),
-    });
-    if (Result.isError(result)) return Result.err(result.error);
-    const rows = parseRows(stage1Row, result.value.rows);
-    if (Result.isError(rows)) return Result.err(rows.error);
-    return Result.ok(rows.value.map(toStage1).sort((a, b) => a.threadId.localeCompare(b.threadId)));
+      );
+      const rows = yield* parseRows(stage1Row, result.rows);
+      return Result.ok(rows.map(toStage1).sort((a, b) => a.threadId.localeCompare(b.threadId)));
+    }, this);
   }
 
   async countStage1(): Promise<MemoryDbResult<number>> {
-    const result = await Result.tryPromise({
-      try: async () => this.client.execute("SELECT COUNT(*) AS count FROM stage1_outputs"),
-      catch: (cause) =>
-        new MemoryDbError({
-          code: "db_query_failed",
-          message: "Failed to count stage1 outputs",
-          cause,
+    return Result.gen(async function* (this: MemoryDb) {
+      const result = yield* Result.await(
+        Result.tryPromise({
+          try: async () => this.client.execute("SELECT COUNT(*) AS count FROM stage1_outputs"),
+          catch: (cause) =>
+            new MemoryDbError({
+              code: "db_query_failed",
+              message: "Failed to count stage1 outputs",
+              cause,
+            }),
         }),
-    });
-    if (Result.isError(result)) return Result.err(result.error);
-    const rows = parseRows(countRow, result.value.rows);
-    if (Result.isError(rows)) return Result.err(rows.error);
-    return Result.ok(rows.value[0]?.count ?? 0);
+      );
+      const rows = yield* parseRows(countRow, result.rows);
+      return Result.ok(rows[0]?.count ?? 0);
+    }, this);
   }
 
   async incrementUsage(input: {
@@ -465,21 +475,27 @@ export class MemoryDb {
   }
 
   async getMode(threadId: string): Promise<MemoryDbResult<MemoryMode | undefined>> {
-    const result = await Result.tryPromise({
-      try: async () =>
-        this.client.execute({
-          sql: "SELECT * FROM thread_memory_modes WHERE thread_id = ?",
-          args: [threadId],
+    return Result.gen(async function* (this: MemoryDb) {
+      const result = yield* Result.await(
+        Result.tryPromise({
+          try: async () =>
+            this.client.execute({
+              sql: "SELECT * FROM thread_memory_modes WHERE thread_id = ?",
+              args: [threadId],
+            }),
+          catch: (cause) =>
+            new MemoryDbError({
+              code: "db_query_failed",
+              message: "Failed to get memory mode",
+              cause,
+            }),
         }),
-      catch: (cause) =>
-        new MemoryDbError({ code: "db_query_failed", message: "Failed to get memory mode", cause }),
-    });
-    if (Result.isError(result)) return Result.err(result.error);
-    const rows = parseRows(modeRow, result.value.rows);
-    if (Result.isError(rows)) return Result.err(rows.error);
-    const row = rows.value[0];
-    if (!row) return Result.ok(undefined);
-    return Result.ok({ threadId: row.thread_id, mode: row.mode, updatedAt: row.updated_at });
+      );
+      const rows = yield* parseRows(modeRow, result.rows);
+      const row = rows[0];
+      if (!row) return Result.ok(undefined);
+      return Result.ok({ threadId: row.thread_id, mode: row.mode, updatedAt: row.updated_at });
+    }, this);
   }
 
   async reset(): Promise<MemoryDbResult<true>> {

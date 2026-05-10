@@ -46,6 +46,10 @@ const ALLOWED_SCOPES = new Set([
   "db",
   "database",
   "prompts",
+  "pip",
+  "logging",
+  "memory",
+  "events",
 ]);
 
 const HEADER_PATTERN =
