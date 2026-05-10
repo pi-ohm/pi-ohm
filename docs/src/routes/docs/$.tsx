@@ -10,6 +10,7 @@ import { staticFunctionMiddleware } from "@tanstack/start-static-server-function
 import { useFumadocsLoader } from "fumadocs-core/source/client";
 import { Suspense } from "react";
 import { LLMCopyButton, ViewOptions } from "@/components/ai/page-actions";
+import { StripeTOC } from "@/components/toc/stripe";
 
 export const Route = createFileRoute("/docs/$")({
   component: Page,
@@ -50,7 +51,15 @@ const clientLoader = browserCollections.docs.createClientLoader({
     },
   ) {
     return (
-      <DocsPage toc={toc}>
+      <DocsPage
+        toc={toc}
+        tableOfContent={{
+          component: <StripeTOC items={toc} />,
+        }}
+        tableOfContentPopover={{
+          style: "clerk",
+        }}
+      >
         <DocsTitle>{frontmatter.title}</DocsTitle>
         <DocsDescription>{frontmatter.description}</DocsDescription>
         <div className="flex flex-row gap-2 items-center border-b -mt-4 pb-6">
