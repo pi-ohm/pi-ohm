@@ -53,19 +53,22 @@ export function debugResult<T, E>(
   result: BetterResult<T, E>,
   fields?: DebugFields,
 ): BetterResult<T, E> {
-  if (Result.isError(result)) {
-    debug(event, {
-      ...fields,
-      outcome: "error",
-      error: serializeDebugError(result.error),
-    });
-    return result;
-  }
-
-  debug(event, {
-    ...fields,
-    outcome: "ok",
+  result.match({
+    ok: () => {
+      debug(event, {
+        ...fields,
+        outcome: "ok",
+      });
+    },
+    err: (error) => {
+      debug(event, {
+        ...fields,
+        outcome: "error",
+        error: serializeDebugError(error),
+      });
+    },
   });
+
   return result;
 }
 

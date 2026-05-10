@@ -7062,7 +7062,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"better-result@npm:^2.6.0":
+"better-result@npm:2.7.0":
   version: 2.7.0
   resolution: "better-result@npm:2.7.0"
   dependencies:
