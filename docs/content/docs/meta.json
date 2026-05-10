@@ -1,4 +1,14 @@
 {
   "title": "pi-ohm",
-  "pages": ["index", "config", "subagents", "modes", "painter", "handoff", "session-search"]
+  "pages": [
+    "index",
+    "installation",
+    "getting-started",
+    "config",
+    "subagents",
+    "modes",
+    "painter",
+    "handoff",
+    "session-search"
+  ]
 }
