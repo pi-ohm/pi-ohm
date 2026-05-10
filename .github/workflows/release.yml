@@ -20,12 +20,12 @@ on:
         type: choice
         options:
           - all
-          - config
           - core
           - modes
           - handoff
           - memories
           - subagents
+          - tui
           - session-search
           - painter
           - pi-ohm
@@ -231,9 +231,6 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
 
           case "${{ inputs.package }}" in
-            config)
-              only="@pi-ohm/config"
-              ;;
             core)
               only="@pi-ohm/core"
               ;;
@@ -248,6 +245,9 @@ jobs:
               ;;
             subagents)
               only="@pi-ohm/subagents"
+              ;;
+            tui)
+              only="@pi-ohm/tui"
               ;;
             session-search)
               only="@pi-ohm/session-search"

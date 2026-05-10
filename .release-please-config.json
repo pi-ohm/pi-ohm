@@ -14,10 +14,10 @@
       "type": "linked-versions",
       "groupName": "pi-ohm-lockstep",
       "components": [
-        "config",
         "core",
         "modes",
         "handoff",
+        "memories",
         "subagents",
         "tui",
         "session-search",
@@ -27,11 +27,6 @@
     }
   ],
   "packages": {
-    "packages/config": {
-      "component": "config",
-      "package-name": "@pi-ohm/core/config",
-      "skip-github-release": true
-    },
     "packages/core": {
       "component": "core",
       "package-name": "@pi-ohm/core",
@@ -45,6 +40,11 @@
     "packages/handoff": {
       "component": "handoff",
       "package-name": "@pi-ohm/handoff",
+      "skip-github-release": true
+    },
+    "packages/memories": {
+      "component": "memories",
+      "package-name": "@pi-ohm/memories",
       "skip-github-release": true
     },
     "packages/subagents": {

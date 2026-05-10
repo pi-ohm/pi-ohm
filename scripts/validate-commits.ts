@@ -50,6 +50,7 @@ const ALLOWED_SCOPES = new Set([
   "logging",
   "memory",
   "events",
+  "ci",
 ]);
 
 const HEADER_PATTERN =
