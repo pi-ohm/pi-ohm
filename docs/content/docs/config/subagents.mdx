@@ -41,45 +41,6 @@ Configure agents in your ohm.json config file:
         "find": "allow",
         "bash": "deny"
       }
-    },
-
-    "oracle": {
-      "model": "openai-codex/gpt-5.4-mini:high",
-      "tools": ["read", "grep"],
-      "description": "Use for architecture review, complex debugging, planning, and correctness checks.",
-      "prompt": "You are Oracle. Focus on correctness, design, risk, and hard tradeoffs."
-    },
-
-    "finder": {
-      "tools": ["read", "grep", "find"],
-      "description": "Use for finding code by behavior, broad concepts, flows, or related paths.",
-      "prompt": "You are Finder. Search precisely and return paths with concise notes."
-    },
-
-    "reviewer": {
-      "disabled": false,
-      "description": "Use for reviewing diffs and checking implementation quality.",
-      "prompt": "Find correctness, type safety, and design issues.",
-      "tools": ["read", "grep", "bash"],
-      "permissions": {
-        "bash": "deny",
-        "read": "allow",
-        "grep": "allow"
-      },
-      "variants": {
-        "*gpt-5.4-mini*": {
-          "description": "Use for quick actionable review on gpt-5.4-mini.",
-          "prompt": "Review quickly. Report only actionable issues.",
-          "tools": ["read", "grep"],
-          "permissions": {
-            "bash": "inherit",
-            "grep": "deny"
-          }
-        },
-        "*experimental*": {
-          "disabled": true
-        }
-      }
     }
   }
 }
