@@ -2,15 +2,15 @@ import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
 import { registerConfig } from "@pi-ohm/core/config";
 import {
-  parseSubagentProfilePatch,
-  parseSubagentProfileVariantPatch,
-  SubagentProfilePatchSchema,
-  SubagentProfileVariantMapPatchSchema,
-  SubagentProfileVariantPatchSchema,
+  parseSubagentAgentPatch,
+  parseSubagentAgentVariantPatch,
+  SubagentAgentPatchSchema,
+  SubagentAgentVariantMapPatchSchema,
+  SubagentAgentVariantPatchSchema,
   SubagentToolPermissionDecisionSchema,
   SubagentToolPermissionMapSchema,
-  type SubagentProfilePatch,
-  type SubagentProfileVariantPatch,
+  type SubagentAgentPatch,
+  type SubagentAgentVariantPatch,
   type SubagentToolPermissionDecisionPatch,
 } from "./schema";
 
@@ -22,7 +22,7 @@ export interface SubagentsConfig {
   readonly subagents: SubagentRuntimeConfig;
 }
 
-export interface SubagentProfileRuntimeConfig {
+export interface SubagentAgentRuntimeConfig {
   disabled?: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
@@ -30,14 +30,13 @@ export interface SubagentProfileRuntimeConfig {
   maxTurns?: number;
   prompt?: string;
   description?: string;
-  whenToUse?: readonly string[];
   permissions?: Readonly<Record<string, SubagentToolPermissionDecision>>;
-  variants?: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>>;
+  variants?: Readonly<Record<string, SubagentAgentVariantRuntimeConfig>>;
 }
 
 export type SubagentToolPermissionDecision = "allow" | "deny" | "inherit";
 
-export interface SubagentProfileVariantRuntimeConfig {
+export interface SubagentAgentVariantRuntimeConfig {
   disabled?: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
@@ -45,11 +44,10 @@ export interface SubagentProfileVariantRuntimeConfig {
   maxTurns?: number;
   prompt?: string;
   description?: string;
-  whenToUse?: readonly string[];
   permissions?: Readonly<Record<string, SubagentToolPermissionDecision>>;
 }
 
-export interface ResolvedSubagentProfileRuntimeConfig {
+export interface ResolvedSubagentAgentRuntimeConfig {
   disabled: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
@@ -57,7 +55,6 @@ export interface ResolvedSubagentProfileRuntimeConfig {
   maxTurns?: number;
   prompt?: string;
   description?: string;
-  whenToUse?: readonly string[];
   permissions: Readonly<Record<string, "allow" | "deny">>;
   variantPattern?: string;
 }
@@ -71,7 +68,7 @@ export interface SubagentRuntimeConfig {
     subagents: Record<string, "allow" | "deny">;
     allowInternalRouting: boolean;
   };
-  profiles: Record<string, SubagentProfileRuntimeConfig>;
+  agents: Record<string, SubagentAgentRuntimeConfig>;
 }
 
 export type SubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
@@ -94,7 +91,7 @@ export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
     subagents: {},
     allowInternalRouting: false,
   },
-  profiles: {},
+  agents: {},
 };
 
 export const subagentsConfigModule = registerConfig({
@@ -116,7 +113,6 @@ const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
   "taskRetentionMs",
   "backend",
   "permissions",
-  "profiles",
 ]);
 
 function isJsonMap(value: unknown): value is JsonMap {
@@ -300,9 +296,9 @@ function stripThinkingSuffix(modelId: string): string {
 
 function mergeSubagentVariantConfig(
   patch: JsonMap,
-  fallback: SubagentProfileVariantRuntimeConfig | undefined,
-): SubagentProfileVariantRuntimeConfig | undefined {
-  const parsedPatch = parseSubagentProfileVariantPatch(patch);
+  fallback: SubagentAgentVariantRuntimeConfig | undefined,
+): SubagentAgentVariantRuntimeConfig | undefined {
+  const parsedPatch = parseSubagentAgentVariantPatch(patch);
   if (!parsedPatch) return fallback;
 
   const disabled = parsedPatch.disabled;
@@ -312,7 +308,6 @@ function mergeSubagentVariantConfig(
   const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
   const description = parsedPatch.description;
-  const whenToUse = parsedPatch.whenToUse;
   const normalizedPermissionsInput = parsedPatch.permissions
     ? Object.fromEntries(
         Object.entries(parsedPatch.permissions).map(([tool, decision]) => [
@@ -326,7 +321,7 @@ function mergeSubagentVariantConfig(
     fallback?.permissions ?? {},
   );
 
-  const merged: SubagentProfileVariantRuntimeConfig = {
+  const merged: SubagentAgentVariantRuntimeConfig = {
     ...fallback,
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
@@ -335,7 +330,6 @@ function mergeSubagentVariantConfig(
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
-    ...(whenToUse ? { whenToUse } : {}),
     ...(Object.keys(permissions).length > 0 ? { permissions } : {}),
   };
 
@@ -347,7 +341,6 @@ function mergeSubagentVariantConfig(
     merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
     merged.description !== undefined ||
-    merged.whenToUse !== undefined ||
     merged.permissions !== undefined;
 
   if (!hasValues) return undefined;
@@ -356,11 +349,11 @@ function mergeSubagentVariantConfig(
 
 function normalizeSubagentVariantMap(
   value: unknown,
-  fallback: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>>,
-): Readonly<Record<string, SubagentProfileVariantRuntimeConfig>> {
+  fallback: Readonly<Record<string, SubagentAgentVariantRuntimeConfig>>,
+): Readonly<Record<string, SubagentAgentVariantRuntimeConfig>> {
   if (!isJsonMap(value)) return fallback;
 
-  const merged: Record<string, SubagentProfileVariantRuntimeConfig> = { ...fallback };
+  const merged: Record<string, SubagentAgentVariantRuntimeConfig> = { ...fallback };
   for (const [rawPattern, rawVariant] of Object.entries(value)) {
     const pattern = normalizeSubagentVariantPattern(rawPattern);
     if (!pattern) continue;
@@ -374,11 +367,11 @@ function normalizeSubagentVariantMap(
   return merged;
 }
 
-function mergeSubagentProfileConfig(
+function mergeSubagentAgentConfig(
   patch: JsonMap,
-  fallback: SubagentProfileRuntimeConfig | undefined,
-): SubagentProfileRuntimeConfig | undefined {
-  const parsedPatch = parseSubagentProfilePatch(patch);
+  fallback: SubagentAgentRuntimeConfig | undefined,
+): SubagentAgentRuntimeConfig | undefined {
+  const parsedPatch = parseSubagentAgentPatch(patch);
   if (!parsedPatch) return fallback;
 
   const disabled = parsedPatch.disabled;
@@ -388,7 +381,6 @@ function mergeSubagentProfileConfig(
   const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
   const description = parsedPatch.description;
-  const whenToUse = parsedPatch.whenToUse;
   const normalizedPermissionsInput = parsedPatch.permissions
     ? Object.fromEntries(
         Object.entries(parsedPatch.permissions).map(([tool, decision]) => [
@@ -403,7 +395,7 @@ function mergeSubagentProfileConfig(
   );
   const variants = normalizeSubagentVariantMap(parsedPatch.variants, fallback?.variants ?? {});
 
-  const merged: SubagentProfileRuntimeConfig = {
+  const merged: SubagentAgentRuntimeConfig = {
     ...fallback,
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
@@ -412,7 +404,6 @@ function mergeSubagentProfileConfig(
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
-    ...(whenToUse ? { whenToUse } : {}),
     ...(Object.keys(permissions).length > 0 ? { permissions } : {}),
     ...(Object.keys(variants).length > 0 ? { variants } : {}),
   };
@@ -425,7 +416,6 @@ function mergeSubagentProfileConfig(
     merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
     merged.description !== undefined ||
-    merged.whenToUse !== undefined ||
     merged.permissions !== undefined ||
     merged.variants !== undefined;
 
@@ -433,30 +423,10 @@ function mergeSubagentProfileConfig(
   return merged;
 }
 
-function normalizeSubagentProfileMap(
-  value: unknown,
-  fallback: Record<string, SubagentProfileRuntimeConfig>,
-): Record<string, SubagentProfileRuntimeConfig> {
-  const normalized = structuredClone(fallback);
-  if (!isJsonMap(value)) return normalized;
-
-  for (const [rawKey, rawValue] of Object.entries(value)) {
-    const key = rawKey.trim().toLowerCase();
-    if (key.length === 0) continue;
-    if (!isJsonMap(rawValue)) continue;
-
-    const mergedProfile = mergeSubagentProfileConfig(rawValue, normalized[key]);
-    if (!mergedProfile) continue;
-    normalized[key] = mergedProfile;
-  }
-
-  return normalized;
-}
-
-function normalizeInlineSubagentProfiles(
+function normalizeInlineSubagentAgents(
   value: JsonMap | undefined,
-  fallback: Record<string, SubagentProfileRuntimeConfig>,
-): Record<string, SubagentProfileRuntimeConfig> {
+  fallback: Record<string, SubagentAgentRuntimeConfig>,
+): Record<string, SubagentAgentRuntimeConfig> {
   const normalized = structuredClone(fallback);
   if (!value) return normalized;
 
@@ -467,9 +437,9 @@ function normalizeInlineSubagentProfiles(
     if (key.length === 0) continue;
     if (!isJsonMap(rawValue)) continue;
 
-    const mergedProfile = mergeSubagentProfileConfig(rawValue, normalized[key]);
-    if (!mergedProfile) continue;
-    normalized[key] = mergedProfile;
+    const merged = mergeSubagentAgentConfig(rawValue, normalized[key]);
+    if (!merged) continue;
+    normalized[key] = merged;
   }
 
   return normalized;
@@ -540,11 +510,7 @@ export function mergeSubagentRuntimeConfig(input: {
     defaults.permissions.allowInternalRouting,
   );
 
-  const explicitProfiles = normalizeSubagentProfileMap(
-    isJsonMap(patch?.profiles) ? patch.profiles : undefined,
-    defaults.profiles,
-  );
-  const profiles = normalizeInlineSubagentProfiles(patch, explicitProfiles);
+  const agents = normalizeInlineSubagentAgents(patch, defaults.agents);
 
   return {
     backend,
@@ -555,7 +521,7 @@ export function mergeSubagentRuntimeConfig(input: {
       subagents: permissionsSubagents,
       allowInternalRouting,
     },
-    profiles,
+    agents,
   };
 }
 
@@ -565,20 +531,20 @@ export function getSubagentConfiguredModel(
 ): string | undefined {
   const key = subagentId.trim().toLowerCase();
   if (key.length === 0) return undefined;
-  return config.subagents?.profiles[key]?.model;
+  return config.subagents?.agents[key]?.model;
 }
 
-export function getSubagentProfileRuntimeConfig(
+export function getSubagentAgentRuntimeConfig(
   config: RuntimeConfigWithSubagents,
   subagentId: string,
-): SubagentProfileRuntimeConfig | undefined {
+): SubagentAgentRuntimeConfig | undefined {
   const key = subagentId.trim().toLowerCase();
   if (key.length === 0) return undefined;
-  return config.subagents?.profiles[key];
+  return config.subagents?.agents[key];
 }
 
 export function resolveSubagentVariantPattern(input: {
-  readonly variants: Readonly<Record<string, SubagentProfileVariantRuntimeConfig>> | undefined;
+  readonly variants: Readonly<Record<string, SubagentAgentVariantRuntimeConfig>> | undefined;
   readonly modelPattern: string | undefined;
 }): string | undefined {
   if (!input.variants) return undefined;
@@ -625,34 +591,33 @@ function applyInheritedToolPermissions(input: {
   return resolved;
 }
 
-export function resolveSubagentProfileRuntimeConfig(input: {
+export function resolveSubagentAgentRuntimeConfig(input: {
   readonly config: RuntimeConfigWithSubagents;
   readonly subagentId: string;
   readonly modelPattern?: string;
-}): ResolvedSubagentProfileRuntimeConfig | undefined {
-  const profile = getSubagentProfileRuntimeConfig(input.config, input.subagentId);
-  if (!profile) return undefined;
+}): ResolvedSubagentAgentRuntimeConfig | undefined {
+  const agent = getSubagentAgentRuntimeConfig(input.config, input.subagentId);
+  if (!agent) return undefined;
 
   const variantPattern = resolveSubagentVariantPattern({
-    variants: profile.variants,
-    modelPattern: input.modelPattern ?? profile.model,
+    variants: agent.variants,
+    modelPattern: input.modelPattern ?? agent.model,
   });
-  const variant = variantPattern ? profile.variants?.[variantPattern] : undefined;
+  const variant = variantPattern ? agent.variants?.[variantPattern] : undefined;
 
   const permissions = applyInheritedToolPermissions({
-    base: profile.permissions,
+    base: agent.permissions,
     override: variant?.permissions,
   });
 
   return {
-    disabled: variant?.disabled ?? profile.disabled ?? false,
-    model: variant?.model ?? profile.model,
-    thinking: variant?.thinking ?? profile.thinking,
-    tools: variant?.tools ?? profile.tools,
-    maxTurns: variant?.maxTurns ?? profile.maxTurns,
-    prompt: variant?.prompt ?? profile.prompt,
-    description: variant?.description ?? profile.description,
-    whenToUse: variant?.whenToUse ?? profile.whenToUse,
+    disabled: variant?.disabled ?? agent.disabled ?? false,
+    model: variant?.model ?? agent.model,
+    thinking: variant?.thinking ?? agent.thinking,
+    tools: variant?.tools ?? agent.tools,
+    maxTurns: variant?.maxTurns ?? agent.maxTurns,
+    prompt: variant?.prompt ?? agent.prompt,
+    description: variant?.description ?? agent.description,
     permissions,
     ...(variantPattern ? { variantPattern } : {}),
   };
@@ -666,19 +631,19 @@ export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntim
     typeof value.taskMaxConcurrency === "number" &&
     typeof value.taskRetentionMs === "number" &&
     isJsonMap(value.permissions) &&
-    isJsonMap(value.profiles)
+    isJsonMap(value.agents)
   );
 }
 
 export {
-  parseSubagentProfilePatch,
-  parseSubagentProfileVariantPatch,
-  SubagentProfilePatchSchema,
-  SubagentProfileVariantMapPatchSchema,
-  SubagentProfileVariantPatchSchema,
+  parseSubagentAgentPatch,
+  parseSubagentAgentVariantPatch,
+  SubagentAgentPatchSchema,
+  SubagentAgentVariantMapPatchSchema,
+  SubagentAgentVariantPatchSchema,
   SubagentToolPermissionDecisionSchema,
   SubagentToolPermissionMapSchema,
-  type SubagentProfilePatch,
-  type SubagentProfileVariantPatch,
+  type SubagentAgentPatch,
+  type SubagentAgentVariantPatch,
   type SubagentToolPermissionDecisionPatch,
 };

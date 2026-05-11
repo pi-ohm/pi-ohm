@@ -29,13 +29,10 @@ Because the file is already named `ohm.json`, config is keyed by package namespa
   "subagents": {
     "taskMaxConcurrency": 8,
     "backend": "interactive-sdk",
-    "profiles": {
-      "reviewer": {
-        "description": "Review code changes",
-        "prompt": "Find correctness, type safety, and design issues.",
-        "model": "anthropic/claude-sonnet-4-5",
-        "whenToUse": ["review diffs", "check implementation quality"]
-      }
+    "reviewer": {
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "Find correctness, type safety, and design issues.",
+      "model": "anthropic/claude-sonnet-4-5"
     }
   },
   "handoff": {
@@ -68,7 +65,7 @@ import { registerConfig } from "@pi-ohm/core/config";
 const SubagentsConfigSchema = Type.Object(
   {
     taskMaxConcurrency: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
-    profiles: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Unknown())),
+    reviewer: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false },
 );

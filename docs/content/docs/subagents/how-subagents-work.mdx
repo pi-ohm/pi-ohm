@@ -82,7 +82,7 @@ Subagents consume Pi-in-Pi through `@pi-ohm/core/pip`:
 import { PipController, createSdkPipRunner } from "@pi-ohm/core/pip";
 ```
 
-PiP owns generic child Pi session lifecycle, parent session lifecycle entries, native Pi session linkage, and SDK failure mapping. Subagents owns agent profiles, nicknames, task names, prompts, tools, model-facing responses, and subagent event contracts.
+PiP owns generic child Pi session lifecycle, parent session lifecycle entries, native Pi session linkage, and SDK failure mapping. Subagents owns agent config, nicknames, task names, prompts, tools, model-facing responses, and subagent event contracts.
 
 PiP owns its session storage root. Runtime child sessions should be stored under the Ohm data dir, not Pi's ambient global session directory. The storage namespace comes from `ownerPackage` by default, or from an extension bus prefix/namespace if the caller provides one later.
 
@@ -384,16 +384,13 @@ Subagents should keep an opencode-style configuration model, but stored in `ohm.
 ```json title=".pi/ohm.json"
 {
   "subagents": {
-    "profiles": {
-      "reviewer": {
-        "description": "Review code changes",
-        "prompt": "You are a strict reviewer. Find correctness, type safety, and design issues.",
-        "model": "anthropic/claude-sonnet-4-5",
-        "thinking": "medium",
-        "tools": ["read", "grep", "bash"],
-        "maxTurns": 12,
-        "whenToUse": ["review diffs", "check implementation quality"]
-      }
+    "reviewer": {
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "You are a strict reviewer. Find correctness, type safety, and design issues.",
+      "model": "anthropic/claude-sonnet-4-5",
+      "thinking": "medium",
+      "tools": ["read", "grep", "bash"],
+      "maxTurns": 12
     }
   }
 }

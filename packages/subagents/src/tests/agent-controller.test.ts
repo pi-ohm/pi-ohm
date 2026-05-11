@@ -8,6 +8,7 @@ import { Result } from "better-result";
 import {
   createSubagentToolRuntime,
   createSubagentTools,
+  resolveAvailableAgents,
   resolveSpawnConfig,
 } from "../agent-controller";
 
@@ -65,22 +66,20 @@ async function withConfig<T>(
   });
 }
 
-void test("resolveSpawnConfig applies profile prompt, thinking, tools, and tool denies", async () => {
+void test("resolveSpawnConfig applies agent prompt, thinking, tools, and tool denies", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(
       path.join(cwd, ".pi", "ohm.json"),
       JSON.stringify({
         subagents: {
-          profiles: {
-            reviewer: {
-              model: "custom-provider/custom-model:high",
-              thinking: "low",
-              tools: ["read", "grep", "bash"],
-              prompt: "profile prompt",
-              permissions: {
-                bash: "deny",
-                grep: "allow",
-              },
+          reviewer: {
+            model: "custom-provider/custom-model:high",
+            thinking: "low",
+            tools: ["read", "grep", "bash"],
+            prompt: "agent prompt",
+            permissions: {
+              bash: "deny",
+              grep: "allow",
             },
           },
         },
@@ -106,7 +105,7 @@ void test("resolveSpawnConfig applies profile prompt, thinking, tools, and tool 
     assert.equal(config.value.model.api, "custom-provider");
     assert.equal(config.value.thinking, "low");
     assert.deepEqual(config.value.tools, ["read", "grep"]);
-    assert.equal(config.value.prompt, "profile prompt\n\nTask:\ninspect this diff");
+    assert.equal(config.value.prompt, "agent prompt\n\nTask:\ninspect this diff");
   });
 });
 
@@ -139,10 +138,8 @@ void test("resolveSpawnConfig uses Pi model registry custom providers before ext
       path.join(cwd, ".pi", "ohm.json"),
       JSON.stringify({
         subagents: {
-          profiles: {
-            researcher: {
-              model: "registry-provider/registry-model:medium",
-            },
+          researcher: {
+            model: "registry-provider/registry-model:medium",
           },
         },
       }),
@@ -175,11 +172,9 @@ void test("resolveSpawnConfig defaults to current session model when no model is
       path.join(cwd, ".pi", "ohm.json"),
       JSON.stringify({
         subagents: {
-          profiles: {
-            reviewer: {
-              tools: ["read"],
-              prompt: "profile prompt",
-            },
+          reviewer: {
+            tools: ["read"],
+            prompt: "agent prompt",
           },
         },
       }),
@@ -222,7 +217,7 @@ void test("resolveSpawnConfig defaults to current session model when no model is
     assert.equal(config.value.modelKey, "external-main-provider/main-model");
     assert.equal(config.value.thinking, "xhigh");
     assert.deepEqual(config.value.tools, ["read"]);
-    assert.equal(config.value.prompt, "profile prompt\n\nTask:\ninspect this diff");
+    assert.equal(config.value.prompt, "agent prompt\n\nTask:\ninspect this diff");
   });
 });
 
@@ -330,5 +325,50 @@ void test("resolveSpawnConfig hides variant-disabled subagents from model-facing
     assert.equal(config.error.message, "Subagent 'reviewer' was not found");
     assert.equal(config.error.message.includes("secret variant reviewer prompt"), false);
     assert.equal(config.error.message.includes("base reviewer prompt"), false);
+  });
+});
+
+void test("resolveAvailableAgents exposes descriptions and omits disabled agents", async () => {
+  await withConfig(async ({ cwd }) => {
+    await fs.writeFile(
+      path.join(cwd, ".pi", "ohm.json"),
+      JSON.stringify({
+        subagents: {
+          librarian: {
+            disabled: true,
+            description: "secret disabled librarian description",
+            prompt: "secret disabled librarian prompt",
+          },
+          reviewer: {
+            description: "Use for reviewing diffs and checking implementation quality.",
+            prompt: "secret reviewer prompt",
+          },
+          hidden: {
+            disabled: true,
+            description: "secret hidden description",
+            prompt: "secret hidden prompt",
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const agents = await resolveAvailableAgents({ cwd });
+
+    assert.equal(Result.isOk(agents), true);
+    if (Result.isError(agents)) assert.fail(agents.error.message);
+    assert.deepEqual(
+      agents.value.map((agent) => agent.name),
+      ["oracle", "finder", "reviewer"],
+    );
+    assert.deepEqual(agents.value.at(-1), {
+      name: "reviewer",
+      description: "Use for reviewing diffs and checking implementation quality.",
+      source: "custom",
+    });
+    const modelVisible = JSON.stringify(agents.value);
+    assert.equal(modelVisible.includes("secret disabled librarian"), false);
+    assert.equal(modelVisible.includes("secret hidden"), false);
+    assert.equal(modelVisible.includes("secret reviewer prompt"), false);
   });
 });

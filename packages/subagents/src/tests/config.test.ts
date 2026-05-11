@@ -8,7 +8,7 @@ import { loadConfig, pickConfig } from "@pi-ohm/core/config";
 import {
   getSubagentConfiguredModel,
   isSubagentRuntimeConfig,
-  resolveSubagentProfileRuntimeConfig,
+  resolveSubagentAgentRuntimeConfig,
   subagentsConfigModule,
 } from "../config";
 
@@ -54,34 +54,30 @@ void test("subagents config smoke resolves every runtime option from project ohm
             },
             allowInternalRouting: "yes",
           },
-          profiles: {
-            reviewer: {
-              disabled: false,
-              model: "OpenAI-Codex/gpt-5.4-mini:medium",
-              thinking: "high",
-              tools: ["read", "grep", "bash"],
-              maxTurns: 12,
-              prompt: "review prompt",
-              description: "reviewer description",
-              whenToUse: ["review diffs"],
-              permissions: {
-                bash: "deny",
-                grep: "allow",
-              },
-              variants: {
-                "*gpt-5.4-mini*": {
-                  disabled: true,
-                  model: "openai-codex/gpt-5.4-mini:low",
-                  thinking: "minimal",
-                  tools: ["read", "grep"],
-                  maxTurns: 4,
-                  prompt: "variant prompt",
-                  description: "variant description",
-                  whenToUse: ["variant use"],
-                  permissions: {
-                    bash: "inherit",
-                    grep: "deny",
-                  },
+          reviewer: {
+            disabled: false,
+            model: "OpenAI-Codex/gpt-5.4-mini:medium",
+            thinking: "high",
+            tools: ["read", "grep", "bash"],
+            maxTurns: 12,
+            prompt: "review prompt",
+            description: "Review diffs and check implementation quality.",
+            permissions: {
+              bash: "deny",
+              grep: "allow",
+            },
+            variants: {
+              "*gpt-5.4-mini*": {
+                disabled: true,
+                model: "openai-codex/gpt-5.4-mini:low",
+                thinking: "minimal",
+                tools: ["read", "grep"],
+                maxTurns: 4,
+                prompt: "variant prompt",
+                description: "Variant reviewer description.",
+                permissions: {
+                  bash: "inherit",
+                  grep: "deny",
                 },
               },
             },
@@ -94,7 +90,6 @@ void test("subagents config smoke resolves every runtime option from project ohm
             maxTurns: 5,
             prompt: "inline prompt",
             description: "inline description",
-            whenToUse: ["inline use"],
             permissions: {
               read: "allow",
               find: "deny",
@@ -130,7 +125,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
       "openai-codex/gpt-5.4-mini:medium",
     );
 
-    const reviewer = resolveSubagentProfileRuntimeConfig({
+    const reviewer = resolveSubagentAgentRuntimeConfig({
       config: { subagents: config.value },
       subagentId: "reviewer",
       modelPattern: "openai-codex/gpt-5.4-mini:medium",
@@ -142,13 +137,12 @@ void test("subagents config smoke resolves every runtime option from project ohm
       tools: ["read", "grep"],
       maxTurns: 4,
       prompt: "variant prompt",
-      description: "variant description",
-      whenToUse: ["variant use"],
+      description: "Variant reviewer description.",
       permissions: { bash: "deny", grep: "deny" },
       variantPattern: "*gpt-5.4-mini*",
     });
 
-    const librarian = resolveSubagentProfileRuntimeConfig({
+    const librarian = resolveSubagentAgentRuntimeConfig({
       config: { subagents: config.value },
       subagentId: "librarian",
     });
@@ -160,7 +154,6 @@ void test("subagents config smoke resolves every runtime option from project ohm
       maxTurns: 5,
       prompt: "inline prompt",
       description: "inline description",
-      whenToUse: ["inline use"],
       permissions: { read: "allow", find: "deny" },
     });
   });

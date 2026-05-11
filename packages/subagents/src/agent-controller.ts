@@ -21,10 +21,11 @@ import { createSdkPipRunner, PipController, type PipStatus } from "@pi-ohm/core/
 import { loadConfig, pickConfig, resolveExtensionConfigDir } from "@pi-ohm/core/config";
 import {
   isSubagentRuntimeConfig,
-  resolveSubagentProfileRuntimeConfig,
+  resolveSubagentAgentRuntimeConfig,
   subagentsConfigModule,
-  type ResolvedSubagentProfileRuntimeConfig,
+  type ResolvedSubagentAgentRuntimeConfig,
 } from "./config";
+import { INTEGRATED_SUBAGENTS } from "./catalog";
 
 const defaultModel = "openai-codex/gpt-5.4-mini:medium";
 
@@ -218,6 +219,11 @@ export function createSubagentToolRuntime(
 
     async list(params, ctx) {
       const record = getRecord(controllers, ctx.sessionManager.getSessionId());
+      const available = await resolveAvailableAgents({
+        cwd: ctx.cwd,
+        currentModel: ctx.model,
+      });
+      if (Result.isError(available)) return toolError(available.error.message);
       const agents = [];
       for (const [agentName, pipId] of record.taskIds.entries()) {
         if (params.path_prefix && !agentName.startsWith(params.path_prefix)) continue;
@@ -232,7 +238,7 @@ export function createSubagentToolRuntime(
           last_task_message: null,
         });
       }
-      return toolOk({ agents });
+      return toolOk({ available_agents: available.value, agents });
     },
 
     async dispose() {
@@ -244,6 +250,65 @@ export function createSubagentToolRuntime(
       controllers.clear();
     },
   };
+}
+
+interface AvailableAgent {
+  readonly name: string;
+  readonly description: string;
+  readonly source: "integrated" | "custom";
+}
+
+export async function resolveAvailableAgents(input: {
+  readonly cwd: string;
+  readonly currentModel?: Model<Api>;
+}): Promise<BetterResult<readonly AvailableAgent[], Error>> {
+  const loaded = await loadConfig({ cwd: input.cwd, modules: [subagentsConfigModule] });
+  if (Result.isError(loaded)) return Result.err(loaded.error);
+
+  const subagents = pickConfig({
+    loaded: loaded.value,
+    module: subagentsConfigModule,
+    is: isSubagentRuntimeConfig,
+  });
+  if (Result.isError(subagents)) return Result.err(subagents.error);
+
+  const currentModelPattern = input.currentModel ? modelKey(input.currentModel) : undefined;
+  const integratedIds = new Set(INTEGRATED_SUBAGENTS.map((agent) => agent.id));
+  const integrated = INTEGRATED_SUBAGENTS.flatMap((agent) => {
+    const config = resolveSubagentAgentRuntimeConfig({
+      config: { subagents: subagents.value },
+      subagentId: agent.id,
+      modelPattern: currentModelPattern,
+    });
+    if (config?.disabled) return [];
+    return [
+      {
+        name: agent.id,
+        description: config?.description ?? agent.description,
+        source: "integrated" as const,
+      },
+    ];
+  });
+  const custom = Object.entries(subagents.value.agents)
+    .filter(([name]) => !integratedIds.has(name))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([name]) => {
+      const config = resolveSubagentAgentRuntimeConfig({
+        config: { subagents: subagents.value },
+        subagentId: name,
+        modelPattern: currentModelPattern,
+      });
+      if (!config || config.disabled) return [];
+      return [
+        {
+          name,
+          description: config.description ?? "Custom configured subagent.",
+          source: "custom" as const,
+        },
+      ];
+    });
+
+  return Result.ok([...integrated, ...custom]);
 }
 
 export interface SubagentToolRuntime {
@@ -369,17 +434,17 @@ export async function resolveSpawnConfig(input: {
 
   const agentType = input.params.agent_type?.trim() || input.params.task_name.trim();
   const currentModelPattern = input.currentModel ? modelKey(input.currentModel) : undefined;
-  const baseProfile = resolveSubagentProfileRuntimeConfig({
+  const baseAgent = resolveSubagentAgentRuntimeConfig({
     config: { subagents: subagents.value },
     subagentId: agentType,
     modelPattern: input.params.model ?? currentModelPattern,
   });
-  const profile = resolveSubagentProfileRuntimeConfig({
+  const agent = resolveSubagentAgentRuntimeConfig({
     config: { subagents: subagents.value },
     subagentId: agentType,
-    modelPattern: input.params.model ?? baseProfile?.model ?? currentModelPattern,
+    modelPattern: input.params.model ?? baseAgent?.model ?? currentModelPattern,
   });
-  if (profile?.disabled) {
+  if (agent?.disabled) {
     return Result.err(new Error(`Subagent '${agentType}' was not found`));
   }
   const agentDir = resolveExtensionConfigDir();
@@ -387,7 +452,7 @@ export async function resolveSpawnConfig(input: {
     try: () =>
       parseModelSpec({
         agentDir,
-        spec: input.params.model ?? profile?.model,
+        spec: input.params.model ?? agent?.model,
         currentModel: input.currentModel,
       }),
     catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
@@ -395,10 +460,8 @@ export async function resolveSpawnConfig(input: {
   if (Result.isError(modelSpec)) return Result.err(modelSpec.error);
   const thinking =
     input.params.thinking ??
-    profile?.thinking ??
-    (input.params.model || profile?.model
-      ? modelSpec.value.thinkingLevel
-      : input.currentThinking) ??
+    agent?.thinking ??
+    (input.params.model || agent?.model ? modelSpec.value.thinkingLevel : input.currentThinking) ??
     modelSpec.value.thinkingLevel;
 
   return Result.ok({
@@ -407,8 +470,8 @@ export async function resolveSpawnConfig(input: {
     modelKey: modelSpec.value.modelKey,
     agentDir,
     thinking,
-    tools: resolveTools(profile),
-    prompt: resolvePrompt({ profile, prompt: input.params.prompt }),
+    tools: resolveTools(agent),
+    prompt: resolvePrompt({ agent, prompt: input.params.prompt }),
   });
 }
 
@@ -417,26 +480,26 @@ function modelKey(model: Model<Api>): string {
 }
 
 function resolveTools(
-  profile: ResolvedSubagentProfileRuntimeConfig | undefined,
+  agent: ResolvedSubagentAgentRuntimeConfig | undefined,
 ): readonly string[] | undefined {
-  if (!profile?.tools) return undefined;
+  if (!agent?.tools) return undefined;
 
   const denied = new Set(
-    Object.entries(profile.permissions)
+    Object.entries(agent.permissions)
       .filter((entry) => entry[1] === "deny")
       .map((entry) => entry[0]),
   );
-  const tools = profile.tools.filter((tool) => !denied.has(tool.trim().toLowerCase()));
+  const tools = agent.tools.filter((tool) => !denied.has(tool.trim().toLowerCase()));
   if (tools.length === 0) return undefined;
   return tools;
 }
 
 function resolvePrompt(input: {
-  readonly profile: ResolvedSubagentProfileRuntimeConfig | undefined;
+  readonly agent: ResolvedSubagentAgentRuntimeConfig | undefined;
   readonly prompt: string;
 }): string {
-  if (!input.profile?.prompt) return input.prompt;
-  return `${input.profile.prompt}\n\nTask:\n${input.prompt}`;
+  if (!input.agent?.prompt) return input.prompt;
+  return `${input.agent.prompt}\n\nTask:\n${input.prompt}`;
 }
 
 function resolveTarget(record: ControllerRecord, target: string): string {

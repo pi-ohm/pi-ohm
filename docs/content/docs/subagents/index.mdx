@@ -25,13 +25,11 @@ pi -e npm:@pi-ohm/subagents
   "subagents": {
     "my-agent": {
       "model": "openai/gpt-5.3-codex:medium",
+      "description": "Use for specialized project work that needs my custom instructions.",
       "prompt": "{file:./prompts/my-custom-agent.general.txt}", // inherits unless overridden
       "permissions": {
         "bash": "deny"
-      },
-      "whenToUse": ["...", "..."],
-      "whenNotToUse": ["...", "..."],
-      "examples": ["...", "..."]
+      }
     }
   }
 }
@@ -48,27 +46,20 @@ pi -e npm:@pi-ohm/subagents
         "*gemini*": {
           "model": "github-copilot/gemini-3.1-pro-preview:high",
           "prompt": "{file:./prompts/my-agent.gemini.txt}",
-          "description": "...",
+          "description": "Use this variant for Gemini-specific research and synthesis.",
           "permissions": {
             "bash": "deny",
             "edit": "deny",
             "apply_patch": "deny"
-          },
-          "whenToUse": ["...", "..."]
+          }
         },
         "*claude*": {
           "model": "anthropic/claude-2",
           "prompt": "{file:./prompts/my-agent.claude.txt}",
-          "description": "...",
-          "permissions": {
-            "bash": "allow",
-            "edit": "deny",
-            "apply_patch": "deny"
-          },
+          "description": "Use this variant for Claude-specific review and planning.",
           "permissions": {
             "bash": "deny"
-          },
-          "whenToUse": ["...", "..."]
+          }
         }
       }
     }

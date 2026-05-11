@@ -1,6 +1,6 @@
 ---
 title: Subagents
-description: Configure Pi-backed subagents with JSON or markdown profiles.
+description: Configure Pi-backed subagents with JSON or markdown agent files.
 ---
 
 Subagents are Pi-backed child sessions. Use `/subagents` in Pi to inspect integrated agents and custom configured agents in a non-model-facing TUI widget.
@@ -20,7 +20,7 @@ Integrated subagents always exist:
 
 ## JSON
 
-Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config dir.
+Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config dir. Agents are configured directly under `subagents.<name>`.
 
 ```json title=".pi/ohm.json"
 {
@@ -45,11 +45,6 @@ Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config di
       "maxTurns": 12,
       "description": "Answer deep codebase questions with thorough explanations.",
       "prompt": "You are Librarian. Read broadly before answering. Return complete explanations.",
-      "whenToUse": [
-        "understanding large codebases",
-        "tracing architecture across files",
-        "explaining existing behavior"
-      ],
       "permissions": {
         "read": "allow",
         "grep": "allow",
@@ -62,31 +57,20 @@ Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config di
       "model": "openai-codex/gpt-5.4-mini:high",
       "thinking": "high",
       "tools": ["read", "grep"],
-      "description": "Reasoning-heavy reviewer and planner.",
-      "prompt": "You are Oracle. Focus on correctness, design, risk, and hard tradeoffs.",
-      "whenToUse": [
-        "reviewing architecture",
-        "debugging complex behavior",
-        "planning non-trivial changes"
-      ]
+      "description": "Use for architecture review, complex debugging, planning, and correctness checks.",
+      "prompt": "You are Oracle. Focus on correctness, design, risk, and hard tradeoffs."
     },
 
     "finder": {
       "tools": ["read", "grep", "find"],
-      "description": "Find code by behavior or concept.",
-      "prompt": "You are Finder. Search precisely and return paths with concise notes.",
-      "whenToUse": [
-        "locating code by behavior",
-        "correlating related code paths",
-        "narrowing broad search terms"
-      ]
+      "description": "Use for finding code by behavior, broad concepts, flows, or related paths.",
+      "prompt": "You are Finder. Search precisely and return paths with concise notes."
     },
 
     "reviewer": {
       "disabled": false,
-      "description": "Strict code reviewer",
+      "description": "Use for reviewing diffs and checking implementation quality.",
       "prompt": "Find correctness, type safety, and design issues.",
-      "whenToUse": ["review diffs", "check implementation quality"],
       "tools": ["read", "grep", "bash"],
       "permissions": {
         "bash": "deny",
@@ -96,6 +80,7 @@ Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config di
       "variants": {
         "*gpt-5.4-mini*": {
           "thinking": "minimal",
+          "description": "Use for quick actionable review on gpt-5.4-mini.",
           "prompt": "Review quickly. Report only actionable issues.",
           "tools": ["read", "grep"],
           "permissions": {
@@ -112,28 +97,12 @@ Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config di
 }
 ```
 
-You can also put custom agents under `subagents.profiles` if you prefer keeping runtime keys and profiles separate:
-
-```json title=".pi/ohm.json"
-{
-  "subagents": {
-    "backend": "interactive-sdk",
-    "profiles": {
-      "security-reviewer": {
-        "description": "Security-focused reviewer",
-        "prompt": "Find auth, injection, secret handling, and permission bugs.",
-        "tools": ["read", "grep"],
-        "whenToUse": ["review security-sensitive changes"]
-      }
-    }
-  }
-}
-```
-
 Important behavior:
 
-- `disabled: true` keeps the profile visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
-- Disabled profiles are not exposed to the main model as usable options, and their configured prompts are never included in tool results.
+- `subagents.<name>` is the only JSON agent shape. There is no `subagents.profiles` fallback.
+- `description` is the model-facing guidance for when to use an agent.
+- `disabled: true` keeps the agent visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
+- Disabled agents are not exposed to the main model as usable options, and their configured prompts are never included in tool results.
 - If `model` is omitted, the subagent inherits the current main session model.
 - If `thinking` is omitted, the subagent inherits the current main session thinking level.
 - `model` accepts `<provider>/<model>` with optional `:<thinking>`.
@@ -147,7 +116,7 @@ Important behavior:
 Model precedence:
 
 1. `spawn_agent.model` and `spawn_agent.thinking`
-2. profile `model` and `thinking`
+2. agent `model` and `thinking`
 3. current main session model and thinking
 4. fallback default only when Pi has no active model
 
@@ -172,10 +141,7 @@ tools:
   - grep
   - bash
 maxTurns: 12
-description: Strict code reviewer
-whenToUse:
-  - review diffs
-  - check implementation quality
+description: Use for reviewing diffs and checking implementation quality.
 permissions:
   bash: deny
   read: allow
@@ -183,6 +149,7 @@ permissions:
 variants:
   "*gpt-5.4-mini*":
     thinking: minimal
+    description: Use for quick actionable review on gpt-5.4-mini.
     tools:
       - read
       - grep
@@ -202,13 +169,10 @@ Another custom agent:
 
 ```md title=".pi/agents/security-reviewer.md"
 ---
-description: Security-focused reviewer
+description: Use for auth, permission, injection, and secret-handling reviews.
 tools:
   - read
   - grep
-whenToUse:
-  - review auth changes
-  - review permission-sensitive code
 permissions:
   read: allow
   grep: allow
@@ -218,4 +182,4 @@ permissions:
 Find auth, injection, secret handling, and permission bugs. Return only issues with exploitability or clear risk.
 ```
 
-Markdown support is planned as the profile-file layer described above. Today, JSON config is the source of truth implemented by the subagents package.
+Markdown support is planned as the agent-file layer described above. Today, JSON config is the source of truth implemented by the subagents package.

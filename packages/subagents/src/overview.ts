@@ -1,6 +1,6 @@
 import { Text, type Component } from "@earendil-works/pi-tui";
 import type { LoadedExtensionConfig } from "@pi-ohm/core/config";
-import type { SubagentProfileRuntimeConfig, SubagentRuntimeConfig } from "./config";
+import type { SubagentAgentRuntimeConfig, SubagentRuntimeConfig } from "./config";
 import { INTEGRATED_SUBAGENTS, type IntegratedSubagent } from "./catalog";
 
 export type SubagentSource = "integrated" | "custom";
@@ -15,7 +15,6 @@ export interface SubagentOverviewEntry {
   readonly thinking?: string;
   readonly tools?: readonly string[];
   readonly maxTurns?: number;
-  readonly whenToUse: readonly string[];
   readonly promptConfigured: boolean;
 }
 
@@ -37,12 +36,12 @@ export interface BuildSubagentOverviewInput {
 export function buildSubagentOverview(input: BuildSubagentOverviewInput): SubagentOverview {
   const integratedIds = new Set(INTEGRATED_SUBAGENTS.map((agent) => agent.id));
   const integrated = INTEGRATED_SUBAGENTS.map((agent) =>
-    toIntegratedEntry({ agent, profile: input.config.profiles[agent.id] }),
+    toIntegratedEntry({ agent, config: input.config.agents[agent.id] }),
   );
-  const custom = Object.entries(input.config.profiles)
+  const custom = Object.entries(input.config.agents)
     .filter(([id]) => !integratedIds.has(id))
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([id, profile]) => toCustomEntry({ id, profile }));
+    .map(([id, config]) => toCustomEntry({ id, config }));
 
   return {
     backend: input.config.backend,
@@ -55,39 +54,37 @@ export function buildSubagentOverview(input: BuildSubagentOverviewInput): Subage
 
 function toIntegratedEntry(input: {
   readonly agent: IntegratedSubagent;
-  readonly profile: SubagentProfileRuntimeConfig | undefined;
+  readonly config: SubagentAgentRuntimeConfig | undefined;
 }): SubagentOverviewEntry {
   return {
     id: input.agent.id,
     name: input.agent.name,
     source: "integrated",
-    disabled: input.profile?.disabled ?? false,
-    description: input.profile?.description ?? input.agent.description,
-    model: input.profile?.model,
-    thinking: input.profile?.thinking,
-    tools: input.profile?.tools,
-    maxTurns: input.profile?.maxTurns,
-    whenToUse: input.profile?.whenToUse ?? input.agent.whenToUse,
-    promptConfigured: input.profile?.prompt !== undefined,
+    disabled: input.config?.disabled ?? false,
+    description: input.config?.description ?? input.agent.description,
+    model: input.config?.model,
+    thinking: input.config?.thinking,
+    tools: input.config?.tools,
+    maxTurns: input.config?.maxTurns,
+    promptConfigured: input.config?.prompt !== undefined,
   };
 }
 
 function toCustomEntry(input: {
   readonly id: string;
-  readonly profile: SubagentProfileRuntimeConfig;
+  readonly config: SubagentAgentRuntimeConfig;
 }): SubagentOverviewEntry {
   return {
     id: input.id,
     name: titleize(input.id),
     source: "custom",
-    disabled: input.profile.disabled ?? false,
-    description: input.profile.description ?? "Custom configured subagent.",
-    model: input.profile.model,
-    thinking: input.profile.thinking,
-    tools: input.profile.tools,
-    maxTurns: input.profile.maxTurns,
-    whenToUse: input.profile.whenToUse ?? [],
-    promptConfigured: input.profile.prompt !== undefined,
+    disabled: input.config.disabled ?? false,
+    description: input.config.description ?? "Custom configured subagent.",
+    model: input.config.model,
+    thinking: input.config.thinking,
+    tools: input.config.tools,
+    maxTurns: input.config.maxTurns,
+    promptConfigured: input.config.prompt !== undefined,
   };
 }
 
@@ -139,7 +136,6 @@ function renderEntry(entry: SubagentOverviewEntry, overview: SubagentOverview): 
     `- ${entry.name} (${entry.id}) · ${source} · ${status}`,
     `  ${entry.description}`,
     `  ${config.join(" · ")}`,
-    `  use: ${entry.whenToUse.length > 0 ? entry.whenToUse.join("; ") : "not configured"}`,
   ];
 }
 

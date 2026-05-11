@@ -16,7 +16,7 @@ export const SubagentToolPermissionMapSchema = Type.Record(
   SubagentToolPermissionDecisionSchema,
 );
 
-export const SubagentProfileVariantPatchSchema = Type.Object(
+export const SubagentAgentVariantPatchSchema = Type.Object(
   {
     disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
@@ -34,18 +34,17 @@ export const SubagentProfileVariantPatchSchema = Type.Object(
     maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
-    whenToUse: Type.Optional(NonEmptyStringArraySchema),
     permissions: Type.Optional(SubagentToolPermissionMapSchema),
   },
   { additionalProperties: false },
 );
 
-export const SubagentProfileVariantMapPatchSchema = Type.Record(
+export const SubagentAgentVariantMapPatchSchema = Type.Record(
   NonEmptyStringSchema,
-  SubagentProfileVariantPatchSchema,
+  SubagentAgentVariantPatchSchema,
 );
 
-export const SubagentProfilePatchSchema = Type.Object(
+export const SubagentAgentPatchSchema = Type.Object(
   {
     disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
@@ -63,9 +62,8 @@ export const SubagentProfilePatchSchema = Type.Object(
     maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
-    whenToUse: Type.Optional(NonEmptyStringArraySchema),
     permissions: Type.Optional(SubagentToolPermissionMapSchema),
-    variants: Type.Optional(SubagentProfileVariantMapPatchSchema),
+    variants: Type.Optional(SubagentAgentVariantMapPatchSchema),
   },
   { additionalProperties: false },
 );
@@ -73,8 +71,8 @@ export const SubagentProfilePatchSchema = Type.Object(
 export type SubagentToolPermissionDecisionPatch = Static<
   typeof SubagentToolPermissionDecisionSchema
 >;
-export type SubagentProfileVariantPatch = Static<typeof SubagentProfileVariantPatchSchema>;
-export type SubagentProfilePatch = Static<typeof SubagentProfilePatchSchema>;
+export type SubagentAgentVariantPatch = Static<typeof SubagentAgentVariantPatchSchema>;
+export type SubagentAgentPatch = Static<typeof SubagentAgentPatchSchema>;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -155,7 +153,7 @@ function normalizeSubagentPermissionMapInput(
   return Value.Decode(SubagentToolPermissionMapSchema, normalized);
 }
 
-function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
+function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
@@ -165,7 +163,6 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
-  const whenToUse = toTrimmedStringArray(Reflect.get(input, "whenToUse"));
   const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
 
   return {
@@ -176,37 +173,36 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
-    ...(whenToUse ? { whenToUse } : {}),
     ...(permissions ? { permissions } : {}),
   };
 }
 
-function normalizeSubagentProfileVariantMapInput(
+function normalizeSubagentAgentVariantMapInput(
   input: unknown,
-): Static<typeof SubagentProfileVariantMapPatchSchema> | undefined {
+): Static<typeof SubagentAgentVariantMapPatchSchema> | undefined {
   if (!isObjectRecord(input)) return undefined;
 
-  const normalized: Record<string, SubagentProfileVariantPatch> = {};
+  const normalized: Record<string, SubagentAgentVariantPatch> = {};
   for (const [rawPattern, rawVariant] of Object.entries(input)) {
     const pattern = toTrimmedString(rawPattern)?.toLowerCase();
     if (!pattern) continue;
 
-    const normalizedVariant = normalizeSubagentProfileVariantPatchInput(rawVariant);
-    if (!Value.Check(SubagentProfileVariantPatchSchema, normalizedVariant)) {
+    const normalizedVariant = normalizeSubagentAgentVariantPatchInput(rawVariant);
+    if (!Value.Check(SubagentAgentVariantPatchSchema, normalizedVariant)) {
       continue;
     }
 
-    normalized[pattern] = Value.Decode(SubagentProfileVariantPatchSchema, normalizedVariant);
+    normalized[pattern] = Value.Decode(SubagentAgentVariantPatchSchema, normalizedVariant);
   }
 
-  if (!Value.Check(SubagentProfileVariantMapPatchSchema, normalized)) {
+  if (!Value.Check(SubagentAgentVariantMapPatchSchema, normalized)) {
     return undefined;
   }
 
-  return Value.Decode(SubagentProfileVariantMapPatchSchema, normalized);
+  return Value.Decode(SubagentAgentVariantMapPatchSchema, normalized);
 }
 
-function normalizeSubagentProfilePatchInput(input: unknown): unknown {
+function normalizeSubagentAgentPatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
@@ -216,9 +212,8 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
-  const whenToUse = toTrimmedStringArray(Reflect.get(input, "whenToUse"));
   const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
-  const variants = normalizeSubagentProfileVariantMapInput(Reflect.get(input, "variants"));
+  const variants = normalizeSubagentAgentVariantMapInput(Reflect.get(input, "variants"));
 
   return {
     ...(disabled !== undefined ? { disabled } : {}),
@@ -228,28 +223,27 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
-    ...(whenToUse ? { whenToUse } : {}),
     ...(permissions ? { permissions } : {}),
     ...(variants ? { variants } : {}),
   };
 }
 
-export function parseSubagentProfileVariantPatch(
+export function parseSubagentAgentVariantPatch(
   input: unknown,
-): SubagentProfileVariantPatch | undefined {
-  const normalized = normalizeSubagentProfileVariantPatchInput(input);
-  if (!Value.Check(SubagentProfileVariantPatchSchema, normalized)) {
+): SubagentAgentVariantPatch | undefined {
+  const normalized = normalizeSubagentAgentVariantPatchInput(input);
+  if (!Value.Check(SubagentAgentVariantPatchSchema, normalized)) {
     return undefined;
   }
 
-  return Value.Decode(SubagentProfileVariantPatchSchema, normalized);
+  return Value.Decode(SubagentAgentVariantPatchSchema, normalized);
 }
 
-export function parseSubagentProfilePatch(input: unknown): SubagentProfilePatch | undefined {
-  const normalized = normalizeSubagentProfilePatchInput(input);
-  if (!Value.Check(SubagentProfilePatchSchema, normalized)) {
+export function parseSubagentAgentPatch(input: unknown): SubagentAgentPatch | undefined {
+  const normalized = normalizeSubagentAgentPatchInput(input);
+  if (!Value.Check(SubagentAgentPatchSchema, normalized)) {
     return undefined;
   }
 
-  return Value.Decode(SubagentProfilePatchSchema, normalized);
+  return Value.Decode(SubagentAgentPatchSchema, normalized);
 }

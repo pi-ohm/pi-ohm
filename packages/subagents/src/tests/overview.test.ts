@@ -11,7 +11,7 @@ void test("buildSubagentOverview includes integrated and custom configured subag
   const overview = buildSubagentOverview({
     config: {
       ...DEFAULT_SUBAGENT_RUNTIME_CONFIG,
-      profiles: {
+      agents: {
         oracle: {
           model: "openai-codex/gpt-5.4-mini:high",
           tools: ["read", "grep"],
@@ -20,7 +20,6 @@ void test("buildSubagentOverview includes integrated and custom configured subag
         reviewer: {
           disabled: true,
           description: "Custom reviewer",
-          whenToUse: ["review diffs"],
         },
       },
     },
@@ -44,7 +43,7 @@ void test("renderSubagentOverview shows current model fallback and custom sectio
   const overview = buildSubagentOverview({
     config: {
       ...DEFAULT_SUBAGENT_RUNTIME_CONFIG,
-      profiles: {
+      agents: {
         reviewer: { description: "Custom reviewer" },
       },
     },
