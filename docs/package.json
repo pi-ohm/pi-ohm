@@ -37,6 +37,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-remove-scroll": "^2.7.2",
+    "remark-gfm": "^4.0.1",
     "scroll-into-view-if-needed": "^3.1.0",
     "tailwind-merge": "^3.4.1",
     "vite": "catalog:"
