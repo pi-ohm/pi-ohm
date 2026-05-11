@@ -460,7 +460,6 @@ export async function resolveSpawnConfig(input: {
   if (Result.isError(modelSpec)) return Result.err(modelSpec.error);
   const thinking =
     input.params.thinking ??
-    agent?.thinking ??
     (input.params.model || agent?.model ? modelSpec.value.thinkingLevel : input.currentThinking) ??
     modelSpec.value.thinkingLevel;
 

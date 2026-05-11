@@ -12,7 +12,6 @@ export interface SubagentOverviewEntry {
   readonly disabled: boolean;
   readonly description: string;
   readonly model?: string;
-  readonly thinking?: string;
   readonly tools?: readonly string[];
   readonly maxTurns?: number;
   readonly promptConfigured: boolean;
@@ -61,7 +60,6 @@ function toIntegratedEntry(input: {
     disabled: input.config?.disabled ?? false,
     description: input.config?.description ?? input.agent.description,
     model: input.config?.model,
-    thinking: input.config?.thinking,
     tools: input.config?.tools,
     maxTurns: input.config?.maxTurns,
     promptConfigured: input.config?.prompt !== undefined,
@@ -79,7 +77,6 @@ function toCustomEntry(input: {
     disabled: input.config.disabled ?? false,
     description: input.config.description ?? "Custom configured subagent.",
     model: input.config.model,
-    thinking: input.config.thinking,
     tools: input.config.tools,
     maxTurns: input.config.maxTurns,
     promptConfigured: input.config.prompt !== undefined,
@@ -118,7 +115,7 @@ export function renderSubagentOverview(input: SubagentOverview): string {
 
 function renderEntry(entry: SubagentOverviewEntry, overview: SubagentOverview): readonly string[] {
   const model = entry.model ?? overview.currentModel ?? "fallback default";
-  const thinking = entry.thinking ?? overview.currentThinking ?? "model default";
+  const thinking = overview.currentThinking ?? "model suffix/default";
   const status = entry.disabled ? "disabled" : "enabled";
   const source = entry.source === "integrated" ? "built-in" : "custom";
   const tools = entry.tools && entry.tools.length > 0 ? entry.tools.join(",") : "default";

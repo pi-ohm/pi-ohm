@@ -25,7 +25,6 @@ export interface SubagentsConfig {
 export interface SubagentAgentRuntimeConfig {
   disabled?: boolean;
   model?: string;
-  thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
   maxTurns?: number;
   prompt?: string;
@@ -39,7 +38,6 @@ export type SubagentToolPermissionDecision = "allow" | "deny" | "inherit";
 export interface SubagentAgentVariantRuntimeConfig {
   disabled?: boolean;
   model?: string;
-  thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
   maxTurns?: number;
   prompt?: string;
@@ -50,7 +48,6 @@ export interface SubagentAgentVariantRuntimeConfig {
 export interface ResolvedSubagentAgentRuntimeConfig {
   disabled: boolean;
   model?: string;
-  thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
   maxTurns?: number;
   prompt?: string;
@@ -64,6 +61,17 @@ export interface SubagentRuntimeConfig {
 }
 
 export type SubagentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+
+function isSubagentThinkingLevel(value: string): value is SubagentThinkingLevel {
+  return (
+    value === "off" ||
+    value === "minimal" ||
+    value === "low" ||
+    value === "medium" ||
+    value === "high" ||
+    value === "xhigh"
+  );
+}
 
 interface JsonMap {
   readonly [key: string]: unknown;
@@ -99,24 +107,6 @@ function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
   if (typeof value !== "number") return undefined;
   if (!Number.isInteger(value) || value <= 0) return undefined;
   return value;
-}
-
-function isSubagentThinkingLevel(value: string): value is SubagentThinkingLevel {
-  return (
-    value === "off" ||
-    value === "minimal" ||
-    value === "low" ||
-    value === "medium" ||
-    value === "high" ||
-    value === "xhigh"
-  );
-}
-
-function normalizeThinking(value: unknown): SubagentThinkingLevel | undefined {
-  if (typeof value !== "string") return undefined;
-  const normalized = value.trim().toLowerCase();
-  if (!isSubagentThinkingLevel(normalized)) return undefined;
-  return normalized;
 }
 
 function normalizeStringList(value: unknown): readonly string[] | undefined {
@@ -216,7 +206,6 @@ function mergeSubagentVariantConfig(
 
   const disabled = parsedPatch.disabled;
   const model = normalizeSubagentModelOverride(parsedPatch.model);
-  const thinking = normalizeThinking(parsedPatch.thinking);
   const tools = normalizeStringList(parsedPatch.tools);
   const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
@@ -238,7 +227,6 @@ function mergeSubagentVariantConfig(
     ...fallback,
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
-    ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
@@ -249,7 +237,6 @@ function mergeSubagentVariantConfig(
   const hasValues =
     merged.disabled !== undefined ||
     merged.model !== undefined ||
-    merged.thinking !== undefined ||
     merged.tools !== undefined ||
     merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
@@ -289,7 +276,6 @@ function mergeSubagentAgentConfig(
 
   const disabled = parsedPatch.disabled;
   const model = normalizeSubagentModelOverride(parsedPatch.model);
-  const thinking = normalizeThinking(parsedPatch.thinking);
   const tools = normalizeStringList(parsedPatch.tools);
   const maxTurns = normalizeOptionalPositiveInteger(parsedPatch.maxTurns);
   const prompt = parsedPatch.prompt;
@@ -312,7 +298,6 @@ function mergeSubagentAgentConfig(
     ...fallback,
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
-    ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
@@ -324,7 +309,6 @@ function mergeSubagentAgentConfig(
   const hasValues =
     merged.disabled !== undefined ||
     merged.model !== undefined ||
-    merged.thinking !== undefined ||
     merged.tools !== undefined ||
     merged.maxTurns !== undefined ||
     merged.prompt !== undefined ||
@@ -486,7 +470,6 @@ export function resolveSubagentAgentRuntimeConfig(input: {
   return {
     disabled: variant?.disabled ?? agent.disabled ?? false,
     model: variant?.model ?? agent.model,
-    thinking: variant?.thinking ?? agent.thinking,
     tools: variant?.tools ?? agent.tools,
     maxTurns: variant?.maxTurns ?? agent.maxTurns,
     prompt: variant?.prompt ?? agent.prompt,

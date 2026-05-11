@@ -31,7 +31,6 @@ Configure agents in your ohm.json config file:
     "librarian": {
       "disabled": false,
       "model": "openai-codex/gpt-5.4-mini:medium",
-      "thinking": "medium",
       "tools": ["read", "grep", "find"],
       "maxTurns": 12,
       "description": "Answer deep codebase questions with thorough explanations.",
@@ -46,7 +45,6 @@ Configure agents in your ohm.json config file:
 
     "oracle": {
       "model": "openai-codex/gpt-5.4-mini:high",
-      "thinking": "high",
       "tools": ["read", "grep"],
       "description": "Use for architecture review, complex debugging, planning, and correctness checks.",
       "prompt": "You are Oracle. Focus on correctness, design, risk, and hard tradeoffs."
@@ -70,7 +68,6 @@ Configure agents in your ohm.json config file:
       },
       "variants": {
         "*gpt-5.4-mini*": {
-          "thinking": "minimal",
           "description": "Use for quick actionable review on gpt-5.4-mini.",
           "prompt": "Review quickly. Report only actionable issues.",
           "tools": ["read", "grep"],
@@ -96,8 +93,8 @@ Important behavior:
 - `disabled: true` keeps the agent visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
 - Disabled agents are not exposed to the main model as usable options, and their configured prompts are never included in tool results.
 - If `model` is omitted, the subagent inherits the current main session model.
-- If `thinking` is omitted, the subagent inherits the current main session thinking level.
 - `model` accepts `<provider>/<model>` with optional `:<thinking>`.
+- Configure thinking in config through the model suffix, for example `openai-codex/gpt-5.4-mini:high`.
 - Known models resolve through Pi's model registry and Pi AI built-ins.
 - Custom providers from `models.json` or provider extensions are allowed.
 - Unknown providers pass through as external models.
@@ -108,8 +105,8 @@ Important behavior:
 Model precedence:
 
 1. `spawn_agent.model` and `spawn_agent.thinking`
-2. agent `model` and `thinking`
-3. current main session model and thinking
+2. agent `model`, including optional `:<thinking>` suffix
+3. current main session model and thinking, when no agent model is configured
 4. fallback default only when Pi has no active model
 
 ## Markdown
@@ -127,7 +124,6 @@ Example:
 ---
 disabled: false
 model: openai-codex/gpt-5.4-mini:medium
-thinking: high
 tools:
   - read
   - grep
@@ -140,7 +136,6 @@ permissions:
   grep: allow
 variants:
   "*gpt-5.4-mini*":
-    thinking: minimal
     description: Use for quick actionable review on gpt-5.4-mini.
     tools:
       - read

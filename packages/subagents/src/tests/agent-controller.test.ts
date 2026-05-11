@@ -66,7 +66,7 @@ async function withConfig<T>(
   });
 }
 
-void test("resolveSpawnConfig applies agent prompt, thinking, tools, and tool denies", async () => {
+void test("resolveSpawnConfig applies agent prompt, model thinking, tools, and tool denies", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(
       path.join(cwd, ".pi", "ohm.json"),
@@ -74,7 +74,6 @@ void test("resolveSpawnConfig applies agent prompt, thinking, tools, and tool de
         subagents: {
           reviewer: {
             model: "custom-provider/custom-model:high",
-            thinking: "low",
             tools: ["read", "grep", "bash"],
             prompt: "agent prompt",
             permissions: {
@@ -103,7 +102,7 @@ void test("resolveSpawnConfig applies agent prompt, thinking, tools, and tool de
     assert.equal(config.value.model.provider, "custom-provider");
     assert.equal(config.value.model.id, "custom-model");
     assert.equal(config.value.model.api, "custom-provider");
-    assert.equal(config.value.thinking, "low");
+    assert.equal(config.value.thinking, "high");
     assert.deepEqual(config.value.tools, ["read", "grep"]);
     assert.equal(config.value.prompt, "agent prompt\n\nTask:\ninspect this diff");
   });
@@ -229,7 +228,6 @@ void test("resolveSpawnConfig lets spawn args override configured model and thin
         subagents: {
           researcher: {
             model: "custom-provider/configured-model:high",
-            thinking: "high",
             tools: ["read"],
           },
         },

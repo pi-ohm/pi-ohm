@@ -20,16 +20,6 @@ export const SubagentAgentVariantPatchSchema = Type.Object(
   {
     disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
-    thinking: Type.Optional(
-      Type.Union([
-        Type.Literal("off"),
-        Type.Literal("minimal"),
-        Type.Literal("low"),
-        Type.Literal("medium"),
-        Type.Literal("high"),
-        Type.Literal("xhigh"),
-      ]),
-    ),
     tools: Type.Optional(NonEmptyStringArraySchema),
     maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
@@ -48,16 +38,6 @@ export const SubagentAgentPatchSchema = Type.Object(
   {
     disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
-    thinking: Type.Optional(
-      Type.Union([
-        Type.Literal("off"),
-        Type.Literal("minimal"),
-        Type.Literal("low"),
-        Type.Literal("medium"),
-        Type.Literal("high"),
-        Type.Literal("xhigh"),
-      ]),
-    ),
     tools: Type.Optional(NonEmptyStringArraySchema),
     maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
@@ -101,22 +81,6 @@ function toPositiveInteger(value: unknown): number | undefined {
   return value;
 }
 
-function toThinking(value: unknown): string | undefined {
-  const trimmed = toTrimmedString(value)?.toLowerCase();
-  if (!trimmed) return undefined;
-  if (
-    trimmed !== "off" &&
-    trimmed !== "minimal" &&
-    trimmed !== "low" &&
-    trimmed !== "medium" &&
-    trimmed !== "high" &&
-    trimmed !== "xhigh"
-  ) {
-    return undefined;
-  }
-  return trimmed;
-}
-
 function toBoolean(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
   return undefined;
@@ -158,7 +122,6 @@ function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
 
   const model = toTrimmedString(Reflect.get(input, "model"));
   const disabled = toBoolean(Reflect.get(input, "disabled"));
-  const thinking = toThinking(Reflect.get(input, "thinking"));
   const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
@@ -168,7 +131,6 @@ function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
   return {
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
-    ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
@@ -207,7 +169,6 @@ function normalizeSubagentAgentPatchInput(input: unknown): unknown {
 
   const model = toTrimmedString(Reflect.get(input, "model"));
   const disabled = toBoolean(Reflect.get(input, "disabled"));
-  const thinking = toThinking(Reflect.get(input, "thinking"));
   const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
@@ -218,7 +179,6 @@ function normalizeSubagentAgentPatchInput(input: unknown): unknown {
   return {
     ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
-    ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
     ...(maxTurns ? { maxTurns } : {}),
     ...(prompt ? { prompt } : {}),
