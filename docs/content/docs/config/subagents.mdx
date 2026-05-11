@@ -132,7 +132,8 @@ You can also put custom agents under `subagents.profiles` if you prefer keeping 
 
 Important behavior:
 
-- `disabled: true` keeps the profile visible in `/subagents`, but `spawn_agent` rejects it.
+- `disabled: true` keeps the profile visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
+- Disabled profiles are not exposed to the main model as usable options, and their configured prompts are never included in tool results.
 - If `model` is omitted, the subagent inherits the current main session model.
 - If `thinking` is omitted, the subagent inherits the current main session thinking level.
 - `model` accepts `<provider>/<model>` with optional `:<thinking>`.

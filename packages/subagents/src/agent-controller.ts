@@ -380,7 +380,7 @@ export async function resolveSpawnConfig(input: {
     modelPattern: input.params.model ?? baseProfile?.model ?? currentModelPattern,
   });
   if (profile?.disabled) {
-    return Result.err(new Error(`Subagent '${agentType}' is disabled by config`));
+    return Result.err(new Error(`Subagent '${agentType}' was not found`));
   }
   const agentDir = resolveExtensionConfigDir();
   const modelSpec = Result.try({
