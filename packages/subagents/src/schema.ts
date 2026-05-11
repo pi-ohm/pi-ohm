@@ -18,6 +18,7 @@ export const SubagentToolPermissionMapSchema = Type.Record(
 
 export const SubagentProfileVariantPatchSchema = Type.Object(
   {
+    disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
     thinking: Type.Optional(
       Type.Union([
@@ -46,6 +47,7 @@ export const SubagentProfileVariantMapPatchSchema = Type.Record(
 
 export const SubagentProfilePatchSchema = Type.Object(
   {
+    disabled: Type.Optional(Type.Boolean()),
     model: Type.Optional(NonEmptyStringSchema),
     thinking: Type.Optional(
       Type.Union([
@@ -117,6 +119,11 @@ function toThinking(value: unknown): string | undefined {
   return trimmed;
 }
 
+function toBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  return undefined;
+}
+
 function normalizeSubagentPermissionMapInput(
   value: unknown,
 ): Static<typeof SubagentToolPermissionMapSchema> | undefined {
@@ -152,6 +159,7 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
+  const disabled = toBoolean(Reflect.get(input, "disabled"));
   const thinking = toThinking(Reflect.get(input, "thinking"));
   const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
@@ -161,6 +169,7 @@ function normalizeSubagentProfileVariantPatchInput(input: unknown): unknown {
   const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
 
   return {
+    ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
@@ -201,6 +210,7 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
   if (!isObjectRecord(input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
+  const disabled = toBoolean(Reflect.get(input, "disabled"));
   const thinking = toThinking(Reflect.get(input, "thinking"));
   const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
@@ -211,6 +221,7 @@ function normalizeSubagentProfilePatchInput(input: unknown): unknown {
   const variants = normalizeSubagentProfileVariantMapInput(Reflect.get(input, "variants"));
 
   return {
+    ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),

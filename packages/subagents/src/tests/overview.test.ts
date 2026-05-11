@@ -18,6 +18,7 @@ void test("buildSubagentOverview includes integrated and custom configured subag
           prompt: "configured oracle prompt",
         },
         reviewer: {
+          disabled: true,
           description: "Custom reviewer",
           whenToUse: ["review diffs"],
         },
@@ -35,6 +36,7 @@ void test("buildSubagentOverview includes integrated and custom configured subag
   assert.equal(overview.entries[1]?.model, "openai-codex/gpt-5.4-mini:high");
   assert.equal(overview.entries[1]?.promptConfigured, true);
   assert.equal(overview.entries[3]?.source, "custom");
+  assert.equal(overview.entries[3]?.disabled, true);
   assert.equal(overview.entries[3]?.description, "Custom reviewer");
 });
 
@@ -57,8 +59,9 @@ void test("renderSubagentOverview shows current model fallback and custom sectio
   assert.match(text, /Custom configured subagents/);
   assert.match(text, /Librarian \(librarian\)/);
   assert.match(text, /Reviewer \(reviewer\)/);
-  assert.match(text, /model: external-main\/main-model/);
-  assert.match(text, /thinking: xhigh/);
+  assert.match(text, /backend interactive-sdk · enabled 4 · disabled 0/);
+  assert.match(text, /model external-main\/main-model/);
+  assert.match(text, /thinking xhigh/);
 });
 
 void test("createSubagentsOverviewComponent returns a pi-tui component", () => {

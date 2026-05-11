@@ -56,6 +56,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
           },
           profiles: {
             reviewer: {
+              disabled: false,
               model: "OpenAI-Codex/gpt-5.4-mini:medium",
               thinking: "high",
               tools: ["read", "grep", "bash"],
@@ -69,6 +70,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
               },
               variants: {
                 "*gpt-5.4-mini*": {
+                  disabled: true,
                   model: "openai-codex/gpt-5.4-mini:low",
                   thinking: "minimal",
                   tools: ["read", "grep"],
@@ -85,6 +87,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
             },
           },
           librarian: {
+            disabled: true,
             model: "anthropic/claude-sonnet-4-5:high",
             thinking: "medium",
             tools: ["read", "find"],
@@ -133,6 +136,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
       modelPattern: "openai-codex/gpt-5.4-mini:medium",
     });
     assert.deepEqual(reviewer, {
+      disabled: true,
       model: "openai-codex/gpt-5.4-mini:low",
       thinking: "minimal",
       tools: ["read", "grep"],
@@ -149,6 +153,7 @@ void test("subagents config smoke resolves every runtime option from project ohm
       subagentId: "librarian",
     });
     assert.deepEqual(librarian, {
+      disabled: true,
       model: "anthropic/claude-sonnet-4-5:high",
       thinking: "medium",
       tools: ["read", "find"],

@@ -9,6 +9,7 @@ export interface SubagentOverviewEntry {
   readonly id: string;
   readonly name: string;
   readonly source: SubagentSource;
+  readonly disabled: boolean;
   readonly description: string;
   readonly model?: string;
   readonly thinking?: string;
@@ -60,6 +61,7 @@ function toIntegratedEntry(input: {
     id: input.agent.id,
     name: input.agent.name,
     source: "integrated",
+    disabled: input.profile?.disabled ?? false,
     description: input.profile?.description ?? input.agent.description,
     model: input.profile?.model,
     thinking: input.profile?.thinking,
@@ -78,6 +80,7 @@ function toCustomEntry(input: {
     id: input.id,
     name: titleize(input.id),
     source: "custom",
+    disabled: input.profile.disabled ?? false,
     description: input.profile.description ?? "Custom configured subagent.",
     model: input.profile.model,
     thinking: input.profile.thinking,
@@ -99,13 +102,14 @@ function titleize(id: string): string {
 export function renderSubagentOverview(input: SubagentOverview): string {
   const integrated = input.entries.filter((entry) => entry.source === "integrated");
   const custom = input.entries.filter((entry) => entry.source === "custom");
+  const enabledCount = input.entries.filter((entry) => !entry.disabled).length;
+  const disabledCount = input.entries.length - enabledCount;
   return [
     "Pi OHM subagents",
     "",
-    `backend: ${input.backend}`,
-    `currentModel: ${input.currentModel ?? "none"}`,
-    `currentThinking: ${input.currentThinking ?? "unknown"}`,
-    `loadedFrom: ${input.loadedFrom.length > 0 ? input.loadedFrom.join(", ") : "defaults"}`,
+    `backend ${input.backend} · enabled ${enabledCount} · disabled ${disabledCount}`,
+    `inherited defaults: ${input.currentModel ?? "no active model"} · thinking ${input.currentThinking ?? "unknown"}`,
+    `config: ${input.loadedFrom.length > 0 ? input.loadedFrom.join(", ") : "defaults"}`,
     "",
     "Integrated subagents",
     ...integrated.flatMap((entry) => renderEntry(entry, input)),
@@ -120,15 +124,22 @@ export function renderSubagentOverview(input: SubagentOverview): string {
 function renderEntry(entry: SubagentOverviewEntry, overview: SubagentOverview): readonly string[] {
   const model = entry.model ?? overview.currentModel ?? "fallback default";
   const thinking = entry.thinking ?? overview.currentThinking ?? "model default";
+  const status = entry.disabled ? "disabled" : "enabled";
+  const source = entry.source === "integrated" ? "built-in" : "custom";
+  const tools = entry.tools && entry.tools.length > 0 ? entry.tools.join(",") : "default";
+  const prompt = entry.promptConfigured ? "custom prompt" : "default prompt";
+  const config = [
+    `model ${model}`,
+    `thinking ${thinking}`,
+    `tools ${tools}`,
+    `turns ${entry.maxTurns ?? "default"}`,
+    prompt,
+  ];
   return [
-    `- ${entry.name} (${entry.id})`,
-    `  description: ${entry.description}`,
-    `  model: ${model}`,
-    `  thinking: ${thinking}`,
-    `  tools: ${entry.tools && entry.tools.length > 0 ? entry.tools.join(", ") : "default"}`,
-    `  maxTurns: ${entry.maxTurns ?? "default"}`,
-    `  prompt: ${entry.promptConfigured ? "configured" : "default"}`,
-    `  whenToUse: ${entry.whenToUse.length > 0 ? entry.whenToUse.join("; ") : "not configured"}`,
+    `- ${entry.name} (${entry.id}) · ${source} · ${status}`,
+    `  ${entry.description}`,
+    `  ${config.join(" · ")}`,
+    `  use: ${entry.whenToUse.length > 0 ? entry.whenToUse.join("; ") : "not configured"}`,
   ];
 }
 

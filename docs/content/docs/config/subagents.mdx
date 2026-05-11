@@ -1,5 +1,143 @@
 ---
 title: Subagents
-description: Planned pi-ohm config architecture, file precedence, schemas, and diagnostics.
+description: Configure Pi-backed subagents, defaults, tools, variants, and disabled profiles.
 ---
 
+Subagent config lives under the `subagents` namespace in `ohm.json`.
+
+```json title=".pi/ohm.json"
+{
+  "subagents": {
+    "librarian": {
+      "model": "openai-codex/gpt-5.4-mini:medium",
+      "tools": ["read", "grep", "find"],
+      "disabled": false
+    },
+    "reviewer": {
+      "description": "Strict code reviewer",
+      "prompt": "Find correctness, type safety, and design issues.",
+      "whenToUse": ["review diffs", "check implementation quality"],
+      "permissions": {
+        "bash": "deny",
+        "read": "allow"
+      }
+    }
+  }
+}
+```
+
+You can inspect the resolved subagent roster in Pi with `/subagents`. It renders a non-model-facing TUI widget with integrated agents and custom configured agents.
+
+## Files and precedence
+
+Ohm reads:
+
+1. global config: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
+2. project config: `<cwd>/.pi/ohm.json`
+
+Project config overrides global config. Spawn arguments override config for that one subagent run.
+
+## Integrated subagents
+
+These profiles are always shown by `/subagents`:
+
+| id          | purpose                                                               |
+| ----------- | --------------------------------------------------------------------- |
+| `librarian` | Multi-repository codebase understanding and explanation.              |
+| `oracle`    | Reasoning-heavy review, planning, debugging, and architecture advice. |
+| `finder`    | Behavior-based code search for concepts, flows, and broad terms.      |
+
+Configure integrated agents by setting `subagents.<id>` or `subagents.profiles.<id>`.
+
+## Runtime options
+
+| path                                         | type             | default             | notes                                                                        |
+| -------------------------------------------- | ---------------- | ------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------- | ----------------------------------------------------------------- |
+| `subagents.backend`                          | `"none"          | "interactive-shell" | "interactive-sdk"                                                            | "custom-plugin"`                                                            | `"interactive-sdk"` | Runtime backend. Current implementation uses Pi SDK PiP sessions. |
+| `subagents.taskMaxConcurrency`               | positive integer | `3`                 | Reserved task concurrency cap.                                               |
+| `subagents.taskRetentionMs`                  | positive integer | `86400000`          | Reserved retention window for task state.                                    |
+| `subagents.permissions.default`              | `"allow"         | "deny"`             | `"allow"`                                                                    | Default subagent routing permission. Legacy `"ask"` normalizes to `"deny"`. |
+| `subagents.permissions.subagents`            | object           | `{}`                | Per-subagent routing permission map. Keys normalize to lowercase.            |
+| `subagents.permissions.allowInternalRouting` | boolean          | `false`             | Reserved for internal profiles. String booleans like `"yes"` are accepted.   |
+| `subagents.profiles`                         | object           | `{}`                | Explicit profile map.                                                        |
+| `subagents.<name>`                           | profile object   | none                | Inline profile shorthand. Reserved runtime keys are not treated as profiles. |
+
+## Profile options
+
+Each profile can be set either under `subagents.profiles.<name>` or directly as `subagents.<name>`.
+
+| field         | type                   | default                    | notes                                                                                                                                                                                                                                                                 |
+| ------------- | ---------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ | -------- | ----------------------------- | ---------------------------------------------------------------------- |
+| `disabled`    | boolean                | `false`                    | When true, `/subagents` still shows the profile but `spawn_agent` rejects it.                                                                                                                                                                                         |
+| `model`       | string                 | current main session model | Format: `<provider>/<model>` with optional `:<thinking>`. Known models are resolved through Pi's model registry and Pi AI built-ins. Custom providers from `models.json` or provider extensions are allowed. Unknown providers are passed through as external models. |
+| `thinking`    | `"off"                 | "minimal"                  | "low"                                                                                                                                                                                                                                                                 | "medium" | "high" | "xhigh"` | current main session thinking | Overrides thinking level from `model` suffix and current main session. |
+| `tools`       | non-empty string array | Pi defaults                | Tool allowlist for the child Pi session.                                                                                                                                                                                                                              |
+| `maxTurns`    | positive integer       | default                    | Parsed and displayed. Reserved for child run limiting.                                                                                                                                                                                                                |
+| `prompt`      | non-empty string       | default                    | Prepended before the spawned task prompt.                                                                                                                                                                                                                             |
+| `description` | non-empty string       | built-in/custom default    | Displayed in `/subagents`.                                                                                                                                                                                                                                            |
+| `whenToUse`   | non-empty string array | built-in/default           | Displayed in `/subagents`.                                                                                                                                                                                                                                            |
+| `permissions` | object                 | `{}`                       | Per-tool permission map. Values: `"allow"`, `"deny"`, `"inherit"`, or legacy `"ask"`. `spawn_agent` filters denied tools out of `tools`.                                                                                                                              |
+| `variants`    | object                 | `{}`                       | Wildcard model-specific profile overrides.                                                                                                                                                                                                                            |
+
+## Model and thinking fallback
+
+Subagents use this precedence:
+
+1. `spawn_agent.model` and `spawn_agent.thinking`
+2. profile `model` and `thinking`
+3. current main session model and thinking
+4. hardcoded fallback only when Pi has no active model
+
+This means a profile can omit `model` and automatically follow whatever model the main session is using.
+
+## Variants
+
+Variants let one profile change behavior for different model families.
+
+```json title=".pi/ohm.json"
+{
+  "subagents": {
+    "reviewer": {
+      "model": "openai-codex/gpt-5.4-mini:medium",
+      "prompt": "General reviewer prompt.",
+      "tools": ["read", "grep", "bash"],
+      "permissions": {
+        "bash": "deny",
+        "grep": "allow"
+      },
+      "variants": {
+        "*gpt-5.4-mini*": {
+          "thinking": "minimal",
+          "prompt": "Short reviewer prompt.",
+          "tools": ["read", "grep"],
+          "permissions": {
+            "bash": "inherit",
+            "grep": "deny"
+          }
+        },
+        "*experimental*": {
+          "disabled": true
+        }
+      }
+    }
+  }
+}
+```
+
+Variant keys are lowercase wildcard patterns matched against both `<provider>/<model>` and `<model>`. Last matching pattern wins. Variant fields override the base profile fields.
+
+`permissions.inherit` removes a variant override and falls back to the base permission when one exists.
+
+## Disable a profile
+
+```json title=".pi/ohm.json"
+{
+  "subagents": {
+    "oracle": {
+      "disabled": true
+    }
+  }
+}
+```
+
+Disabled profiles remain visible in `/subagents` so you can see why they are unavailable.

@@ -23,6 +23,7 @@ export interface SubagentsConfig {
 }
 
 export interface SubagentProfileRuntimeConfig {
+  disabled?: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
@@ -37,6 +38,7 @@ export interface SubagentProfileRuntimeConfig {
 export type SubagentToolPermissionDecision = "allow" | "deny" | "inherit";
 
 export interface SubagentProfileVariantRuntimeConfig {
+  disabled?: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
@@ -48,6 +50,7 @@ export interface SubagentProfileVariantRuntimeConfig {
 }
 
 export interface ResolvedSubagentProfileRuntimeConfig {
+  disabled: boolean;
   model?: string;
   thinking?: SubagentThinkingLevel;
   tools?: readonly string[];
@@ -302,6 +305,7 @@ function mergeSubagentVariantConfig(
   const parsedPatch = parseSubagentProfileVariantPatch(patch);
   if (!parsedPatch) return fallback;
 
+  const disabled = parsedPatch.disabled;
   const model = normalizeSubagentModelOverride(parsedPatch.model);
   const thinking = normalizeThinking(parsedPatch.thinking);
   const tools = normalizeStringList(parsedPatch.tools);
@@ -324,6 +328,7 @@ function mergeSubagentVariantConfig(
 
   const merged: SubagentProfileVariantRuntimeConfig = {
     ...fallback,
+    ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
@@ -335,6 +340,7 @@ function mergeSubagentVariantConfig(
   };
 
   const hasValues =
+    merged.disabled !== undefined ||
     merged.model !== undefined ||
     merged.thinking !== undefined ||
     merged.tools !== undefined ||
@@ -375,6 +381,7 @@ function mergeSubagentProfileConfig(
   const parsedPatch = parseSubagentProfilePatch(patch);
   if (!parsedPatch) return fallback;
 
+  const disabled = parsedPatch.disabled;
   const model = normalizeSubagentModelOverride(parsedPatch.model);
   const thinking = normalizeThinking(parsedPatch.thinking);
   const tools = normalizeStringList(parsedPatch.tools);
@@ -398,6 +405,7 @@ function mergeSubagentProfileConfig(
 
   const merged: SubagentProfileRuntimeConfig = {
     ...fallback,
+    ...(disabled !== undefined ? { disabled } : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(tools ? { tools } : {}),
@@ -410,6 +418,7 @@ function mergeSubagentProfileConfig(
   };
 
   const hasValues =
+    merged.disabled !== undefined ||
     merged.model !== undefined ||
     merged.thinking !== undefined ||
     merged.tools !== undefined ||
@@ -636,6 +645,7 @@ export function resolveSubagentProfileRuntimeConfig(input: {
   });
 
   return {
+    disabled: variant?.disabled ?? profile.disabled ?? false,
     model: variant?.model ?? profile.model,
     thinking: variant?.thinking ?? profile.thinking,
     tools: variant?.tools ?? profile.tools,

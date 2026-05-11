@@ -261,3 +261,33 @@ void test("resolveSpawnConfig lets spawn args override configured model and thin
     assert.equal(config.value.thinking, "off");
   });
 });
+
+void test("resolveSpawnConfig rejects disabled subagents", async () => {
+  await withConfig(async ({ cwd }) => {
+    await fs.writeFile(
+      path.join(cwd, ".pi", "ohm.json"),
+      JSON.stringify({
+        subagents: {
+          reviewer: {
+            disabled: true,
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const config = await resolveSpawnConfig({
+      cwd,
+      params: {
+        task_name: "reviewer",
+        agent_type: "reviewer",
+        prompt: "inspect this diff",
+        summary: "review summary",
+      },
+    });
+
+    assert.equal(Result.isError(config), true);
+    if (Result.isOk(config)) assert.fail("Expected disabled subagent error");
+    assert.equal(config.error.message, "Subagent 'reviewer' is disabled by config");
+  });
+});
