@@ -37,23 +37,12 @@ async function withConfig<T>(run: (input: { readonly cwd: string }) => Promise<T
   });
 }
 
-void test("subagents config smoke resolves every runtime option from project ohm.json", async () => {
+void test("subagents config smoke resolves agent options from project ohm.json", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(
       path.join(cwd, ".pi", "ohm.json"),
       JSON.stringify({
         subagents: {
-          backend: "custom-plugin",
-          taskMaxConcurrency: 9,
-          taskRetentionMs: 12345,
-          permissions: {
-            default: "deny",
-            subagents: {
-              reviewer: "allow",
-              oracle: "ask",
-            },
-            allowInternalRouting: "yes",
-          },
           reviewer: {
             disabled: false,
             model: "OpenAI-Codex/gpt-5.4-mini:medium",
@@ -112,14 +101,6 @@ void test("subagents config smoke resolves every runtime option from project ohm
 
     assert.equal(Result.isOk(config), true);
     if (Result.isError(config)) assert.fail(config.error.message);
-    assert.equal(config.value.backend, "custom-plugin");
-    assert.equal(config.value.taskMaxConcurrency, 9);
-    assert.equal(config.value.taskRetentionMs, 12345);
-    assert.deepEqual(config.value.permissions, {
-      default: "deny",
-      subagents: { reviewer: "allow", oracle: "deny" },
-      allowInternalRouting: true,
-    });
     assert.equal(
       getSubagentConfiguredModel({ subagents: config.value }, "reviewer"),
       "openai-codex/gpt-5.4-mini:medium",

@@ -27,8 +27,6 @@ Because the file is already named `ohm.json`, config is keyed by package namespa
 ```json title=".pi/ohm.json"
 {
   "subagents": {
-    "taskMaxConcurrency": 8,
-    "backend": "interactive-sdk",
     "reviewer": {
       "description": "Use for reviewing diffs and checking implementation quality.",
       "prompt": "Find correctness, type safety, and design issues.",
@@ -64,7 +62,6 @@ import { registerConfig } from "@pi-ohm/core/config";
 
 const SubagentsConfigSchema = Type.Object(
   {
-    taskMaxConcurrency: Type.Optional(Type.Integer({ minimum: 1, maximum: 64 })),
     reviewer: Type.Optional(Type.Unknown()),
   },
   { additionalProperties: false },

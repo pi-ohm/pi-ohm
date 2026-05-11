@@ -19,7 +19,6 @@ export interface SubagentOverviewEntry {
 }
 
 export interface SubagentOverview {
-  readonly backend: string;
   readonly loadedFrom: readonly string[];
   readonly currentModel?: string;
   readonly currentThinking?: string;
@@ -44,7 +43,6 @@ export function buildSubagentOverview(input: BuildSubagentOverviewInput): Subage
     .map(([id, config]) => toCustomEntry({ id, config }));
 
   return {
-    backend: input.config.backend,
     loadedFrom: input.loaded.loadedFrom,
     currentModel: input.currentModel,
     currentThinking: input.currentThinking,
@@ -104,7 +102,7 @@ export function renderSubagentOverview(input: SubagentOverview): string {
   return [
     "Pi OHM subagents",
     "",
-    `backend ${input.backend} · enabled ${enabledCount} · disabled ${disabledCount}`,
+    `enabled ${enabledCount} · disabled ${disabledCount}`,
     `inherited defaults: ${input.currentModel ?? "no active model"} · thinking ${input.currentThinking ?? "unknown"}`,
     `config: ${input.loadedFrom.length > 0 ? input.loadedFrom.join(", ") : "defaults"}`,
     "",

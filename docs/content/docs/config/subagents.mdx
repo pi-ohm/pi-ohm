@@ -28,18 +28,6 @@ Configure agents in your ohm.json config file:
 ```json title="ohm.json"
 {
   "subagents": {
-    "backend": "interactive-sdk",
-    "taskMaxConcurrency": 3,
-    "taskRetentionMs": 86400000,
-    "permissions": {
-      "default": "allow",
-      "subagents": {
-        "oracle": "allow",
-        "experimental-reviewer": "deny"
-      },
-      "allowInternalRouting": false
-    },
-
     "librarian": {
       "disabled": false,
       "model": "openai-codex/gpt-5.4-mini:medium",
@@ -103,6 +91,7 @@ Configure agents in your ohm.json config file:
 Important behavior:
 
 - `subagents.<name>` is the only JSON agent shape. There is no `subagents.profiles` fallback.
+- There are no backend/runtime switching options. Subagents always use the Pi SDK PiP runner.
 - `description` is the model-facing guidance for when to use an agent.
 - `disabled: true` keeps the agent visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
 - Disabled agents are not exposed to the main model as usable options, and their configured prompts are never included in tool results.

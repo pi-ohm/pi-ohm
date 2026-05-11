@@ -88,7 +88,7 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
 
       const lines = [
         `handoff: ${config.value.handoff.enabled ? "on" : "off"}`,
-        `subagents: ${config.value.subagents.backend}`,
+        `subagents: on`,
         `sessionSearch: ${config.value.search.enabled ? "on" : "off"}`,
         `handoffVisualizer: ${config.value.handoff.visualizer ? "on" : "off"}`,
         `painter: ${config.value.painter.enabled ? "on" : "off"}`,

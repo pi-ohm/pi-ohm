@@ -60,18 +60,9 @@ export interface ResolvedSubagentAgentRuntimeConfig {
 }
 
 export interface SubagentRuntimeConfig {
-  backend: SubagentBackend;
-  taskMaxConcurrency: number;
-  taskRetentionMs: number;
-  permissions: {
-    default: "allow" | "deny";
-    subagents: Record<string, "allow" | "deny">;
-    allowInternalRouting: boolean;
-  };
   agents: Record<string, SubagentAgentRuntimeConfig>;
 }
 
-export type SubagentBackend = "none" | "interactive-shell" | "interactive-sdk" | "custom-plugin";
 export type SubagentThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 interface JsonMap {
@@ -83,14 +74,6 @@ interface RuntimeConfigWithSubagents {
 }
 
 export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
-  backend: "interactive-sdk",
-  taskMaxConcurrency: 3,
-  taskRetentionMs: 1000 * 60 * 60 * 24,
-  permissions: {
-    default: "allow",
-    subagents: {},
-    allowInternalRouting: false,
-  },
   agents: {},
 };
 
@@ -108,36 +91,8 @@ export const subagentsConfigModule = registerConfig({
   },
 });
 
-const SUBAGENT_RUNTIME_RESERVED_KEYS = new Set([
-  "taskMaxConcurrency",
-  "taskRetentionMs",
-  "backend",
-  "permissions",
-]);
-
 function isJsonMap(value: unknown): value is JsonMap {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return fallback;
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
-    return true;
-  }
-  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
-    return false;
-  }
-
-  return fallback;
-}
-
-function normalizePositiveInteger(value: unknown, fallback: number): number {
-  if (typeof value !== "number") return fallback;
-  if (!Number.isInteger(value) || value <= 0) return fallback;
-  return value;
 }
 
 function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
@@ -171,48 +126,6 @@ function normalizeStringList(value: unknown): readonly string[] | undefined {
     .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
     .filter((entry) => entry.length > 0);
   if (normalized.length === 0) return undefined;
-  return normalized;
-}
-
-function normalizeSubagentBackend(value: unknown, fallback: SubagentBackend): SubagentBackend {
-  if (
-    value === "none" ||
-    value === "interactive-shell" ||
-    value === "interactive-sdk" ||
-    value === "custom-plugin"
-  ) {
-    return value;
-  }
-
-  return fallback;
-}
-
-function normalizePermissionDecision(value: unknown, fallback: "allow" | "deny"): "allow" | "deny" {
-  if (value === "allow" || value === "deny") return value;
-
-  // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
-  if (value === "ask") return "deny";
-
-  return fallback;
-}
-
-function normalizePermissionDecisionMap(
-  value: unknown,
-  fallback: Readonly<Record<string, "allow" | "deny">>,
-): Record<string, "allow" | "deny"> {
-  if (!isJsonMap(value)) {
-    return { ...fallback };
-  }
-
-  const normalized: Record<string, "allow" | "deny"> = {};
-  for (const [key, decision] of Object.entries(value)) {
-    const trimmedKey = key.trim().toLowerCase();
-    if (trimmedKey.length === 0) continue;
-
-    const normalizedDecision = normalizePermissionDecision(decision, "allow");
-    normalized[trimmedKey] = normalizedDecision;
-  }
-
   return normalized;
 }
 
@@ -431,8 +344,6 @@ function normalizeInlineSubagentAgents(
   if (!value) return normalized;
 
   for (const [rawKey, rawValue] of Object.entries(value)) {
-    if (SUBAGENT_RUNTIME_RESERVED_KEYS.has(rawKey)) continue;
-
     const key = rawKey.trim().toLowerCase();
     if (key.length === 0) continue;
     if (!isJsonMap(rawValue)) continue;
@@ -480,47 +391,9 @@ export function mergeSubagentRuntimeConfig(input: {
 }): SubagentRuntimeConfig {
   const patch = isJsonMap(input.patch) ? input.patch : undefined;
   const defaults = input.current ?? DEFAULT_SUBAGENT_RUNTIME_CONFIG;
-
-  const taskMaxConcurrency = normalizePositiveInteger(
-    patch?.taskMaxConcurrency,
-    defaults.taskMaxConcurrency,
-  );
-
-  const taskRetentionMs = normalizePositiveInteger(
-    patch?.taskRetentionMs,
-    defaults.taskRetentionMs,
-  );
-
-  const backend = normalizeSubagentBackend(patch?.backend, defaults.backend);
-
-  const permissionsPatch = isJsonMap(patch?.permissions) ? patch.permissions : undefined;
-
-  const permissionsDefault = normalizePermissionDecision(
-    permissionsPatch?.default,
-    defaults.permissions.default,
-  );
-
-  const permissionsSubagents = normalizePermissionDecisionMap(
-    permissionsPatch?.subagents,
-    defaults.permissions.subagents,
-  );
-
-  const allowInternalRouting = normalizeBoolean(
-    permissionsPatch?.allowInternalRouting,
-    defaults.permissions.allowInternalRouting,
-  );
-
   const agents = normalizeInlineSubagentAgents(patch, defaults.agents);
 
   return {
-    backend,
-    taskMaxConcurrency,
-    taskRetentionMs,
-    permissions: {
-      default: permissionsDefault,
-      subagents: permissionsSubagents,
-      allowInternalRouting,
-    },
     agents,
   };
 }
@@ -625,14 +498,7 @@ export function resolveSubagentAgentRuntimeConfig(input: {
 
 export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntimeConfig {
   if (!isJsonMap(value)) return false;
-  return (
-    normalizeSubagentBackend(value.backend, DEFAULT_SUBAGENT_RUNTIME_CONFIG.backend) ===
-      value.backend &&
-    typeof value.taskMaxConcurrency === "number" &&
-    typeof value.taskRetentionMs === "number" &&
-    isJsonMap(value.permissions) &&
-    isJsonMap(value.agents)
-  );
+  return isJsonMap(value.agents);
 }
 
 export {

@@ -58,7 +58,7 @@ void test("renderSubagentOverview shows current model fallback and custom sectio
   assert.match(text, /Custom configured subagents/);
   assert.match(text, /Librarian \(librarian\)/);
   assert.match(text, /Reviewer \(reviewer\)/);
-  assert.match(text, /backend interactive-sdk · enabled 4 · disabled 0/);
+  assert.match(text, /enabled 4 · disabled 0/);
   assert.match(text, /model external-main\/main-model/);
   assert.match(text, /thinking xhigh/);
 });
