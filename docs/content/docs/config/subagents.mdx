@@ -3,26 +3,29 @@ title: Subagents
 description: Configure Pi-backed subagents with JSON or markdown agent files.
 ---
 
-Subagents are Pi-backed child sessions. Use `/subagents` in Pi to inspect integrated agents and custom configured agents in a non-model-facing TUI widget.
+Subagents use our Pi-in-Pi architecture located in `@pi-ohm/core/pip`. Use `/subagents` in Pi to inspect integrated agents and custom configured agents in a non-model-facing TUI widget.
 
-Ohm reads config from:
+## Built-in
 
-1. global config: `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
-2. project config: `<cwd>/.pi/ohm.json`
+Ohm comes with three integrated subagents.
 
-Project config overrides global config. Spawn args override config for one run.
+### Librarian
 
-Integrated subagents always exist:
+multi-repository codebase understanding and explanation
 
-- `librarian` - multi-repository codebase understanding and explanation
-- `oracle` - reasoning-heavy review, planning, debugging, and architecture advice
-- `finder` - behavior-based code search for concepts, flows, and broad terms
+### Oracle
+
+reasoning-heavy review, planning, debugging, and architecture advice
+
+### Finder
+
+behavior-based code search for concepts, flows, and broad terms
 
 ## JSON
 
-Use `.pi/ohm.json` for project config, or `ohm.json` in the global Ohm config dir. Agents are configured directly under `subagents.<name>`.
+Configure agents in your ohm.json config file:
 
-```json title=".pi/ohm.json"
+```json title="ohm.json"
 {
   "subagents": {
     "backend": "interactive-sdk",
