@@ -14,7 +14,10 @@ import {
   type SubagentToolPermissionDecisionPatch,
 } from "./schema";
 
-export const SubagentsConfigSchema = Type.Record(Type.String({ minLength: 1 }), Type.Unknown());
+export const SubagentsConfigSchema = Type.Record(
+  Type.String({ minLength: 1 }),
+  SubagentAgentPatchSchema,
+);
 
 type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
 
@@ -123,9 +126,6 @@ function normalizeSubagentToolPermissionDecision(
   value: unknown,
 ): SubagentToolPermissionDecision | undefined {
   if (value === "allow" || value === "deny" || value === "inherit") return value;
-
-  // Legacy compatibility: treat deprecated "ask" as deny-safe behavior.
-  if (value === "ask") return "deny";
   return undefined;
 }
 

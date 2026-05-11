@@ -28,19 +28,32 @@ Configure agents in your ohm.json config file:
 ```json title="ohm.json"
 {
   "subagents": {
-    "librarian": {
+    "reviewer": {
       "disabled": false,
       "model": "openai-codex/gpt-5.4-mini:medium",
-      "tools": ["read", "grep", "find"],
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "Find correctness, type safety, and design issues.",
+      "tools": ["read", "grep", "bash"],
       "maxTurns": 12,
-      "description": "Answer deep codebase questions with thorough explanations.",
-      "prompt": "You are Librarian. Read broadly before answering. Return complete explanations.",
       "permissions": {
         "read": "allow",
         "grep": "allow",
-        "find": "allow",
         "bash": "deny"
+      },
+      "variants": {
+        "*gpt-5.4-mini*": {
+          "description": "Use for quick actionable review on gpt-5.4-mini.",
+          "prompt": "Review quickly. Report only actionable issues.",
+          "tools": ["read", "grep"],
+          "permissions": {
+            "bash": "inherit",
+            "grep": "deny"
+          }
+        }
       }
+    },
+    "oracle": {
+      "disabled": true
     }
   }
 }
@@ -49,6 +62,7 @@ Configure agents in your ohm.json config file:
 Important behavior:
 
 - `subagents.<name>` is the only JSON agent shape. There is no `subagents.profiles` fallback.
+- Do not add an `agents` wrapper. That exists only in the internal resolved config shape.
 - There are no backend/runtime switching options. Subagents always use the Pi SDK PiP runner.
 - `description` is the model-facing guidance for when to use an agent.
 - `disabled: true` keeps the agent visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
@@ -59,7 +73,8 @@ Important behavior:
 - Known models resolve through Pi's model registry and Pi AI built-ins.
 - Custom providers from `models.json` or provider extensions are allowed.
 - Unknown providers pass through as external models.
-- `permissions` values are `allow`, `deny`, `inherit`, or legacy `ask`. Legacy `ask` becomes `deny`.
+- Agent-level `permissions` values are `allow` or `deny`.
+- Variant-level `permissions` can also use `inherit` to remove a variant override and fall back to the agent permission.
 - Denied tools are removed from the child session `tools` allowlist.
 - Variant keys are lowercase wildcard patterns matched against `<provider>/<model>` and `<model>`.
 

@@ -4,11 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
+import { Value } from "typebox/value";
 import { loadConfig, pickConfig } from "@pi-ohm/core/config";
 import {
   getSubagentConfiguredModel,
   isSubagentRuntimeConfig,
   resolveSubagentAgentRuntimeConfig,
+  SubagentsConfigSchema,
   subagentsConfigModule,
 } from "../config";
 
@@ -36,6 +38,44 @@ async function withConfig<T>(run: (input: { readonly cwd: string }) => Promise<T
     await fs.rm(dir, { recursive: true, force: true });
   });
 }
+
+void test("SubagentsConfigSchema accepts only public agent config shape", () => {
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      reviewer: {
+        disabled: false,
+        model: "openai-codex/gpt-5.4-mini:medium",
+        description: "Use for reviewing diffs.",
+        prompt: "Review the diff.",
+        tools: ["read", "grep", "bash"],
+        maxTurns: 12,
+        permissions: {
+          read: "allow",
+          bash: "deny",
+        },
+        variants: {
+          "*gpt-5.4-mini*": {
+            permissions: {
+              bash: "inherit",
+            },
+          },
+        },
+      },
+    }),
+    true,
+  );
+  assert.equal(Value.Check(SubagentsConfigSchema, { agents: { reviewer: {} } }), false);
+  assert.equal(Value.Check(SubagentsConfigSchema, { backend: "interactive-sdk" }), false);
+  assert.equal(Value.Check(SubagentsConfigSchema, { reviewer: { thinking: "high" } }), false);
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, { reviewer: { permissions: { bash: "inherit" } } }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, { reviewer: { permissions: { bash: "ask" } } }),
+    false,
+  );
+});
 
 void test("subagents config smoke resolves agent options from project ohm.json", async () => {
   await withConfig(async ({ cwd }) => {

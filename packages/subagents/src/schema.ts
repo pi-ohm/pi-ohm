@@ -7,13 +7,22 @@ const NonEmptyStringArraySchema = Type.Array(NonEmptyStringSchema, { minItems: 1
 export const SubagentToolPermissionDecisionSchema = Type.Union([
   Type.Literal("allow"),
   Type.Literal("deny"),
+]);
+
+export const SubagentVariantToolPermissionDecisionSchema = Type.Union([
+  Type.Literal("allow"),
+  Type.Literal("deny"),
   Type.Literal("inherit"),
-  Type.Literal("ask"),
 ]);
 
 export const SubagentToolPermissionMapSchema = Type.Record(
   NonEmptyStringSchema,
   SubagentToolPermissionDecisionSchema,
+);
+
+export const SubagentVariantToolPermissionMapSchema = Type.Record(
+  NonEmptyStringSchema,
+  SubagentVariantToolPermissionDecisionSchema,
 );
 
 export const SubagentAgentVariantPatchSchema = Type.Object(
@@ -24,7 +33,7 @@ export const SubagentAgentVariantPatchSchema = Type.Object(
     maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
-    permissions: Type.Optional(SubagentToolPermissionMapSchema),
+    permissions: Type.Optional(SubagentVariantToolPermissionMapSchema),
   },
   { additionalProperties: false },
 );
@@ -49,7 +58,7 @@ export const SubagentAgentPatchSchema = Type.Object(
 );
 
 export type SubagentToolPermissionDecisionPatch = Static<
-  typeof SubagentToolPermissionDecisionSchema
+  typeof SubagentVariantToolPermissionDecisionSchema
 >;
 export type SubagentAgentVariantPatch = Static<typeof SubagentAgentVariantPatchSchema>;
 export type SubagentAgentPatch = Static<typeof SubagentAgentPatchSchema>;
@@ -88,7 +97,8 @@ function toBoolean(value: unknown): boolean | undefined {
 
 function normalizeSubagentPermissionMapInput(
   value: unknown,
-): Static<typeof SubagentToolPermissionMapSchema> | undefined {
+  mode: "agent" | "variant",
+): Static<typeof SubagentVariantToolPermissionMapSchema> | undefined {
   if (!isObjectRecord(value)) return undefined;
 
   const normalized: Record<string, SubagentToolPermissionDecisionPatch> = {};
@@ -98,23 +108,19 @@ function normalizeSubagentPermissionMapInput(
     if (typeof rawDecision !== "string") continue;
 
     const decision = rawDecision.trim().toLowerCase();
-    if (
-      decision !== "allow" &&
-      decision !== "deny" &&
-      decision !== "inherit" &&
-      decision !== "ask"
-    ) {
-      continue;
-    }
+    if (decision !== "allow" && decision !== "deny" && decision !== "inherit") continue;
+    if (mode === "agent" && decision === "inherit") continue;
 
     normalized[toolName] = decision;
   }
 
-  if (!Value.Check(SubagentToolPermissionMapSchema, normalized)) {
+  const schema =
+    mode === "agent" ? SubagentToolPermissionMapSchema : SubagentVariantToolPermissionMapSchema;
+  if (!Value.Check(schema, normalized)) {
     return undefined;
   }
 
-  return Value.Decode(SubagentToolPermissionMapSchema, normalized);
+  return Value.Decode(schema, normalized);
 }
 
 function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
@@ -126,7 +132,10 @@ function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
-  const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
+  const permissions = normalizeSubagentPermissionMapInput(
+    Reflect.get(input, "permissions"),
+    "variant",
+  );
 
   return {
     ...(disabled !== undefined ? { disabled } : {}),
@@ -173,7 +182,10 @@ function normalizeSubagentAgentPatchInput(input: unknown): unknown {
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
-  const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
+  const permissions = normalizeSubagentPermissionMapInput(
+    Reflect.get(input, "permissions"),
+    "agent",
+  );
   const variants = normalizeSubagentAgentVariantMapInput(Reflect.get(input, "variants"));
 
   return {
