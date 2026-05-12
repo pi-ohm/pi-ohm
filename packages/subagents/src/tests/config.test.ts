@@ -53,13 +53,6 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
           read: "allow",
           bash: "deny",
         },
-        variants: {
-          "*gpt-5.4-mini*": {
-            permissions: {
-              bash: "inherit",
-            },
-          },
-        },
       },
     }),
     true,
@@ -73,6 +66,10 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
   );
   assert.equal(
     Value.Check(SubagentsConfigSchema, { reviewer: { permissions: { bash: "ask" } } }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, { reviewer: { variants: { "*gpt*": {} } } }),
     false,
   );
 });
@@ -93,20 +90,6 @@ void test("subagents config smoke resolves agent options from project ohm.json",
             permissions: {
               bash: "deny",
               grep: "allow",
-            },
-            variants: {
-              "*gpt-5.4-mini*": {
-                disabled: true,
-                model: "openai-codex/gpt-5.4-mini:low",
-                tools: ["read", "grep"],
-                maxTurns: 4,
-                prompt: "variant prompt",
-                description: "Variant reviewer description.",
-                permissions: {
-                  bash: "inherit",
-                  grep: "deny",
-                },
-              },
             },
           },
           librarian: {
@@ -149,14 +132,13 @@ void test("subagents config smoke resolves agent options from project ohm.json",
       modelPattern: "openai-codex/gpt-5.4-mini:medium",
     });
     assert.deepEqual(reviewer, {
-      disabled: true,
-      model: "openai-codex/gpt-5.4-mini:low",
-      tools: ["read", "grep"],
-      maxTurns: 4,
-      prompt: "variant prompt",
-      description: "Variant reviewer description.",
-      permissions: { bash: "deny", grep: "deny" },
-      variantPattern: "*gpt-5.4-mini*",
+      disabled: false,
+      model: "openai-codex/gpt-5.4-mini:medium",
+      tools: ["read", "grep", "bash"],
+      maxTurns: 12,
+      prompt: "review prompt",
+      description: "Review diffs and check implementation quality.",
+      permissions: { bash: "deny", grep: "allow" },
     });
 
     const librarian = resolveSubagentAgentRuntimeConfig({

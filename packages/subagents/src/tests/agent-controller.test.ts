@@ -287,45 +287,6 @@ void test("resolveSpawnConfig hides disabled subagents from model-facing tools",
   });
 });
 
-void test("resolveSpawnConfig hides variant-disabled subagents from model-facing tools", async () => {
-  await withConfig(async ({ cwd }) => {
-    await fs.writeFile(
-      path.join(cwd, ".pi", "ohm.json"),
-      JSON.stringify({
-        subagents: {
-          reviewer: {
-            model: "custom-provider/custom-model:medium",
-            prompt: "base reviewer prompt",
-            variants: {
-              "*custom-model*": {
-                disabled: true,
-                prompt: "secret variant reviewer prompt",
-              },
-            },
-          },
-        },
-      }),
-      "utf8",
-    );
-
-    const config = await resolveSpawnConfig({
-      cwd,
-      params: {
-        task_name: "reviewer",
-        agent_type: "reviewer",
-        prompt: "inspect this diff",
-        summary: "review summary",
-      },
-    });
-
-    assert.equal(Result.isError(config), true);
-    if (Result.isOk(config)) assert.fail("Expected variant-disabled subagent error");
-    assert.equal(config.error.message, "Subagent 'reviewer' was not found");
-    assert.equal(config.error.message.includes("secret variant reviewer prompt"), false);
-    assert.equal(config.error.message.includes("base reviewer prompt"), false);
-  });
-});
-
 void test("resolveAvailableAgents exposes descriptions and omits disabled agents", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(

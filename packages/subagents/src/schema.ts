@@ -9,38 +9,9 @@ export const SubagentToolPermissionDecisionSchema = Type.Union([
   Type.Literal("deny"),
 ]);
 
-export const SubagentVariantToolPermissionDecisionSchema = Type.Union([
-  Type.Literal("allow"),
-  Type.Literal("deny"),
-  Type.Literal("inherit"),
-]);
-
 export const SubagentToolPermissionMapSchema = Type.Record(
   NonEmptyStringSchema,
   SubagentToolPermissionDecisionSchema,
-);
-
-export const SubagentVariantToolPermissionMapSchema = Type.Record(
-  NonEmptyStringSchema,
-  SubagentVariantToolPermissionDecisionSchema,
-);
-
-export const SubagentAgentVariantPatchSchema = Type.Object(
-  {
-    disabled: Type.Optional(Type.Boolean()),
-    model: Type.Optional(NonEmptyStringSchema),
-    tools: Type.Optional(NonEmptyStringArraySchema),
-    maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
-    prompt: Type.Optional(NonEmptyStringSchema),
-    description: Type.Optional(NonEmptyStringSchema),
-    permissions: Type.Optional(SubagentVariantToolPermissionMapSchema),
-  },
-  { additionalProperties: false },
-);
-
-export const SubagentAgentVariantMapPatchSchema = Type.Record(
-  NonEmptyStringSchema,
-  SubagentAgentVariantPatchSchema,
 );
 
 export const SubagentAgentPatchSchema = Type.Object(
@@ -52,15 +23,13 @@ export const SubagentAgentPatchSchema = Type.Object(
     prompt: Type.Optional(NonEmptyStringSchema),
     description: Type.Optional(NonEmptyStringSchema),
     permissions: Type.Optional(SubagentToolPermissionMapSchema),
-    variants: Type.Optional(SubagentAgentVariantMapPatchSchema),
   },
   { additionalProperties: false },
 );
 
 export type SubagentToolPermissionDecisionPatch = Static<
-  typeof SubagentVariantToolPermissionDecisionSchema
+  typeof SubagentToolPermissionDecisionSchema
 >;
-export type SubagentAgentVariantPatch = Static<typeof SubagentAgentVariantPatchSchema>;
 export type SubagentAgentPatch = Static<typeof SubagentAgentPatchSchema>;
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -97,8 +66,7 @@ function toBoolean(value: unknown): boolean | undefined {
 
 function normalizeSubagentPermissionMapInput(
   value: unknown,
-  mode: "agent" | "variant",
-): Static<typeof SubagentVariantToolPermissionMapSchema> | undefined {
+): Static<typeof SubagentToolPermissionMapSchema> | undefined {
   if (!isObjectRecord(value)) return undefined;
 
   const normalized: Record<string, SubagentToolPermissionDecisionPatch> = {};
@@ -108,69 +76,16 @@ function normalizeSubagentPermissionMapInput(
     if (typeof rawDecision !== "string") continue;
 
     const decision = rawDecision.trim().toLowerCase();
-    if (decision !== "allow" && decision !== "deny" && decision !== "inherit") continue;
-    if (mode === "agent" && decision === "inherit") continue;
+    if (decision !== "allow" && decision !== "deny") continue;
 
     normalized[toolName] = decision;
   }
 
-  const schema =
-    mode === "agent" ? SubagentToolPermissionMapSchema : SubagentVariantToolPermissionMapSchema;
-  if (!Value.Check(schema, normalized)) {
+  if (!Value.Check(SubagentToolPermissionMapSchema, normalized)) {
     return undefined;
   }
 
-  return Value.Decode(schema, normalized);
-}
-
-function normalizeSubagentAgentVariantPatchInput(input: unknown): unknown {
-  if (!isObjectRecord(input)) return input;
-
-  const model = toTrimmedString(Reflect.get(input, "model"));
-  const disabled = toBoolean(Reflect.get(input, "disabled"));
-  const tools = toTrimmedStringArray(Reflect.get(input, "tools"));
-  const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
-  const prompt = toTrimmedString(Reflect.get(input, "prompt"));
-  const description = toTrimmedString(Reflect.get(input, "description"));
-  const permissions = normalizeSubagentPermissionMapInput(
-    Reflect.get(input, "permissions"),
-    "variant",
-  );
-
-  return {
-    ...(disabled !== undefined ? { disabled } : {}),
-    ...(model ? { model } : {}),
-    ...(tools ? { tools } : {}),
-    ...(maxTurns ? { maxTurns } : {}),
-    ...(prompt ? { prompt } : {}),
-    ...(description ? { description } : {}),
-    ...(permissions ? { permissions } : {}),
-  };
-}
-
-function normalizeSubagentAgentVariantMapInput(
-  input: unknown,
-): Static<typeof SubagentAgentVariantMapPatchSchema> | undefined {
-  if (!isObjectRecord(input)) return undefined;
-
-  const normalized: Record<string, SubagentAgentVariantPatch> = {};
-  for (const [rawPattern, rawVariant] of Object.entries(input)) {
-    const pattern = toTrimmedString(rawPattern)?.toLowerCase();
-    if (!pattern) continue;
-
-    const normalizedVariant = normalizeSubagentAgentVariantPatchInput(rawVariant);
-    if (!Value.Check(SubagentAgentVariantPatchSchema, normalizedVariant)) {
-      continue;
-    }
-
-    normalized[pattern] = Value.Decode(SubagentAgentVariantPatchSchema, normalizedVariant);
-  }
-
-  if (!Value.Check(SubagentAgentVariantMapPatchSchema, normalized)) {
-    return undefined;
-  }
-
-  return Value.Decode(SubagentAgentVariantMapPatchSchema, normalized);
+  return Value.Decode(SubagentToolPermissionMapSchema, normalized);
 }
 
 function normalizeSubagentAgentPatchInput(input: unknown): unknown {
@@ -182,11 +97,7 @@ function normalizeSubagentAgentPatchInput(input: unknown): unknown {
   const maxTurns = toPositiveInteger(Reflect.get(input, "maxTurns"));
   const prompt = toTrimmedString(Reflect.get(input, "prompt"));
   const description = toTrimmedString(Reflect.get(input, "description"));
-  const permissions = normalizeSubagentPermissionMapInput(
-    Reflect.get(input, "permissions"),
-    "agent",
-  );
-  const variants = normalizeSubagentAgentVariantMapInput(Reflect.get(input, "variants"));
+  const permissions = normalizeSubagentPermissionMapInput(Reflect.get(input, "permissions"));
 
   return {
     ...(disabled !== undefined ? { disabled } : {}),
@@ -196,19 +107,7 @@ function normalizeSubagentAgentPatchInput(input: unknown): unknown {
     ...(prompt ? { prompt } : {}),
     ...(description ? { description } : {}),
     ...(permissions ? { permissions } : {}),
-    ...(variants ? { variants } : {}),
   };
-}
-
-export function parseSubagentAgentVariantPatch(
-  input: unknown,
-): SubagentAgentVariantPatch | undefined {
-  const normalized = normalizeSubagentAgentVariantPatchInput(input);
-  if (!Value.Check(SubagentAgentVariantPatchSchema, normalized)) {
-    return undefined;
-  }
-
-  return Value.Decode(SubagentAgentVariantPatchSchema, normalized);
 }
 
 export function parseSubagentAgentPatch(input: unknown): SubagentAgentPatch | undefined {
