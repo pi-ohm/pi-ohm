@@ -53,6 +53,9 @@ function createFakeRunner(): PipRunner {
         previousStatus: { state: "completed", result: "ok" },
       });
     },
+    async abort(input) {
+      return Result.ok({ pipId: input.pipId, status: { state: "interrupted" } });
+    },
     async resume(input) {
       return Result.ok({ pipId: input.pipId, status: { state: "running" } });
     },
@@ -91,6 +94,9 @@ function createRunningRunner(): PipRunner {
     },
     async close(input) {
       return Result.ok({ pipId: input.pipId, previousStatus: { state: "running" } });
+    },
+    async abort(input) {
+      return Result.ok({ pipId: input.pipId, status: { state: "interrupted" } });
     },
     async resume(input) {
       return Result.ok({ pipId: input.pipId, status: { state: "running" } });
@@ -234,6 +240,62 @@ void test("PipController wait returns runner timeout status", async () => {
   if (Result.isError(waited)) assert.fail(waited.error.message);
   assert.equal(waited.value.timedOut, true);
   assert.deepEqual(waited.value.statuses[spawned.value.pipId], { state: "running" });
+});
+
+void test("PipController aborts through runner and records interrupted status", async () => {
+  const graph = createInMemoryPipGraphStore();
+  const entries: unknown[] = [];
+  const aborted: string[] = [];
+  const runner = createRunningRunner();
+  const controller = new PipController({
+    runner: {
+      ...runner,
+      async abort(input) {
+        aborted.push(input.pipId);
+        return runner.abort(input);
+      },
+    },
+    graph,
+    createId: () => "pip-abort",
+    now: () => 456,
+    entries: {
+      write(entry) {
+        entries.push(entry);
+        return Result.ok("entry-abort");
+      },
+    },
+  });
+
+  const spawned = await controller.spawn({
+    ownerPackage: "@demo/subagents",
+    role: "reviewer",
+    parentSessionId: "parent-1",
+    cwd: "/tmp/demo",
+    prompt: "review this",
+    runInBackground: true,
+  });
+  assert.equal(Result.isOk(spawned), true);
+  if (Result.isError(spawned)) assert.fail(spawned.error.message);
+
+  const result = await controller.abort({ pipId: spawned.value.pipId });
+  assert.equal(Result.isOk(result), true);
+  if (Result.isError(result)) assert.fail(result.error.message);
+  assert.deepEqual(aborted, ["pip-abort"]);
+  assert.deepEqual(result.value.status, { state: "interrupted" });
+
+  const stored = await graph.get("pip-abort");
+  assert.equal(Result.isOk(stored), true);
+  if (Result.isError(stored)) assert.fail(stored.error.message);
+  assert.deepEqual(stored.value?.status, { state: "interrupted" });
+  assert.equal(
+    entries.some(
+      (entry) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        Reflect.get(entry, "kind") === "pip_status_changed",
+    ),
+    true,
+  );
 });
 
 void test("PiP storage resolves safe namespaces and rejects escaped child paths", () => {

@@ -99,7 +99,12 @@ void test("PiP SDK smoke: configurable real model", { skip: !shouldRunModel }, a
   assert.equal(spawned.value.pipId, "pip-smoke-model");
   assert.equal(spawned.value.childSessionId.length > 0, true);
   assert.equal(spawned.value.childSessionPath?.endsWith(".jsonl"), true);
-  assert.equal(spawned.value.status.state, "completed");
+  assert.equal(spawned.value.status.state, "running");
+
+  const waited = await controller.wait({ pipIds: [spawned.value.pipId], timeoutMs: 30_000 });
+  assert.equal(Result.isOk(waited), true);
+  if (Result.isError(waited)) assert.fail(waited.error.message);
+  assert.equal(waited.value.statuses[spawned.value.pipId]?.state, "completed");
 
   const closed = await controller.close({ pipId: spawned.value.pipId });
   assert.equal(Result.isOk(closed), true);

@@ -19,22 +19,22 @@ pre-commit:
       stage_fixed: true
 
     typecheck:
-      run: yarn typecheck
+      run: pnpm typecheck
 
 pre-push:
   parallel: true
   commands:
     oxfmt-check:
-      run: yarn format
+      run: pnpm format
 
     oxlint:
-      run: yarn lint
+      run: pnpm lint
 
     typecheck:
-      run: yarn typecheck
+      run: pnpm typecheck
 
 pre-merge-commit:
   parallel: false
   commands:
     oxlint:
-      run: yarn lint
+      run: pnpm lint

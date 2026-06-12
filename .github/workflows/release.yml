@@ -54,11 +54,14 @@ jobs:
           node-version: 24
           cache: true
 
+      - name: Setup pnpm
+        run: corepack enable
+
       - name: Install
-        run: vp install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build distributables
-        run: vp run build
+        run: pnpm build
 
       - name: Publish all packages to npm @dev
         env:
@@ -111,11 +114,14 @@ jobs:
           node-version: 24
           cache: true
 
+      - name: Setup pnpm
+        run: corepack enable
+
       - name: Install
-        run: vp install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build distributables
-        run: vp run build
+        run: pnpm build
 
       - name: Publish released package versions to npm @latest
         env:
@@ -208,11 +214,14 @@ jobs:
           node-version: 24
           cache: true
 
+      - name: Setup pnpm
+        run: corepack enable
+
       - name: Install
-        run: vp install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build distributables
-        run: vp run build
+        run: pnpm build
 
       - name: Publish selected package(s)
         env:

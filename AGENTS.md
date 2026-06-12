@@ -4,11 +4,11 @@
 
 - Be concise, sacrificing grammar for brevity.
 - Write high-coverage tests. You don't need to write a million tests. Always begin with failing tests or tests that reproduce a bug.
-- Lint and check with `yarn lint` and `yarn typecheck`
+- Lint and check with `pnpm lint` and `pnpm typecheck`
 
 ## Repo shape
 
-This is a Yarn-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
+This is a pnpm-workspace monorepo for publishable `@pi-ohm/*` and `pi-ohm` packages.
 
 ## Writing code in this repo
 
@@ -30,7 +30,7 @@ you should uphold these standards whenever you write code in this repo:
    - `.pi/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.providers.json`
-5. Use Yarn commands (`yarn install`, `yarn test`) instead of npm.
+5. Use pnpm commands (`pnpm install`, `pnpm test`) instead of npm.
 6. Branch model: `dev` is integration + release-prep; `prod` is promotion/stable publish branch.
 7. Versioning/changelog automation is release-please (not changesets).
 8. Use scoped conventional commits for release automation (`feat(subagents):`, `fix(root,modes):`, `feat(config)!:`, etc.).

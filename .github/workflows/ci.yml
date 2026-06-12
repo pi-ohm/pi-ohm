@@ -59,17 +59,29 @@ jobs:
           node-version: 24
           cache: true
 
+      - name: Setup pnpm
+        run: corepack enable
+
       - name: Install
-        run: vp install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: vp run build
+        run: pnpm build
 
-      - name: Check
-        run: vp check
+      - name: Format
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
 
       - name: Test
-        run: vp test
+        run: pnpm test
+
+      - name: Subagents tests
+        run: pnpm test:subagents
+
+      - name: Memories tests
+        run: pnpm test:memories
 
       - name: Typecheck
-        run: vp run typecheck
+        run: pnpm typecheck

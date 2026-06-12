@@ -64,19 +64,19 @@ Coming soon
 <details>
   <summary>
     <strong>Info (click to expand)</strong>
-    <p>Yarn workspaces, linting, formatting, etc.</p>
+    <p>pnpm workspaces, linting, formatting, etc.</p>
   </summary>
 
 #### Package manager
 
-This repo uses Yarn workspaces.
+This repo uses pnpm workspaces.
 
 ```bash
 corepack enable
-corepack prepare yarn@stable --activate
-yarn install
-yarn build
-yarn typecheck
+corepack prepare pnpm@10.25.0 --activate
+pnpm install
+pnpm build
+pnpm typecheck
 ```
 
 #### Workspace layout

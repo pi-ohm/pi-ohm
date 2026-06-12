@@ -106,6 +106,15 @@ export interface PipCloseResult {
   readonly previousStatus: PipStatus;
 }
 
+export interface PipAbortInput {
+  readonly pipId: PipId;
+}
+
+export interface PipAbortResult {
+  readonly pipId: PipId;
+  readonly status: PipStatus;
+}
+
 export interface PipResumeInput {
   readonly pipId: PipId;
 }
@@ -130,6 +139,7 @@ export interface PipRunner {
   wait(input: PipWaitInput): Promise<PipResult<PipWaitResult>>;
   get(input: PipGetInput): Promise<PipResult<PipGetResult>>;
   close(input: PipCloseInput): Promise<PipResult<PipCloseResult>>;
+  abort(input: PipAbortInput): Promise<PipResult<PipAbortResult>>;
   resume(input: PipResumeInput): Promise<PipResult<PipResumeResult>>;
 }
 
@@ -246,7 +256,8 @@ interface PipReservation {
 interface SdkSessionRecord {
   readonly session: AgentSession;
   readonly metadata: PipSessionMetadata;
-  readonly backgroundPrompt?: Promise<void>;
+  readonly activePrompt?: Promise<void>;
+  readonly statusOverride?: PipStatus;
 }
 
 const ENTRY_TYPE = "pi-ohm.pip";
@@ -642,6 +653,39 @@ export class PipController {
     return debugResult(this.#debug, "pip.close", closed, fields);
   }
 
+  async abort(input: PipAbortInput): Promise<PipResult<PipAbortResult>> {
+    const fields = { pipId: input.pipId };
+    const aborted = await Result.gen(async function* (this: PipController) {
+      const result = yield* Result.await(this.#runner.abort(input));
+      if (!this.#graph) return Result.ok(result);
+      const edge = yield* Result.await(this.#graph.get(input.pipId));
+      if (!edge) return Result.ok(result);
+
+      const now = this.#now();
+      yield* Result.await(
+        this.#graph.updateStatus({
+          pipId: input.pipId,
+          status: result.status,
+          updatedAtEpochMs: now,
+        }),
+      );
+
+      yield* this.writeEntry({
+        kind: "pip_status_changed",
+        pipId: input.pipId,
+        ownerPackage: edge.ownerPackage,
+        role: edge.role,
+        parentSessionId: edge.parentSessionId,
+        status: result.status,
+        atEpochMs: now,
+      });
+
+      return Result.ok(result);
+    }, this);
+
+    return debugResult(this.#debug, "pip.abort", aborted, fields);
+  }
+
   async resume(input: PipResumeInput): Promise<PipResult<PipResumeResult>> {
     const resumed = await this.#runner.resume(input);
     return debugResult(this.#debug, "pip.resume", resumed, { pipId: input.pipId });
@@ -872,28 +916,32 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
             ? createPipChildSessionPath({ dataDir, childSessionFile })
             : Result.ok(null);
           if (Result.isError(childSessionPath)) throw childSessionPath.error;
-          const backgroundPrompt =
-            spawn.prompt && spawn.runInBackground
-              ? session.session.prompt(spawn.prompt).catch(() => undefined)
-              : undefined;
-          if (spawn.prompt && !spawn.runInBackground) await session.session.prompt(spawn.prompt);
-
-          const status: PipStatus = spawn.prompt
-            ? spawn.runInBackground
-              ? { state: "running" }
-              : { state: "completed", result: latestAssistantText(session.session) }
-            : { state: "running" };
-          const metadata: PipSessionMetadata = {
+          const running: PipSessionMetadata = {
             pipId: spawn.pipId,
             ownerPackage: spawn.ownerPackage,
             role: spawn.role,
             parentSessionId: spawn.parentSessionId,
             childSessionId: session.session.sessionId,
             childSessionPath: childSessionPath.value,
-            status,
+            status: { state: "running" },
           };
-          sessions.set(spawn.pipId, { session: session.session, metadata, backgroundPrompt });
-          return metadata;
+          sessions.set(spawn.pipId, { session: session.session, metadata: running });
+
+          if (!spawn.prompt) return running;
+
+          const activePrompt = session.session.prompt(spawn.prompt).finally(() => {
+            const current = sessions.get(spawn.pipId);
+            if (!current) return;
+            sessions.set(spawn.pipId, { ...current, activePrompt: undefined });
+          });
+          sessions.set(spawn.pipId, {
+            session: session.session,
+            metadata: running,
+            activePrompt,
+          });
+
+          activePrompt.catch(() => undefined);
+          return running;
         },
         catch: (cause) =>
           new PipError({
@@ -919,7 +967,7 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
           if (send.mode === "steer") await record.session.steer(send.prompt);
           if (send.mode === "follow_up") await record.session.followUp(send.prompt);
           if (!send.mode || send.mode === "prompt") await record.session.prompt(send.prompt);
-          return { pipId: send.pipId, status: currentStatus(record.session) };
+          return { pipId: send.pipId, status: currentStatus(record) };
         },
         catch: (cause) =>
           new PipError({
@@ -957,7 +1005,7 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
       }
       return Result.ok({
         pipId: get.pipId,
-        status: currentStatus(record.session),
+        status: currentStatus(record),
         childSessionId: record.session.sessionId,
         childSessionPath: record.metadata.childSessionPath,
       });
@@ -965,15 +1013,37 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
     async close(close) {
       const record = sessions.get(close.pipId);
       if (!record) return Result.err(notFound(close.pipId, "runner.close"));
-      const previousStatus = currentStatus(record.session);
+      const previousStatus = currentStatus(record);
       record.session.dispose();
       sessions.delete(close.pipId);
       return Result.ok({ pipId: close.pipId, previousStatus });
     },
+    async abort(abort) {
+      const record = sessions.get(abort.pipId);
+      if (!record) return Result.err(notFound(abort.pipId, "runner.abort"));
+
+      const aborted = await Result.tryPromise({
+        try: async () => {
+          await record.session.abort();
+          const status: PipStatus = { state: "interrupted" };
+          sessions.set(abort.pipId, { ...record, activePrompt: undefined, statusOverride: status });
+          return { pipId: abort.pipId, status };
+        },
+        catch: (cause) =>
+          new PipError({
+            code: "pip_sdk_abort_failed",
+            stage: "runner.abort",
+            message: `Failed to abort PiP session: ${messageFromCause(cause)}`,
+            pipId: abort.pipId,
+            cause,
+          }),
+      });
+      return debugResult(debug, "pip.runner.abort", aborted, { pipId: abort.pipId });
+    },
     async resume(resume) {
       const record = sessions.get(resume.pipId);
       if (!record) return Result.err(notFound(resume.pipId, "runner.resume"));
-      return Result.ok({ pipId: resume.pipId, status: currentStatus(record.session) });
+      return Result.ok({ pipId: resume.pipId, status: currentStatus(record) });
     },
   };
 }
@@ -987,7 +1057,9 @@ function promptText(input: PipPromptInput): string {
   return input.text;
 }
 
-function currentStatus(session: AgentSession): PipStatus {
+function currentStatus(record: SdkSessionRecord): PipStatus {
+  if (record.statusOverride) return record.statusOverride;
+  const session = record.session;
   if (session.isStreaming) return { state: "running" };
   const error = readStringField(session.state, "errorMessage");
   if (error) return { state: "errored", error };
@@ -1003,7 +1075,7 @@ function currentStatuses(
     const record = sessions.get(pipId);
     return {
       ...state,
-      [pipId]: record ? currentStatus(record.session) : { state: "not_found" },
+      [pipId]: record ? currentStatus(record) : { state: "not_found" },
     };
   }, {});
 }

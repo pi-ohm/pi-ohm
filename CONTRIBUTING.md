@@ -4,7 +4,7 @@ Thank you for your interest in contributing!
 
 See the development portion of the main README.md for more info on development.
 
-If you are vibe coding and do not have any sort of pre-push/commit hooks, it's recommended that you install and use ours via [lefthook](./lefthook.yml), or by running `yarn hooksinstall`.
+If you are vibe coding and do not have any sort of pre-push/commit hooks, it's recommended that you install and use ours via [lefthook](./lefthook.yml), or by running `pnpm hooks:install`.
 
 ## Prompt requests
 

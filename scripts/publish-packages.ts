@@ -107,7 +107,7 @@ async function ensurePublishArtifacts(
       await access(absoluteFilePath);
     } catch {
       throw new Error(
-        `Package '${pkg.name}' is missing required publish artifact '${filePath}'. Run 'yarn build' before publishing.`,
+        `Package '${pkg.name}' is missing required publish artifact '${filePath}'. Run 'pnpm build' before publishing.`,
       );
     }
   }
@@ -227,49 +227,40 @@ function buildDevSuffix(): string {
   return `dev.${runId}.${runAttempt}.${sha}`;
 }
 
-function runAndCapture(command: string, args: string[], cwd: string): string {
-  const result = spawnSync(command, args, {
-    cwd,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: process.env,
-    encoding: "utf8",
-  });
-
-  if (result.status !== 0) {
-    const stderr = result.stderr.trim();
-    const details = stderr.length > 0 ? `: ${stderr}` : "";
-    throw new Error(
-      `${command} ${args.join(" ")} failed with exit code ${result.status ?? "unknown"}${details}`,
-    );
+function parseYamlKey(source: string): string {
+  const trimmed = source.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
   }
-
-  return result.stdout.trim();
+  return trimmed;
 }
 
-function readYarnConfigJson(key: string): unknown {
-  const output = runAndCapture("vp", ["pm", "config", "get", key, "--json"], repoRoot);
-  if (output.length === 0 || output === "undefined" || output === "null") {
-    return null;
-  }
+function parseCatalogEntry(line: string, indent: number): [string, string] | null {
+  const prefix = " ".repeat(indent);
+  if (!line.startsWith(prefix)) return null;
 
-  try {
-    const parsed: unknown = JSON.parse(output);
-    return parsed;
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new Error(`Failed to parse Yarn config '${key}' JSON: ${reason}`);
-  }
+  const trimmed = line.slice(indent);
+  if (trimmed.length === 0 || trimmed.startsWith("- ") || trimmed.startsWith("#")) return null;
+
+  const separator = trimmed.indexOf(":");
+  if (separator < 0) return null;
+
+  const key = parseYamlKey(trimmed.slice(0, separator));
+  const value = trimmed.slice(separator + 1).trim();
+  if (value.length === 0) return null;
+
+  return [key, value];
 }
 
 function toStringMap(source: unknown, label: string): Map<string, string> {
   if (!isRecord(source)) {
-    throw new Error(`Expected '${label}' to be an object in Yarn config.`);
+    throw new Error(`Expected '${label}' to be an object in pnpm workspace config.`);
   }
 
   const output = new Map<string, string>();
   for (const [key, value] of Object.entries(source)) {
     if (typeof value !== "string") {
-      throw new Error(`Expected '${label}.${key}' to be a string in Yarn config.`);
+      throw new Error(`Expected '${label}.${key}' to be a string in pnpm workspace config.`);
     }
     output.set(key, value);
   }
@@ -277,22 +268,46 @@ function toStringMap(source: unknown, label: string): Map<string, string> {
   return output;
 }
 
-function loadCatalogConfig(): CatalogConfig {
-  const catalogRaw = readYarnConfigJson("catalog");
-  const catalogsRaw = readYarnConfigJson("catalogs");
+async function loadCatalogConfig(): Promise<CatalogConfig> {
+  const text = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const lines = text.split(/\r?\n/);
+  const catalogRaw: Record<string, string> = {};
+  const catalogsRaw: Record<string, Record<string, string>> = {};
+  const catalogStart = lines.findIndex((line) => line.trim() === "catalog:");
+  const catalogsStart = lines.findIndex((line) => line.trim() === "catalogs:");
 
-  const defaultCatalog =
-    catalogRaw === null ? new Map<string, string>() : toStringMap(catalogRaw, "catalog");
+  if (catalogStart >= 0) {
+    const end = catalogsStart >= 0 ? catalogsStart : lines.length;
+    for (const line of lines.slice(catalogStart + 1, end)) {
+      const entry = parseCatalogEntry(line, 2);
+      if (!entry) continue;
+      catalogRaw[entry[0]] = entry[1];
+    }
+  }
 
+  if (catalogsStart >= 0) {
+    const nested = lines.slice(catalogsStart + 1);
+    const names = nested
+      .map((line, index) => ({ line, index }))
+      .filter((entry) => /^ {2}[^ ].*:\s*$/.test(entry.line));
+
+    for (const [index, name] of names.entries()) {
+      const catalogName = parseYamlKey(name.line.trim().slice(0, -1));
+      const next = names[index + 1]?.index ?? nested.length;
+      const entries: Record<string, string> = {};
+      for (const line of nested.slice(name.index + 1, next)) {
+        const entry = parseCatalogEntry(line, 4);
+        if (!entry) continue;
+        entries[entry[0]] = entry[1];
+      }
+      catalogsRaw[catalogName] = entries;
+    }
+  }
+
+  const defaultCatalog = toStringMap(catalogRaw, "catalog");
   const namedCatalogs = new Map<string, ReadonlyMap<string, string>>();
-  if (catalogsRaw !== null) {
-    if (!isRecord(catalogsRaw)) {
-      throw new Error("Expected 'catalogs' to be an object in Yarn config.");
-    }
-
-    for (const [catalogName, entries] of Object.entries(catalogsRaw)) {
-      namedCatalogs.set(catalogName, toStringMap(entries, `catalogs.${catalogName}`));
-    }
+  for (const [catalogName, entries] of Object.entries(catalogsRaw)) {
+    namedCatalogs.set(catalogName, toStringMap(entries, `catalogs.${catalogName}`));
   }
 
   return { defaultCatalog, namedCatalogs };
@@ -343,7 +358,7 @@ function resolveCatalogRange(
     const version = catalogs.defaultCatalog.get(depName);
     if (!version) {
       throw new Error(
-        `Missing Yarn default catalog entry for '${depName}' in package '${pkgName}'.`,
+        `Missing pnpm default catalog entry for '${depName}' in package '${pkgName}'.`,
       );
     }
     return version;
@@ -352,14 +367,14 @@ function resolveCatalogRange(
   const namedCatalog = catalogs.namedCatalogs.get(catalogName);
   if (!namedCatalog) {
     throw new Error(
-      `Missing Yarn named catalog '${catalogName}' for dependency '${depName}' in package '${pkgName}'.`,
+      `Missing pnpm named catalog '${catalogName}' for dependency '${depName}' in package '${pkgName}'.`,
     );
   }
 
   const version = namedCatalog.get(depName);
   if (!version) {
     throw new Error(
-      `Missing Yarn catalog entry '${catalogName}.${depName}' in package '${pkgName}'.`,
+      `Missing pnpm catalog entry '${catalogName}.${depName}' in package '${pkgName}'.`,
     );
   }
   return version;
@@ -447,7 +462,7 @@ async function versionExistsOnNpm(name: string, version: string): Promise<boolea
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const catalogs = loadCatalogConfig();
+  const catalogs = await loadCatalogConfig();
 
   const packages: LoadedPackage[] = [];
   for (const relDir of PACKAGE_DIRS) {

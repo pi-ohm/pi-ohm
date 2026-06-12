@@ -43,7 +43,7 @@ export const schema = await Worker("schema", {
 
 export const docs = await Vite("docs", {
   adopt: true,
-  build: "yarn build",
+  build: "pnpm build",
   assets: ".output/public",
   compatibility: "node",
   spa: true,
