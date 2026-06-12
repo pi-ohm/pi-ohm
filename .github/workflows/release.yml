@@ -44,6 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,18 +62,8 @@ jobs:
         run: vp run build
 
       - name: Publish all packages to npm @dev
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "false"
         run: |
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for dev-channel publishing."
-            exit 1
-          fi
-
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
+          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev
 
   release-dev:
     if: ${{ github.ref_name == 'dev' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release')) }}
@@ -118,17 +109,7 @@ jobs:
         run: vp run build
 
       - name: Publish released package versions to npm @latest
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "true"
         run: |
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for stable publishing."
-            exit 1
-          fi
-
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
           node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
 
       - name: Resolve release version
@@ -215,20 +196,9 @@ jobs:
         run: vp run build
 
       - name: Publish selected package(s)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: ${{ inputs.channel == 'dev' && 'false' || 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for manual publishing."
-            exit 1
-          fi
-
-          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
 
           case "${{ inputs.package }}" in
             core)
@@ -268,9 +238,6 @@ jobs:
           esac
 
           cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
-          if [[ "${{ inputs.channel }}" == "dev" ]]; then
-            cmd+=(--provenance=false)
-          fi
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
           fi

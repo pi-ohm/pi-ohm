@@ -150,7 +150,7 @@ Config files:
 - Trigger: push to `dev`
 - Workflow: `.github/workflows/release.yml`
 - Publishes all packages as prerelease builds with `dev` tag (version suffix includes run/sha)
-- Auth: uses `NPM_TOKEN` secret (automation token)
+- Auth: npm Trusted Publishing via GitHub Actions OIDC
 
 Install dev builds with `@dev`, for example:
 
@@ -166,10 +166,9 @@ For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-ohm/*`), configure npm Trusted
 
 - Provider: GitHub Actions
 - Repository: this repo
-- Workflow: `.github/workflows/release.yml`
-- Branch: leave unrestricted if possible (or configure to allow both `dev` and `prod` events)
-
-If npm only allows one trusted-publisher workflow/branch pairing, keep Trusted Publishing on `prod` and use `NPM_TOKEN` for `dev` snapshots.
+- Workflow filename: `release.yml`
+- Allowed action: `npm publish`
+- Environment: blank unless the workflow adds a matching GitHub environment
 
 No long-lived `NPM_TOKEN` is required.
 
