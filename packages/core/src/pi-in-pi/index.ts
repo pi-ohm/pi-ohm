@@ -51,12 +51,14 @@ export class PipError extends TaggedError("PipError")<{
 
 export type PipResult<T> = BetterResult<T, PipError>;
 
+export type PipPromptInput = string | { readonly text: string };
+
 export interface PipSpawnInput {
   readonly ownerPackage: string;
   readonly role: string;
   readonly parentSessionId: string;
   readonly cwd: string;
-  readonly prompt?: string;
+  readonly prompt?: PipPromptInput;
   readonly runInBackground?: boolean;
   readonly parentSessionFile?: string;
 }
@@ -65,7 +67,7 @@ export interface PipSpawnResult extends PipSessionMetadata {}
 
 export interface PipSendInput {
   readonly pipId: PipId;
-  readonly prompt: string;
+  readonly prompt: PipPromptInput;
   readonly mode?: "prompt" | "steer" | "follow_up";
 }
 
@@ -113,9 +115,18 @@ export interface PipResumeResult {
   readonly status: PipStatus;
 }
 
+export type PipRunnerSpawnInput = Omit<PipSpawnInput, "prompt"> & {
+  readonly pipId: PipId;
+  readonly prompt?: string;
+};
+
+export type PipRunnerSendInput = Omit<PipSendInput, "prompt"> & {
+  readonly prompt: string;
+};
+
 export interface PipRunner {
-  spawn(input: PipSpawnInput & { readonly pipId: PipId }): Promise<PipResult<PipSpawnResult>>;
-  send(input: PipSendInput): Promise<PipResult<PipSendResult>>;
+  spawn(input: PipRunnerSpawnInput): Promise<PipResult<PipSpawnResult>>;
+  send(input: PipRunnerSendInput): Promise<PipResult<PipSendResult>>;
   wait(input: PipWaitInput): Promise<PipResult<PipWaitResult>>;
   get(input: PipGetInput): Promise<PipResult<PipGetResult>>;
   close(input: PipCloseInput): Promise<PipResult<PipCloseResult>>;
@@ -531,7 +542,13 @@ export class PipController {
         atEpochMs: requestedAt,
       });
 
-      const child = yield* Result.await(this.#runner.spawn({ ...input, pipId: reserved.pipId }));
+      const child = yield* Result.await(
+        this.#runner.spawn({
+          ...input,
+          pipId: reserved.pipId,
+          prompt: input.prompt ? promptText(input.prompt) : undefined,
+        }),
+      );
       const now = this.#now();
 
       if (this.#graph) {
@@ -578,7 +595,7 @@ export class PipController {
   }
 
   async send(input: PipSendInput): Promise<PipResult<PipSendResult>> {
-    const sent = await this.#runner.send(input);
+    const sent = await this.#runner.send({ ...input, prompt: promptText(input.prompt) });
     return debugResult(this.#debug, "pip.send", sent, { pipId: input.pipId });
   }
 
@@ -963,6 +980,11 @@ export function createSdkPipRunner(input: CreateSdkPipRunnerInput = {}): PipRunn
 
 export function createPipId(): PipId {
   return `pip_${crypto.randomUUID()}`;
+}
+
+function promptText(input: PipPromptInput): string {
+  if (typeof input === "string") return input;
+  return input.text;
 }
 
 function currentStatus(session: AgentSession): PipStatus {

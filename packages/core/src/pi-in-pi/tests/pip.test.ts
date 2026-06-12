@@ -13,6 +13,7 @@ import {
   resolvePipSessionFile,
   type PipRunner,
 } from "../index";
+import { setPrompt } from "../experimental";
 
 function createFakeRunner(): PipRunner {
   return {
@@ -165,6 +166,51 @@ void test("PipController forwards background spawn intent to runner", async () =
   assert.equal(Result.isOk(spawned), true);
   if (Result.isError(spawned)) assert.fail(spawned.error.message);
   assert.deepEqual(seen, [true]);
+});
+
+void test("PipController accepts prompt objects and forwards text to runner", async () => {
+  const prompts: string[] = [];
+  const sends: string[] = [];
+  const runner = createFakeRunner();
+  const controller = new PipController({
+    runner: {
+      ...runner,
+      async spawn(input) {
+        prompts.push(input.prompt ?? "");
+        return runner.spawn(input);
+      },
+      async send(input) {
+        sends.push(input.prompt);
+        return runner.send(input);
+      },
+    },
+    createId: () => "pip-prompt-object",
+  });
+
+  const prompt = setPrompt()`
+    Review ${"packages/core/src/pi-in-pi/index.ts"}.
+  `;
+
+  const spawned = await controller.spawn({
+    ownerPackage: "@demo/subagents",
+    role: "reviewer",
+    parentSessionId: "parent-1",
+    cwd: "/tmp/demo",
+    prompt,
+  });
+
+  assert.equal(Result.isOk(spawned), true);
+  if (Result.isError(spawned)) assert.fail(spawned.error.message);
+
+  const sent = await controller.send({
+    pipId: spawned.value.pipId,
+    prompt: setPrompt()`Follow up with ${"tests"}.`,
+  });
+
+  assert.equal(Result.isOk(sent), true);
+  if (Result.isError(sent)) assert.fail(sent.error.message);
+  assert.deepEqual(prompts, ["Review packages/core/src/pi-in-pi/index.ts."]);
+  assert.deepEqual(sends, ["Follow up with tests."]);
 });
 
 void test("PipController wait returns runner timeout status", async () => {
