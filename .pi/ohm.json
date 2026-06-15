@@ -9,5 +9,13 @@
     "finder": {
       "model": "github-copilot/gemini-3-flash-preview"
     }
+  },
+  "references": {
+    "opencode": {
+      "repository": "anomalyco/opencode",
+      "branch": "dev",
+      "description": "The open source coding agent.",
+      "hidden": false
+    }
   }
 }

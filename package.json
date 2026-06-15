@@ -54,8 +54,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "catalog:pi",
-    "@earendil-works/pi-tui": "catalog:pi",
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "drizzle-kit": "catalog:",

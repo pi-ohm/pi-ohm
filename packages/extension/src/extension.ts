@@ -9,6 +9,8 @@ import registerSessionSearchExtension from "@pi-ohm/session-search";
 import { isSessionSearchConfig, sessionSearchConfigModule } from "@pi-ohm/session-search/config";
 import registerPainterExtension from "@pi-ohm/painter";
 import { isPainterConfig, painterConfigModule } from "@pi-ohm/painter/config";
+import registerReferencesExtension from "@pi-ohm/references";
+import { isReferencesRuntimeConfig, referencesConfigModule } from "@pi-ohm/references/config";
 import registerModesExtension from "@pi-ohm/modes";
 import { isModesConfig, modesConfigModule } from "@pi-ohm/modes/config";
 import registerMemoriesExtension from "@pi-ohm/memories";
@@ -19,6 +21,7 @@ async function loadBundleConfig(cwd: string) {
     handoffConfigModule,
     modesConfigModule,
     painterConfigModule,
+    referencesConfigModule,
     sessionSearchConfigModule,
     subagentsConfigModule,
   ];
@@ -52,6 +55,13 @@ async function loadBundleConfig(cwd: string) {
   });
   if (Result.isError(search)) return Result.err(search.error);
 
+  const references = pickConfig({
+    loaded: loaded.value,
+    module: referencesConfigModule,
+    is: isReferencesRuntimeConfig,
+  });
+  if (Result.isError(references)) return Result.err(references.error);
+
   const subagents = pickConfig({
     loaded: loaded.value,
     module: subagentsConfigModule,
@@ -64,6 +74,7 @@ async function loadBundleConfig(cwd: string) {
     handoff: handoff.value,
     modes: modes.value,
     painter: painter.value,
+    references: references.value,
     search: search.value,
     subagents: subagents.value,
   });
@@ -74,6 +85,7 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
   registerSubagentsExtension(pi);
   registerSessionSearchExtension(pi);
   registerPainterExtension(pi);
+  registerReferencesExtension(pi);
   registerModesExtension(pi);
   registerMemoriesExtension(pi);
 
@@ -92,6 +104,7 @@ export default function registerPiOhmExtension(pi: ExtensionAPI): void {
         `sessionSearch: ${config.value.search.enabled ? "on" : "off"}`,
         `handoffVisualizer: ${config.value.handoff.visualizer ? "on" : "off"}`,
         `painter: ${config.value.painter.enabled ? "on" : "off"}`,
+        `references: ${Object.keys(config.value.references).length}`,
         `defaultMode: ${config.value.modes.defaultMode}`,
       ];
 

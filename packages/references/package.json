@@ -1,15 +1,16 @@
 {
-  "name": "@pi-ohm/handoff",
+  "name": "@pi-ohm/references",
   "version": "0.6.4",
-  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/handoff#readme",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/references#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/pi-ohm/pi-ohm.git",
-    "directory": "packages/handoff"
+    "directory": "packages/references"
   },
   "files": [
     "dist/",
-    "README.md"
+    "README.md",
+    "SPEC.md"
   ],
   "type": "module",
   "main": "dist/extension.js",
@@ -22,6 +23,18 @@
     "./config": {
       "types": "./dist/config.d.ts",
       "default": "./dist/config.js"
+    },
+    "./repository": {
+      "types": "./dist/repository.d.ts",
+      "default": "./dist/repository.js"
+    },
+    "./cache": {
+      "types": "./dist/cache.d.ts",
+      "default": "./dist/cache.js"
+    },
+    "./references": {
+      "types": "./dist/references.d.ts",
+      "default": "./dist/references.js"
     }
   },
   "publishConfig": {
@@ -29,16 +42,18 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/extension.ts src/config.ts"
+    "build": "vp pack src/extension.ts src/config.ts src/repository.ts src/cache.ts src/references.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
     "@pi-ohm/core": "workspace:*",
     "better-result": "catalog:",
     "typebox": "^1.0.68"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "0.79.4"
+    "@earendil-works/pi-coding-agent": "0.79.4",
+    "@earendil-works/pi-tui": "0.79.4"
   },
   "pi": {
     "extensions": [

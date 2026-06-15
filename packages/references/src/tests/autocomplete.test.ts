@@ -1,0 +1,76 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
+import { createReferencesAutocompleteProvider } from "../extension";
+import type { ReferenceInfo } from "../references";
+
+const references: readonly ReferenceInfo[] = [
+  {
+    name: "opencode",
+    path: "/cache/github.com/anomalyco/opencode",
+    description: "OpenCode source",
+    source: { type: "git", repository: "anomalyco/opencode", description: "OpenCode source" },
+  },
+  {
+    name: "hidden",
+    path: "/cache/hidden",
+    hidden: true,
+    source: { type: "local", path: "/cache/hidden", hidden: true },
+  },
+];
+
+function provider(suggestions: AutocompleteSuggestions | null): AutocompleteProvider {
+  return {
+    async getSuggestions() {
+      return suggestions;
+    },
+    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      const line = lines[cursorLine] ?? "";
+      const before = line.slice(0, cursorCol - prefix.length);
+      const after = line.slice(cursorCol);
+      const next = [...lines];
+      next[cursorLine] = `${before}${item.value}${after}`;
+      return { lines: next, cursorLine, cursorCol: before.length + item.value.length };
+    },
+  };
+}
+
+void test("reference autocomplete merges with current provider for same @ prefix", async () => {
+  const current = provider({
+    prefix: "@op",
+    items: [{ value: "@other.ts", label: "other.ts" }],
+  });
+  const wrapped = createReferencesAutocompleteProvider(current, () => references);
+  const controller = new AbortController();
+
+  const suggestions = await wrapped.getSuggestions(["read @op"], 0, "read @op".length, {
+    signal: controller.signal,
+  });
+
+  assert.ok(suggestions);
+  assert.deepEqual(wrapped.triggerCharacters, ["@"]);
+  assert.equal(suggestions.prefix, "@op");
+  assert.deepEqual(
+    suggestions.items.map((item) => item.label),
+    ["@opencode", "other.ts"],
+  );
+});
+
+void test("reference autocomplete delegates when no visible reference matches", async () => {
+  const current = provider({
+    prefix: "@hi",
+    items: [{ value: "@hit.ts", label: "hit.ts" }],
+  });
+  const wrapped = createReferencesAutocompleteProvider(current, () => references);
+  const controller = new AbortController();
+
+  const suggestions = await wrapped.getSuggestions(["read @hi"], 0, "read @hi".length, {
+    signal: controller.signal,
+  });
+
+  assert.ok(suggestions);
+  assert.deepEqual(
+    suggestions.items.map((item) => item.label),
+    ["hit.ts"],
+  );
+});
