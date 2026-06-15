@@ -56,6 +56,26 @@ void test("reference autocomplete merges with current provider for same @ prefix
   );
 });
 
+void test("double at reference autocomplete bypasses current provider", async () => {
+  const current = provider({
+    prefix: "@@op",
+    items: [{ value: "@other.ts", label: "other.ts" }],
+  });
+  const wrapped = createReferencesAutocompleteProvider(current, () => references);
+  const controller = new AbortController();
+
+  const suggestions = await wrapped.getSuggestions(["read @@op"], 0, "read @@op".length, {
+    signal: controller.signal,
+  });
+
+  assert.ok(suggestions);
+  assert.equal(suggestions.prefix, "@@op");
+  assert.deepEqual(
+    suggestions.items.map((item) => item.label),
+    ["@@opencode"],
+  );
+});
+
 void test("reference autocomplete delegates when no visible reference matches", async () => {
   const current = provider({
     prefix: "@hi",

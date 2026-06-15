@@ -31,15 +31,27 @@ interface ReferencesState {
 
 const EMPTY_REFERENCES_STATE: ReferencesState = { references: [], diagnostics: [] };
 
+type ReferencePrefixMode = "compose" | "exclusive";
+
+interface ReferenceToken {
+  readonly mode: ReferencePrefixMode;
+  readonly marker: "@" | "@@";
+  readonly token: string;
+}
+
 function completionValue(target: string): string {
   const normalized = target.replaceAll("\\", "/");
   if (/\s/.test(normalized)) return `@"${normalized}"`;
   return `@${normalized}`;
 }
 
-function extractReferenceToken(textBeforeCursor: string): string | undefined {
-  const match = textBeforeCursor.match(/(?:^|[ \t])@([^\s@]*)$/);
-  return match?.[1];
+function extractReferenceToken(textBeforeCursor: string): ReferenceToken | undefined {
+  const match = textBeforeCursor.match(/(?:^|[ \t])(@@?)([^\s@]*)$/);
+  const marker = match?.[1];
+  const token = match?.[2];
+  if (marker !== "@" && marker !== "@@") return undefined;
+  if (token === undefined) return undefined;
+  return { marker, token, mode: marker === "@@" ? "exclusive" : "compose" };
 }
 
 function visibleReferences(references: readonly ReferenceInfo[]): readonly ReferenceInfo[] {
@@ -49,6 +61,7 @@ function visibleReferences(references: readonly ReferenceInfo[]): readonly Refer
 function aliasItems(
   references: readonly ReferenceInfo[],
   token: string,
+  marker: "@" | "@@",
 ): readonly AutocompleteItem[] {
   const normalized = token.toLowerCase();
   return [...visibleReferences(references)]
@@ -57,7 +70,7 @@ function aliasItems(
     .slice(0, MAX_AUTOCOMPLETE_ITEMS)
     .map((reference) => ({
       value: completionValue(reference.path),
-      label: `@${reference.name}`,
+      label: `${marker}${reference.name}`,
       description:
         reference.source.type === "git" ? reference.source.repository : reference.source.path,
     }));
@@ -65,6 +78,7 @@ function aliasItems(
 
 async function childItems(input: {
   readonly reference: ReferenceInfo;
+  readonly marker: "@" | "@@";
   readonly token: string;
   readonly tail: string;
 }): Promise<readonly AutocompleteItem[]> {
@@ -87,7 +101,7 @@ async function childItems(input: {
     .slice(0, MAX_AUTOCOMPLETE_ITEMS)
     .map((entry) => {
       const relative = parentTail === "." ? entry.name : path.join(parentTail, entry.name);
-      const display = `@${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
+      const display = `${input.marker}${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
       const target =
         path.join(input.reference.path, relative) + (entry.isDirectory() ? path.sep : "");
       return {
@@ -126,25 +140,30 @@ function mergeSuggestions(input: {
 
 async function referenceSuggestions(input: {
   readonly references: readonly ReferenceInfo[];
-  readonly token: string;
+  readonly match: ReferenceToken;
 }): Promise<AutocompleteSuggestions | null> {
-  const slashIndex = input.token.indexOf("/");
+  const slashIndex = input.match.token.indexOf("/");
   if (slashIndex === -1) {
-    const items = aliasItems(input.references, input.token);
+    const items = aliasItems(input.references, input.match.token, input.match.marker);
     if (items.length === 0) return null;
-    return { items: [...items], prefix: `@${input.token}` };
+    return { items: [...items], prefix: `${input.match.marker}${input.match.token}` };
   }
 
-  const alias = input.token.slice(0, slashIndex);
-  const tail = input.token.slice(slashIndex + 1);
+  const alias = input.match.token.slice(0, slashIndex);
+  const tail = input.match.token.slice(slashIndex + 1);
   const reference = visibleReferences(input.references).find(
     (candidate) => candidate.name === alias,
   );
   if (!reference) return null;
 
-  const items = await childItems({ reference, token: input.token, tail });
+  const items = await childItems({
+    reference,
+    marker: input.match.marker,
+    token: input.match.token,
+    tail,
+  });
   if (items.length === 0) return null;
-  return { items: [...items], prefix: `@${input.token}` };
+  return { items: [...items], prefix: `${input.match.marker}${input.match.token}` };
 }
 
 export function createReferencesAutocompleteProvider(
@@ -162,11 +181,15 @@ export function createReferencesAutocompleteProvider(
     ): Promise<AutocompleteSuggestions | null> {
       const currentLine = lines[cursorLine] ?? "";
       const textBeforeCursor = currentLine.slice(0, cursorCol);
-      const token = extractReferenceToken(textBeforeCursor);
-      if (token === undefined) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+      const match = extractReferenceToken(textBeforeCursor);
+      if (match === undefined) return current.getSuggestions(lines, cursorLine, cursorCol, options);
+
+      if (match.mode === "exclusive") {
+        return referenceSuggestions({ references: getReferences(), match });
+      }
 
       const [references, currentSuggestions] = await Promise.all([
-        referenceSuggestions({ references: getReferences(), token }),
+        referenceSuggestions({ references: getReferences(), match }),
         current.getSuggestions(lines, cursorLine, cursorCol, options),
       ]);
       if (options.signal.aborted) return null;
@@ -245,15 +268,6 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     const key = ctx.sessionManager.getSessionFile() ?? ctx.cwd;
-    if (ctx.hasUI) {
-      ctx.ui.addAutocompleteProvider((current) =>
-        createReferencesAutocompleteProvider(
-          current,
-          () => states.get(key)?.references ?? EMPTY_REFERENCES_STATE.references,
-        ),
-      );
-    }
-
     const loaded = await loadResolvedReferences(ctx.cwd);
     if (Result.isError(loaded)) return;
 
@@ -261,6 +275,15 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
     states.set(key, loaded.value.resolved);
     if (ctx.hasUI) {
       ctx.ui.setStatus(STATUS_KEY, `refs:${references.length}`);
+      setTimeout(() => {
+        if (ctx.signal?.aborted) return;
+        ctx.ui.addAutocompleteProvider((current) =>
+          createReferencesAutocompleteProvider(
+            current,
+            () => states.get(key)?.references ?? EMPTY_REFERENCES_STATE.references,
+          ),
+        );
+      }, 0);
     }
 
     startMaterialization({ pi, ctx, references });
