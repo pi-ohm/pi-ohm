@@ -51,6 +51,8 @@ const ALLOWED_SCOPES = new Set([
   "memory",
   "events",
   "ci",
+  "references",
+  "ref",
 ]);
 
 const HEADER_PATTERN =

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
-import { createReferencesAutocompleteProvider } from "../extension";
+import { bridgeReferencesAutocomplete, createReferencesAutocompleteProvider } from "../extension";
 import type { ReferenceInfo } from "../references";
 
 const references: readonly ReferenceInfo[] = [
@@ -54,26 +54,7 @@ void test("reference autocomplete merges with current provider for same @ prefix
     suggestions.items.map((item) => item.label),
     ["@opencode", "other.ts"],
   );
-});
-
-void test("double at reference autocomplete bypasses current provider", async () => {
-  const current = provider({
-    prefix: "@@op",
-    items: [{ value: "@other.ts", label: "other.ts" }],
-  });
-  const wrapped = createReferencesAutocompleteProvider(current, () => references);
-  const controller = new AbortController();
-
-  const suggestions = await wrapped.getSuggestions(["read @@op"], 0, "read @@op".length, {
-    signal: controller.signal,
-  });
-
-  assert.ok(suggestions);
-  assert.equal(suggestions.prefix, "@@op");
-  assert.deepEqual(
-    suggestions.items.map((item) => item.label),
-    ["@@opencode"],
-  );
+  assert.equal(suggestions.items[0]?.description, "[Ω:REF] anomalyco/opencode");
 });
 
 void test("reference autocomplete delegates when no visible reference matches", async () => {
@@ -92,5 +73,40 @@ void test("reference autocomplete delegates when no visible reference matches", 
   assert.deepEqual(
     suggestions.items.map((item) => item.label),
     ["hit.ts"],
+  );
+});
+
+void test("autocomplete bridge keeps references outside providers registered later", async () => {
+  const providers: Array<(current: AutocompleteProvider) => AutocompleteProvider> = [];
+  const host = {
+    addAutocompleteProvider(factory: (current: AutocompleteProvider) => AutocompleteProvider) {
+      providers.push(factory);
+    },
+  };
+  const add = bridgeReferencesAutocomplete({ host, getReferences: () => references });
+
+  add((current) => createReferencesAutocompleteProvider(current, () => references));
+  host.addAutocompleteProvider((current) => ({
+    async getSuggestions() {
+      return {
+        prefix: "@op",
+        items: [{ value: "@other.ts", label: "other.ts" }],
+      };
+    },
+    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+      return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+    },
+  }));
+
+  const combined = providers.reduce((current, factory) => factory(current), provider(null));
+  const controller = new AbortController();
+  const suggestions = await combined.getSuggestions(["read @op"], 0, "read @op".length, {
+    signal: controller.signal,
+  });
+
+  assert.ok(suggestions);
+  assert.deepEqual(
+    suggestions.items.map((item) => item.label),
+    ["@opencode", "other.ts"],
   );
 });

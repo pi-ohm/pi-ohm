@@ -23,6 +23,7 @@ export * from "./references";
 
 const STATUS_KEY = "ohm-references";
 const MAX_AUTOCOMPLETE_ITEMS = 30;
+const AUTOCOMPLETE_DESCRIPTION_TAG = "[Ω:REF]";
 
 interface ReferencesState {
   readonly references: readonly ReferenceInfo[];
@@ -31,13 +32,13 @@ interface ReferencesState {
 
 const EMPTY_REFERENCES_STATE: ReferencesState = { references: [], diagnostics: [] };
 
-type ReferencePrefixMode = "compose" | "exclusive";
+type AddAutocompleteProvider = ExtensionContext["ui"]["addAutocompleteProvider"];
 
-interface ReferenceToken {
-  readonly mode: ReferencePrefixMode;
-  readonly marker: "@" | "@@";
-  readonly token: string;
+interface AutocompleteHost {
+  addAutocompleteProvider: AddAutocompleteProvider;
 }
+
+const BRIDGED_HOSTS = new WeakMap<AutocompleteHost, AddAutocompleteProvider>();
 
 function completionValue(target: string): string {
   const normalized = target.replaceAll("\\", "/");
@@ -45,23 +46,22 @@ function completionValue(target: string): string {
   return `@${normalized}`;
 }
 
-function extractReferenceToken(textBeforeCursor: string): ReferenceToken | undefined {
-  const match = textBeforeCursor.match(/(?:^|[ \t])(@@?)([^\s@]*)$/);
-  const marker = match?.[1];
-  const token = match?.[2];
-  if (marker !== "@" && marker !== "@@") return undefined;
-  if (token === undefined) return undefined;
-  return { marker, token, mode: marker === "@@" ? "exclusive" : "compose" };
+function extractReferenceToken(textBeforeCursor: string): string | undefined {
+  const match = textBeforeCursor.match(/(?:^|[ \t])@([^\s@]*)$/);
+  return match?.[1];
 }
 
 function visibleReferences(references: readonly ReferenceInfo[]): readonly ReferenceInfo[] {
   return references.filter((reference) => reference.hidden !== true);
 }
 
+function taggedDescription(description: string): string {
+  return `${AUTOCOMPLETE_DESCRIPTION_TAG} ${description}`;
+}
+
 function aliasItems(
   references: readonly ReferenceInfo[],
   token: string,
-  marker: "@" | "@@",
 ): readonly AutocompleteItem[] {
   const normalized = token.toLowerCase();
   return [...visibleReferences(references)]
@@ -70,15 +70,16 @@ function aliasItems(
     .slice(0, MAX_AUTOCOMPLETE_ITEMS)
     .map((reference) => ({
       value: completionValue(reference.path),
-      label: `${marker}${reference.name}`,
+      label: `@${reference.name}`,
       description:
-        reference.source.type === "git" ? reference.source.repository : reference.source.path,
+        reference.source.type === "git"
+          ? taggedDescription(reference.source.repository)
+          : taggedDescription(reference.source.path),
     }));
 }
 
 async function childItems(input: {
   readonly reference: ReferenceInfo;
-  readonly marker: "@" | "@@";
   readonly token: string;
   readonly tail: string;
 }): Promise<readonly AutocompleteItem[]> {
@@ -101,13 +102,13 @@ async function childItems(input: {
     .slice(0, MAX_AUTOCOMPLETE_ITEMS)
     .map((entry) => {
       const relative = parentTail === "." ? entry.name : path.join(parentTail, entry.name);
-      const display = `${input.marker}${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
+      const display = `@${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
       const target =
         path.join(input.reference.path, relative) + (entry.isDirectory() ? path.sep : "");
       return {
         value: completionValue(target),
         label: display,
-        description: target.replaceAll("\\", "/"),
+        description: taggedDescription(target.replaceAll("\\", "/")),
       };
     });
 }
@@ -140,17 +141,17 @@ function mergeSuggestions(input: {
 
 async function referenceSuggestions(input: {
   readonly references: readonly ReferenceInfo[];
-  readonly match: ReferenceToken;
+  readonly token: string;
 }): Promise<AutocompleteSuggestions | null> {
-  const slashIndex = input.match.token.indexOf("/");
+  const slashIndex = input.token.indexOf("/");
   if (slashIndex === -1) {
-    const items = aliasItems(input.references, input.match.token, input.match.marker);
+    const items = aliasItems(input.references, input.token);
     if (items.length === 0) return null;
-    return { items: [...items], prefix: `${input.match.marker}${input.match.token}` };
+    return { items: [...items], prefix: `@${input.token}` };
   }
 
-  const alias = input.match.token.slice(0, slashIndex);
-  const tail = input.match.token.slice(slashIndex + 1);
+  const alias = input.token.slice(0, slashIndex);
+  const tail = input.token.slice(slashIndex + 1);
   const reference = visibleReferences(input.references).find(
     (candidate) => candidate.name === alias,
   );
@@ -158,12 +159,11 @@ async function referenceSuggestions(input: {
 
   const items = await childItems({
     reference,
-    marker: input.match.marker,
-    token: input.match.token,
+    token: input.token,
     tail,
   });
   if (items.length === 0) return null;
-  return { items: [...items], prefix: `${input.match.marker}${input.match.token}` };
+  return { items: [...items], prefix: `@${input.token}` };
 }
 
 export function createReferencesAutocompleteProvider(
@@ -181,15 +181,11 @@ export function createReferencesAutocompleteProvider(
     ): Promise<AutocompleteSuggestions | null> {
       const currentLine = lines[cursorLine] ?? "";
       const textBeforeCursor = currentLine.slice(0, cursorCol);
-      const match = extractReferenceToken(textBeforeCursor);
-      if (match === undefined) return current.getSuggestions(lines, cursorLine, cursorCol, options);
-
-      if (match.mode === "exclusive") {
-        return referenceSuggestions({ references: getReferences(), match });
-      }
+      const token = extractReferenceToken(textBeforeCursor);
+      if (token === undefined) return current.getSuggestions(lines, cursorLine, cursorCol, options);
 
       const [references, currentSuggestions] = await Promise.all([
-        referenceSuggestions({ references: getReferences(), match }),
+        referenceSuggestions({ references: getReferences(), token }),
         current.getSuggestions(lines, cursorLine, cursorCol, options),
       ]);
       if (options.signal.aborted) return null;
@@ -204,6 +200,21 @@ export function createReferencesAutocompleteProvider(
       return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
     },
   };
+}
+
+export function bridgeReferencesAutocomplete(input: {
+  readonly host: AutocompleteHost;
+  readonly getReferences: () => readonly ReferenceInfo[];
+}): AddAutocompleteProvider {
+  const existing = BRIDGED_HOSTS.get(input.host);
+  if (existing) return existing;
+
+  const add: AddAutocompleteProvider = input.host.addAutocompleteProvider.bind(input.host);
+  input.host.addAutocompleteProvider = (factory) => {
+    add((current) => createReferencesAutocompleteProvider(factory(current), input.getReferences));
+  };
+  BRIDGED_HOSTS.set(input.host, add);
+  return add;
 }
 
 async function loadResolvedReferences(cwd: string) {
@@ -268,6 +279,11 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     const key = ctx.sessionManager.getSessionFile() ?? ctx.cwd;
+    const getReferences = () => states.get(key)?.references ?? EMPTY_REFERENCES_STATE.references;
+    const addAutocomplete = ctx.hasUI
+      ? bridgeReferencesAutocomplete({ host: ctx.ui, getReferences })
+      : undefined;
+
     const loaded = await loadResolvedReferences(ctx.cwd);
     if (Result.isError(loaded)) return;
 
@@ -275,15 +291,7 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
     states.set(key, loaded.value.resolved);
     if (ctx.hasUI) {
       ctx.ui.setStatus(STATUS_KEY, `refs:${references.length}`);
-      setTimeout(() => {
-        if (ctx.signal?.aborted) return;
-        ctx.ui.addAutocompleteProvider((current) =>
-          createReferencesAutocompleteProvider(
-            current,
-            () => states.get(key)?.references ?? EMPTY_REFERENCES_STATE.references,
-          ),
-        );
-      }, 0);
+      addAutocomplete?.((current) => createReferencesAutocompleteProvider(current, getReferences));
     }
 
     startMaterialization({ pi, ctx, references });
