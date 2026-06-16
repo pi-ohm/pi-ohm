@@ -11,6 +11,7 @@
     "...modes",
     "...painter",
     "...handoff",
+    "...references",
     "...session-search"
   ]
 }

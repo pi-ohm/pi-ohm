@@ -18,6 +18,9 @@ export default defineConfig({
     hash: false,
     failOnWarn: "ci-only",
     report: false,
+    checks: {
+      pluginTimings: false,
+    },
   },
   fmt: {
     ignorePatterns: ["docs/src/routeTree.gen.ts", "packages/*/CHANGELOG.md"],

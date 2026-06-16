@@ -6,6 +6,9 @@ import mdx from "fumadocs-mdx/vite";
 import { nitro } from "nitro/vite";
 
 export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 1_200,
+  },
   server: {
     port: 3000,
   },
