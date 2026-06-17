@@ -45,6 +45,8 @@ overrides:
   vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
   ws: 8.21.0
 
+packageExtensionsChecksum: sha256-H+vK8AqrHlXQZdAme/gI0uE84uDrMAh0vGTj0rBJnR4=
+
 importers:
 
   .:
@@ -7174,6 +7176,7 @@ snapshots:
       picocolors: 1.1.1
       proper-lockfile: 4.1.2
       signal-exit: 4.1.0
+      undici: 7.24.8
       unenv: 2.0.0-rc.21
       wrangler: 4.97.0(@cloudflare/workers-types@4.20260612.1)
       ws: 8.21.0

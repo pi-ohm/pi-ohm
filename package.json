@@ -79,6 +79,13 @@
       "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.24",
       "ws": "8.21.0"
     },
+    "packageExtensions": {
+      "alchemy@*": {
+        "dependencies": {
+          "undici": "7.24.8"
+        }
+      }
+    },
     "allowedDeprecatedVersions": {
       "node-domexception": "1.0.0"
     },
