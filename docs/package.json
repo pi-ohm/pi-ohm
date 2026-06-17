@@ -27,7 +27,7 @@
     "@tanstack/react-start": "1.168.19",
     "@tanstack/router-core": "1.171.9",
     "@tanstack/start-static-server-functions": "1.167.12",
-    "alchemy": "0.93.9",
+    "alchemy": "0.93.12",
     "class-variance-authority": "0.7.1",
     "fumadocs-core": "16.9.3",
     "fumadocs-mdx": "15.0.10",

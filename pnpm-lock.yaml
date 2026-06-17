@@ -114,8 +114,8 @@ importers:
         specifier: 1.167.12
         version: 1.167.12(@tanstack/react-start@1.168.19(@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0))(crossws@0.4.6(srvx@0.11.16))(react-dom@19.2.7(react@19.2.7))(react@19.2.7))
       alchemy:
-        specifier: 0.93.9
-        version: 0.93.9(@libsql/client@0.17.3)(@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0))(workerd@1.20260601.1)
+        specifier: 0.93.12
+        version: 0.93.12(@libsql/client@0.17.3)(@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0))(workerd@1.20260601.1)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -2644,8 +2644,8 @@ packages:
   ajv@8.18.0:
     resolution: {integrity: sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A==}
 
-  alchemy@0.93.9:
-    resolution: {integrity: sha512-suneExNJ0sziKP7xBLesOBFx/E6esousqKiIroKIML+4IQ6S8H0nhrt9i9j0fEZA0Z+BFE+H8qNG2mGzqIDtXg==}
+  alchemy@0.93.12:
+    resolution: {integrity: sha512-0XCVvUpIbvYuN4ZL1JHGH56XfXhIxTHYfHdp2z2UaOB35m8VqlaJjz2mG3n8C8EUIoU/vKzFPAPOYp+HYzhULQ==}
     hasBin: true
     peerDependencies:
       '@astrojs/cloudflare': ^12.6.4
@@ -7146,7 +7146,7 @@ snapshots:
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
-  alchemy@0.93.9(@libsql/client@0.17.3)(@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0))(workerd@1.20260601.1):
+  alchemy@0.93.12(@libsql/client@0.17.3)(@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0))(workerd@1.20260601.1):
     dependencies:
       '@aws-sdk/credential-providers': 3.1067.0
       '@cloudflare/unenv-preset': 2.7.7(unenv@2.0.0-rc.21)(workerd@1.20260601.1)
