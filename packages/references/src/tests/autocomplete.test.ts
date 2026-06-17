@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
-import { bridgeReferencesAutocomplete, createReferencesAutocompleteProvider } from "../extension";
+import {
+  bridgeReferencesAutocomplete,
+  createReferencesAutocompleteProvider,
+  findReferenceInvocations,
+  renderReferenceInvocation,
+  rewriteReferencePath,
+} from "../extension";
 import type { ReferenceInfo } from "../references";
 
 const references: readonly ReferenceInfo[] = [
@@ -54,6 +60,7 @@ void test("reference autocomplete merges with current provider for same @ prefix
     suggestions.items.map((item) => item.label),
     ["@opencode", "other.ts"],
   );
+  assert.equal(suggestions.items[0]?.value, "@opencode");
   assert.equal(suggestions.items[0]?.description, "[Ω:REF] anomalyco/opencode");
 });
 
@@ -109,4 +116,37 @@ void test("autocomplete bridge keeps references outside providers registered lat
     suggestions.items.map((item) => item.label),
     ["@opencode", "other.ts"],
   );
+});
+
+void test("reference invocations render XML blocks with resolved paths", () => {
+  const invocations = findReferenceInvocations("compare @opencode. and @missing", references);
+  const rendered = renderReferenceInvocation(invocations);
+
+  assert.deepEqual(invocations, [
+    {
+      name: "opencode",
+      token: "@opencode",
+      path: "/cache/github.com/anomalyco/opencode",
+      description: "OpenCode source",
+    },
+  ]);
+  assert.equal(
+    rendered,
+    [
+      '<reference name="opencode" token="@opencode" path="/cache/github.com/anomalyco/opencode">',
+      "The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.",
+      "",
+      "OpenCode source",
+      "</reference>",
+    ].join("\n"),
+  );
+});
+
+void test("reference path rewrite resolves aliases and rejects path escapes", () => {
+  assert.equal(
+    rewriteReferencePath("@opencode/packages/core", references),
+    "/cache/github.com/anomalyco/opencode/packages/core",
+  );
+  assert.equal(rewriteReferencePath("@opencode/../secret", references), "@opencode/../secret");
+  assert.equal(rewriteReferencePath("./local", references), "./local");
 });

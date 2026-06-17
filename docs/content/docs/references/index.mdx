@@ -81,8 +81,24 @@ If an existing cache points at the wrong origin, it is deleted and recloned.
 References do not add a model-facing tool. Instead, described references are
 added to the agent's system prompt with their absolute paths.
 
+When a prompt includes `@alias` or `@alias/path`, the package also adds a
+collapsed reference message for that turn. The message contains a resolved XML
+block for the agent:
+
+```xml
+<reference name="opencode" token="@opencode" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode">
+The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.
+
+OpenCode source for agent behavior references
+</reference>
+```
+
 The agent then uses normal Pi tools like `read`, `bash`, `edit`, and `write`.
 References do not grant mutation permission by themselves.
+
+Read-only path tools (`read`, `ls`, `grep`, `find`) can receive `@alias` and
+`@alias/path`; the extension rewrites those path arguments to absolute paths
+before execution.
 
 Only references with `description` are advertised to the agent. A `hidden`
 reference with a description is still included in agent guidance.
@@ -90,8 +106,12 @@ reference with a description is still included in agent guidance.
 ## TUI autocomplete
 
 In the TUI, visible references can be inserted with `@alias` or `@alias/path`.
-Autocomplete inserts the underlying absolute path so Pi's normal file handling
-continues to work.
+Autocomplete inserts the alias text, not the underlying absolute path, so the
+editor stays readable.
+
+When submitted, invoked references appear as a compact `[ref] @alias` block
+outside the prompt. Use `ctrl+o` to expand it and see the resolved path and
+description.
 
 Reference autocomplete rows are tagged in their description with `[Ω:REF]` so
 they are easy to distinguish from normal file results.
@@ -119,4 +139,3 @@ reference provider sees the request.
 `@pi-ohm/references` bridges `ctx.ui.addAutocompleteProvider` during session
 startup so reference suggestions stay outside later providers. Reference matches
 are merged first, so `@alias` rows stay visible without disabling `pi-fff`.
-

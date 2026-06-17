@@ -153,16 +153,21 @@ Sort by reference name for deterministic prompt text.
 Initial package can include:
 
 - `/ohm-references` user command to inspect resolved references and cache status
-- optional autocomplete provider for `@alias` and `@alias/path` that inserts
-  absolute paths, relying on Pi's existing file expansion/read behavior
+- optional autocomplete provider for `@alias` and `@alias/path` that keeps the
+  alias in the editor and emits a collapsed custom reference message on submit
+- read-only tool path rewriting for `read`, `ls`, `grep`, and `find` so models
+  may use `@alias` path arguments without a dedicated reference tool
 
-No custom TUI component is required for the first implementation.
+The custom message renderer should mirror Pi's skill invocation shape: compact
+by default, expandable with the normal tool-output expansion key.
 
 ## Agent tools
 
 This package exposes no new model-facing tool. The model uses existing Pi tools:
 
 - `read` to inspect files/directories by absolute path
+- `read`, `ls`, `grep`, and `find` may receive `@alias` paths, rewritten before
+  execution
 - `bash` for allowed shell inspection
 - `edit`/`write` only if normal Pi permissions allow mutation
 

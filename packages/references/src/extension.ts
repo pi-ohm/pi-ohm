@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Result } from "better-result";
+import { Box, Text } from "@earendil-works/pi-tui";
 import type {
   AutocompleteItem,
   AutocompleteProvider,
   AutocompleteSuggestions,
 } from "@earendil-works/pi-tui";
+import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadReferencesConfig } from "./config";
 import {
@@ -24,10 +26,24 @@ export * from "./references";
 const STATUS_KEY = "ohm-references";
 const MAX_AUTOCOMPLETE_ITEMS = 30;
 const AUTOCOMPLETE_DESCRIPTION_TAG = "[Ω:REF]";
+const REFERENCE_MESSAGE_TYPE = "ohm-reference";
+const REFERENCE_INVOCATION_BLURB =
+  "The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.";
 
 interface ReferencesState {
   readonly references: readonly ReferenceInfo[];
   readonly diagnostics: readonly ReferenceDiagnostic[];
+}
+
+export interface ReferenceInvocation {
+  readonly name: string;
+  readonly token: string;
+  readonly path: string;
+  readonly description: string | undefined;
+}
+
+interface ReferenceInvocationDetails {
+  readonly references: readonly ReferenceInvocation[];
 }
 
 const EMPTY_REFERENCES_STATE: ReferencesState = { references: [], diagnostics: [] };
@@ -40,10 +56,9 @@ interface AutocompleteHost {
 
 const BRIDGED_HOSTS = new WeakMap<AutocompleteHost, AddAutocompleteProvider>();
 
-function completionValue(target: string): string {
-  const normalized = target.replaceAll("\\", "/");
-  if (/\s/.test(normalized)) return `@"${normalized}"`;
-  return `@${normalized}`;
+function aliasValue(reference: ReferenceInfo, relative?: string): string {
+  const suffix = relative ? `/${relative.replaceAll("\\", "/")}` : "";
+  return `@${reference.name}${suffix}`;
 }
 
 function extractReferenceToken(textBeforeCursor: string): string | undefined {
@@ -69,7 +84,7 @@ function aliasItems(
     .sort((left, right) => left.name.localeCompare(right.name))
     .slice(0, MAX_AUTOCOMPLETE_ITEMS)
     .map((reference) => ({
-      value: completionValue(reference.path),
+      value: aliasValue(reference),
       label: `@${reference.name}`,
       description:
         reference.source.type === "git"
@@ -103,14 +118,182 @@ async function childItems(input: {
     .map((entry) => {
       const relative = parentTail === "." ? entry.name : path.join(parentTail, entry.name);
       const display = `@${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
-      const target =
-        path.join(input.reference.path, relative) + (entry.isDirectory() ? path.sep : "");
       return {
-        value: completionValue(target),
+        value: aliasValue(input.reference, `${relative}${entry.isDirectory() ? "/" : ""}`),
         label: display,
-        description: taggedDescription(target.replaceAll("\\", "/")),
+        description: taggedDescription(
+          path.join(input.reference.path, relative).replaceAll("\\", "/"),
+        ),
       };
     });
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function escapeXmlText(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function resolveReferenceTarget(input: {
+  readonly reference: ReferenceInfo;
+  readonly suffix: string | undefined;
+}): string | undefined {
+  if (!input.suffix) return input.reference.path;
+
+  const withoutLeadingSlash = input.suffix.startsWith("/") ? input.suffix.slice(1) : input.suffix;
+  if (!withoutLeadingSlash) return input.reference.path;
+  if (withoutLeadingSlash.includes("\0") || withoutLeadingSlash.includes("\\")) {
+    return undefined;
+  }
+
+  const normalized = path.normalize(withoutLeadingSlash);
+  if (normalized === "." || path.isAbsolute(normalized)) return undefined;
+
+  const target = path.join(input.reference.path, normalized);
+  const relative = path.relative(input.reference.path, target);
+  if (relative === "") return target;
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return undefined;
+  }
+
+  return target;
+}
+
+export function resolveReferenceToken(
+  token: string,
+  references: readonly ReferenceInfo[],
+): ReferenceInvocation | undefined {
+  if (!token.startsWith("@")) return undefined;
+
+  const slashIndex = token.indexOf("/");
+  const name = slashIndex === -1 ? token.slice(1) : token.slice(1, slashIndex);
+  const suffix = slashIndex === -1 ? undefined : token.slice(slashIndex + 1);
+  const reference = references.find((candidate) => candidate.name === name);
+  if (!reference) return undefined;
+
+  const target = resolveReferenceTarget({ reference, suffix });
+  if (!target) return undefined;
+
+  return {
+    name: reference.name,
+    token,
+    path: target,
+    description: reference.description,
+  };
+}
+
+function resolveReferenceTokenInText(
+  token: string,
+  references: readonly ReferenceInfo[],
+): ReferenceInvocation | undefined {
+  const direct = resolveReferenceToken(token, references);
+  if (direct) return direct;
+
+  const trimmed = token.replace(/[.:;!?)}\]]+$/u, "");
+  if (trimmed === token) return undefined;
+  return resolveReferenceToken(trimmed, references);
+}
+
+export function findReferenceInvocations(
+  text: string,
+  references: readonly ReferenceInfo[],
+): readonly ReferenceInvocation[] {
+  const matches = text.matchAll(/(?:^|[\s([{])(@([^/\s`,]+)(?:\/([^\s`,]*))?)/g);
+  const invocations = Array.from(matches)
+    .map((match) => resolveReferenceTokenInText(match[1] ?? "", references))
+    .filter((invocation) => invocation !== undefined);
+
+  return [
+    ...new Map(invocations.map((invocation) => [invocation.token, invocation])).values(),
+  ].sort((left, right) => left.token.localeCompare(right.token));
+}
+
+export function renderReferenceInvocation(
+  invocations: readonly ReferenceInvocation[],
+): string | undefined {
+  if (invocations.length === 0) return undefined;
+
+  return invocations
+    .map((invocation) => {
+      const description = invocation.description ? escapeXmlText(invocation.description) : "";
+      return [
+        `<reference name="${escapeXmlAttribute(invocation.name)}" token="${escapeXmlAttribute(invocation.token)}" path="${escapeXmlAttribute(invocation.path)}">`,
+        escapeXmlText(REFERENCE_INVOCATION_BLURB),
+        ...(description ? ["", description] : []),
+        "</reference>",
+      ].join("\n");
+    })
+    .join("\n\n");
+}
+
+export function rewriteReferencePath(
+  value: string | undefined,
+  references: readonly ReferenceInfo[],
+): string | undefined {
+  if (!value?.startsWith("@")) return value;
+  return resolveReferenceToken(value, references)?.path ?? value;
+}
+
+function createReferenceMessage(invocations: readonly ReferenceInvocation[]) {
+  const content = renderReferenceInvocation(invocations);
+  if (!content) return undefined;
+
+  return {
+    customType: REFERENCE_MESSAGE_TYPE,
+    content,
+    display: true,
+    details: { references: invocations } satisfies ReferenceInvocationDetails,
+  };
+}
+
+function renderReferenceMessage(
+  details: ReferenceInvocationDetails | undefined,
+  expanded: boolean,
+  color: {
+    readonly fg: (name: "customMessageLabel" | "customMessageText" | "dim", text: string) => string;
+    readonly bg: (name: "customMessageBg", text: string) => string;
+  },
+) {
+  const references = details?.references ?? [];
+  const labels =
+    references.length > 0 ? references.map((reference) => reference.token).join(" ") : "references";
+  const box = new Box(1, 1, (text) => color.bg("customMessageBg", text));
+  const label = color.fg("customMessageLabel", "\x1b[1m[ref]\x1b[22m");
+
+  if (!expanded) {
+    box.addChild(
+      new Text(
+        `${label} ${color.fg("customMessageText", labels)} ${color.fg("dim", "(ctrl+o to expand)")}`,
+        0,
+        0,
+      ),
+    );
+    return box;
+  }
+
+  box.addChild(new Text(`${label} ${color.fg("customMessageText", labels)}`, 0, 0));
+  box.addChild(
+    new Text(
+      color.fg(
+        "customMessageText",
+        references
+          .map((reference) => {
+            const description = reference.description ? `\n${reference.description}` : "";
+            return `${reference.token}\npath: ${reference.path}${description}`;
+          })
+          .join("\n\n"),
+      ),
+      0,
+      0,
+    ),
+  );
+  return box;
 }
 
 function uniqueItems(items: readonly AutocompleteItem[]): readonly AutocompleteItem[] {
@@ -277,6 +460,11 @@ function startMaterialization(input: {
 export default function registerReferencesExtension(pi: ExtensionAPI): void {
   const states = new Map<string, ReferencesState>();
 
+  pi.registerMessageRenderer<ReferenceInvocationDetails>(
+    REFERENCE_MESSAGE_TYPE,
+    (message, { expanded }, theme) => renderReferenceMessage(message.details, expanded, theme),
+  );
+
   pi.on("session_start", async (_event, ctx) => {
     const key = ctx.sessionManager.getSessionFile() ?? ctx.cwd;
     const getReferences = () => states.get(key)?.references ?? EMPTY_REFERENCES_STATE.references;
@@ -303,10 +491,48 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
 
     const references = loaded.value.resolved.references;
     const guidance = renderReferenceGuidance(references);
-    if (!guidance) return;
+    const invocations = findReferenceInvocations(event.prompt, references);
+    const message = createReferenceMessage(invocations);
+    if (!guidance && !message) return;
 
     startMaterialization({ pi, ctx, references });
-    return { systemPrompt: `${event.systemPrompt}\n\n${guidance}` };
+    return {
+      ...(message ? { message } : {}),
+      ...(guidance ? { systemPrompt: `${event.systemPrompt}\n\n${guidance}` } : {}),
+    };
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    const loaded = await loadResolvedReferences(ctx.cwd);
+    if (Result.isError(loaded)) return;
+
+    const references = loaded.value.resolved.references;
+    if (isToolCallEventType("read", event)) {
+      event.input.path = rewriteReferencePath(event.input.path, references) ?? event.input.path;
+      return;
+    }
+    if (isToolCallEventType("ls", event)) {
+      event.input.path = rewriteReferencePath(event.input.path, references);
+      return;
+    }
+    if (isToolCallEventType("grep", event)) {
+      event.input.path = rewriteReferencePath(event.input.path, references);
+      return;
+    }
+    if (isToolCallEventType("find", event)) {
+      event.input.path = rewriteReferencePath(event.input.path, references);
+      return;
+    }
+    if (isToolCallEventType("edit", event) || isToolCallEventType("write", event)) {
+      const invocation = resolveReferenceToken(event.input.path, references);
+      if (invocation) {
+        return {
+          block: true,
+          reason:
+            "Reference aliases are read-only. Use an absolute path if mutation is intentional.",
+        };
+      }
+    }
   });
 
   pi.registerCommand("ohm-references", {
