@@ -1,13 +1,13 @@
 {
   "subagents": {
     "librarian": {
-      "model": "openai-codex/gpt-5.3-codex:medium"
+      "model": "openai-codex/gpt-5.5:medium"
     },
     "oracle": {
-      "model": "openai-codex/gpt-5.2:xhigh"
+      "model": "openai-codex/gpt-5.5:xhigh"
     },
     "finder": {
-      "model": "github-copilot/gemini-3-flash-preview"
+      "model": "openai-codex/gpt-5.5:low"
     }
   },
   "references": {
