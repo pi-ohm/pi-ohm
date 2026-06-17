@@ -7,5 +7,6 @@
   "packages/tui": "0.6.4",
   "packages/session-search": "0.6.4",
   "packages/painter": "0.6.4",
+  "packages/references": "0.6.4",
   "packages/extension": "0.6.4"
 }

@@ -29,6 +29,7 @@ const SOURCES: ChangelogSource[] = [
     path: "packages/session-search/CHANGELOG.md",
   },
   { label: "@pi-ohm/painter", path: "packages/painter/CHANGELOG.md" },
+  { label: "@pi-ohm/references", path: "packages/references/CHANGELOG.md" },
   { label: "pi-ohm", path: "packages/extension/CHANGELOG.md" },
 ];
 

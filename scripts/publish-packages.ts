@@ -126,6 +126,7 @@ const PACKAGE_DIRS = [
   "packages/tui",
   "packages/session-search",
   "packages/painter",
+  "packages/references",
   "packages/extension",
 ] as const;
 

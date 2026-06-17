@@ -22,6 +22,7 @@
         "tui",
         "session-search",
         "painter",
+        "references",
         "pi-ohm"
       ]
     }
@@ -65,6 +66,11 @@
     "packages/painter": {
       "component": "painter",
       "package-name": "@pi-ohm/painter",
+      "skip-github-release": true
+    },
+    "packages/references": {
+      "component": "references",
+      "package-name": "@pi-ohm/references",
       "skip-github-release": true
     },
     "packages/extension": {

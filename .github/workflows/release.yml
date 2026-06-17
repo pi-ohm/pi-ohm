@@ -28,6 +28,7 @@ on:
           - tui
           - session-search
           - painter
+          - references
           - pi-ohm
       channel:
         description: "npm dist-tag channel"
@@ -224,6 +225,9 @@ jobs:
               ;;
             painter)
               only="@pi-ohm/painter"
+              ;;
+            references)
+              only="@pi-ohm/references"
               ;;
             pi-ohm)
               only="pi-ohm"
