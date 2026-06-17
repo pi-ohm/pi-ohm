@@ -245,6 +245,9 @@ importers:
       '@pi-ohm/painter':
         specifier: workspace:*
         version: link:../painter
+      '@pi-ohm/profiler':
+        specifier: workspace:*
+        version: link:../profiler
       '@pi-ohm/references':
         specifier: workspace:*
         version: link:../references
@@ -314,6 +317,21 @@ importers:
       '@earendil-works/pi-tui':
         specifier: catalog:pi
         version: 0.79.4
+      '@pi-ohm/core':
+        specifier: workspace:*
+        version: link:../core
+      better-result:
+        specifier: 'catalog:'
+        version: 2.9.2
+      typebox:
+        specifier: ^1.0.68
+        version: 1.2.8
+
+  packages/profiler:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: catalog:pi
+        version: 0.79.4(ws@8.21.0)(zod@4.4.3)
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
