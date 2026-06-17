@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import type { AutocompleteProvider, AutocompleteSuggestions } from "@earendil-works/pi-tui";
 import {
@@ -118,15 +121,64 @@ void test("autocomplete bridge keeps references outside providers registered lat
   );
 });
 
+void test("nested reference autocomplete keeps value and description relative", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-ohm-refs-"));
+  context.after(() => {
+    void rm(root, { recursive: true, force: true });
+  });
+  await mkdir(join(root, "packages", "ai"), { recursive: true });
+
+  const local: readonly ReferenceInfo[] = [
+    {
+      name: "pi",
+      path: root,
+      description: "Pi source",
+      source: { type: "local", path: root, description: "Pi source" },
+    },
+  ];
+  const wrapped = createReferencesAutocompleteProvider(provider(null), () => local);
+  const prompt = "read @pi/packages/a";
+  const controller = new AbortController();
+
+  const suggestions = await wrapped.getSuggestions([prompt], 0, prompt.length, {
+    signal: controller.signal,
+  });
+
+  assert.ok(suggestions);
+  assert.deepEqual(suggestions.items, [
+    {
+      value: "@pi/packages/ai/",
+      label: "@pi/packages/ai/",
+      description: "[Ω:REF] packages/ai/",
+    },
+  ]);
+});
+
 void test("reference invocations render XML blocks with resolved paths", () => {
-  const invocations = findReferenceInvocations("compare @opencode. and @missing", references);
+  const rootInvocation = findReferenceInvocations("compare @opencode. and @missing", references);
+  assert.equal(rootInvocation[0]?.token, "@opencode");
+
+  const invocations = findReferenceInvocations(
+    "compare @opencode/packages/core and @opencode/scripts",
+    references,
+  );
   const rendered = renderReferenceInvocation(invocations);
 
   assert.deepEqual(invocations, [
     {
       name: "opencode",
-      token: "@opencode",
-      path: "/cache/github.com/anomalyco/opencode",
+      token: "@opencode/packages/core",
+      path: "/cache/github.com/anomalyco/opencode/packages/core",
+      rootPath: "/cache/github.com/anomalyco/opencode",
+      relativePath: "packages/core",
+      description: "OpenCode source",
+    },
+    {
+      name: "opencode",
+      token: "@opencode/scripts",
+      path: "/cache/github.com/anomalyco/opencode/scripts",
+      rootPath: "/cache/github.com/anomalyco/opencode",
+      relativePath: "scripts",
       description: "OpenCode source",
     },
   ]);
@@ -137,6 +189,11 @@ void test("reference invocations render XML blocks with resolved paths", () => {
       "The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.",
       "",
       "OpenCode source",
+      "",
+      "<reference_files>",
+      '  <file token="@opencode/packages/core" relative_path="packages/core" path="/cache/github.com/anomalyco/opencode/packages/core" />',
+      '  <file token="@opencode/scripts" relative_path="scripts" path="/cache/github.com/anomalyco/opencode/scripts" />',
+      "</reference_files>",
       "</reference>",
     ].join("\n"),
   );

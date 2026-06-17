@@ -154,7 +154,10 @@ Initial package can include:
 
 - `/ohm-references` user command to inspect resolved references and cache status
 - optional autocomplete provider for `@alias` and `@alias/path` that keeps the
-  alias in the editor and emits a collapsed custom reference message on submit
+  alias in the editor, shows nested picker descriptions as relative paths, and
+  emits a collapsed custom reference message on submit
+- grouped XML invocation blocks: one `<reference>` per alias with mentioned
+  `@alias/path` entries under `<reference_files>`
 - read-only tool path rewriting for `read`, `ls`, `grep`, and `find` so models
   may use `@alias` path arguments without a dedicated reference tool
 

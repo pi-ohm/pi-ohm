@@ -83,13 +83,18 @@ added to the agent's system prompt with their absolute paths.
 
 When a prompt includes `@alias` or `@alias/path`, the package also adds a
 collapsed reference message for that turn. The message contains a resolved XML
-block for the agent:
+block for the agent with mentioned paths grouped under the reference:
 
 ```xml
 <reference name="opencode" token="@opencode" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode">
 The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.
 
 OpenCode source for agent behavior references
+
+<reference_files>
+  <file token="@opencode/packages/ai" relative_path="packages/ai" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode/packages/ai" />
+  <file token="@opencode/packages/tui" relative_path="packages/tui" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode/packages/tui" />
+</reference_files>
 </reference>
 ```
 
@@ -114,7 +119,8 @@ outside the prompt. Use `ctrl+o` to expand it and see the resolved path and
 description.
 
 Reference autocomplete rows are tagged in their description with `[Ω:REF]` so
-they are easy to distinguish from normal file results.
+they are easy to distinguish from normal file results. Nested rows show relative
+paths like `packages/ai`, not the full cache path.
 
 `hidden: true` only hides a reference from autocomplete.
 

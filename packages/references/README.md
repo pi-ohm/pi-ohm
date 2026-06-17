@@ -34,17 +34,25 @@ Autocomplete inserts the reference alias, not the absolute path. If you select
 `@sdk`, the editor keeps `@sdk`.
 
 When a prompt contains `@alias` or `@alias/path`, the package adds a collapsed
-custom message for the agent with the resolved path:
+custom message for the agent with the resolved root path and grouped mentioned
+paths:
 
 ```xml
 <reference name="sdk" token="@sdk" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode-sdk-js">
 The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.
 
 Use for JavaScript SDK implementation details
+
+<reference_files>
+  <file token="@sdk/packages/client" relative_path="packages/client" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode-sdk-js/packages/client" />
+  <file token="@sdk/README.md" relative_path="README.md" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode-sdk-js/README.md" />
+</reference_files>
 </reference>
 ```
 
 The TUI shows this as a compact `[ref] @alias` block. Use `ctrl+o` to expand it.
+Nested autocomplete rows show relative descriptions like `packages/client`, not
+the full cache path. The XML still includes the exact absolute paths.
 
 Read-only path tools (`read`, `ls`, `grep`, `find`) also accept `@alias` and
 `@alias/path`; the extension rewrites those tool path arguments to absolute

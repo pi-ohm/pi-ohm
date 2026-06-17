@@ -39,6 +39,8 @@ export interface ReferenceInvocation {
   readonly name: string;
   readonly token: string;
   readonly path: string;
+  readonly rootPath: string;
+  readonly relativePath: string | undefined;
   readonly description: string | undefined;
 }
 
@@ -118,12 +120,11 @@ async function childItems(input: {
     .map((entry) => {
       const relative = parentTail === "." ? entry.name : path.join(parentTail, entry.name);
       const display = `@${input.reference.name}/${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
+      const relativeDisplay = `${relative.replaceAll("\\", "/")}${entry.isDirectory() ? "/" : ""}`;
       return {
         value: aliasValue(input.reference, `${relative}${entry.isDirectory() ? "/" : ""}`),
         label: display,
-        description: taggedDescription(
-          path.join(input.reference.path, relative).replaceAll("\\", "/"),
-        ),
+        description: taggedDescription(relativeDisplay),
       };
     });
 }
@@ -143,11 +144,11 @@ function escapeXmlText(value: string): string {
 function resolveReferenceTarget(input: {
   readonly reference: ReferenceInfo;
   readonly suffix: string | undefined;
-}): string | undefined {
-  if (!input.suffix) return input.reference.path;
+}): { readonly path: string; readonly relativePath: string | undefined } | undefined {
+  if (!input.suffix) return { path: input.reference.path, relativePath: undefined };
 
   const withoutLeadingSlash = input.suffix.startsWith("/") ? input.suffix.slice(1) : input.suffix;
-  if (!withoutLeadingSlash) return input.reference.path;
+  if (!withoutLeadingSlash) return { path: input.reference.path, relativePath: undefined };
   if (withoutLeadingSlash.includes("\0") || withoutLeadingSlash.includes("\\")) {
     return undefined;
   }
@@ -157,12 +158,12 @@ function resolveReferenceTarget(input: {
 
   const target = path.join(input.reference.path, normalized);
   const relative = path.relative(input.reference.path, target);
-  if (relative === "") return target;
+  if (relative === "") return { path: target, relativePath: undefined };
   if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     return undefined;
   }
 
-  return target;
+  return { path: target, relativePath: normalized.replaceAll("\\", "/") };
 }
 
 export function resolveReferenceToken(
@@ -183,7 +184,9 @@ export function resolveReferenceToken(
   return {
     name: reference.name,
     token,
-    path: target,
+    path: target.path,
+    rootPath: reference.path,
+    relativePath: target.relativePath,
     description: reference.description,
   };
 }
@@ -219,13 +222,39 @@ export function renderReferenceInvocation(
 ): string | undefined {
   if (invocations.length === 0) return undefined;
 
-  return invocations
-    .map((invocation) => {
-      const description = invocation.description ? escapeXmlText(invocation.description) : "";
+  const groups = Array.from(
+    invocations
+      .reduce<Map<string, readonly ReferenceInvocation[]>>((state, invocation) => {
+        const previous = state.get(invocation.name) ?? [];
+        return new Map([...state, [invocation.name, [...previous, invocation]]]);
+      }, new Map())
+      .values(),
+  ).sort((left, right) => (left[0]?.name ?? "").localeCompare(right[0]?.name ?? ""));
+
+  return groups
+    .map((group) => {
+      const reference = group[0];
+      if (!reference) return "";
+      const description = reference.description ? escapeXmlText(reference.description) : "";
+      const files = group
+        .filter((invocation) => invocation.relativePath !== undefined)
+        .sort((left, right) => left.relativePath?.localeCompare(right.relativePath ?? "") ?? 0);
+
       return [
-        `<reference name="${escapeXmlAttribute(invocation.name)}" token="${escapeXmlAttribute(invocation.token)}" path="${escapeXmlAttribute(invocation.path)}">`,
+        `<reference name="${escapeXmlAttribute(reference.name)}" token="${escapeXmlAttribute(`@${reference.name}`)}" path="${escapeXmlAttribute(reference.rootPath)}">`,
         escapeXmlText(REFERENCE_INVOCATION_BLURB),
         ...(description ? ["", description] : []),
+        ...(files.length > 0
+          ? [
+              "",
+              "<reference_files>",
+              ...files.map(
+                (file) =>
+                  `  <file token="${escapeXmlAttribute(file.token)}" relative_path="${escapeXmlAttribute(file.relativePath ?? "")}" path="${escapeXmlAttribute(file.path)}" />`,
+              ),
+              "</reference_files>",
+            ]
+          : []),
         "</reference>",
       ].join("\n");
     })
@@ -261,8 +290,23 @@ function renderReferenceMessage(
   },
 ) {
   const references = details?.references ?? [];
+  const groups = Array.from(
+    references.reduce<Map<string, readonly ReferenceInvocation[]>>((state, reference) => {
+      const previous = state.get(reference.name) ?? [];
+      return new Map([...state, [reference.name, [...previous, reference]]]);
+    }, new Map()),
+  ).sort((left, right) => left[0].localeCompare(right[0]));
   const labels =
-    references.length > 0 ? references.map((reference) => reference.token).join(" ") : "references";
+    groups.length > 0
+      ? groups
+          .map(([name, group]) => {
+            const pathCount = group.filter(
+              (reference) => reference.relativePath !== undefined,
+            ).length;
+            return pathCount > 0 ? `@${name} (${pathCount} paths)` : `@${name}`;
+          })
+          .join(" ")
+      : "references";
   const box = new Box(1, 1, (text) => color.bg("customMessageBg", text));
   const label = color.fg("customMessageLabel", "\x1b[1m[ref]\x1b[22m");
 
@@ -285,7 +329,8 @@ function renderReferenceMessage(
         references
           .map((reference) => {
             const description = reference.description ? `\n${reference.description}` : "";
-            return `${reference.token}\npath: ${reference.path}${description}`;
+            const relative = reference.relativePath ? `\nrelative: ${reference.relativePath}` : "";
+            return `${reference.token}${relative}\npath: ${reference.path}${description}`;
           })
           .join("\n\n"),
       ),
