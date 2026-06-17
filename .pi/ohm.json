@@ -20,7 +20,7 @@
     "pi": {
       "repository": "https://github.com/earendil-works/pi",
       "branch": "main",
-      "description": "The personal information agent.",
+      "description": "Use whenever working on Pi-related code.",
       "hidden": false
     }
   }
