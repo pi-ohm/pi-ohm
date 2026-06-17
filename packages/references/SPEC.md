@@ -105,10 +105,12 @@ ${XDG_DATA_HOME:-~/.local/share}/pi-ohm/agent/references/repos/<host>/<path>
 Materialization:
 
 - Git refs appear in guidance immediately at their deterministic cache path
-- clone/fetch happens asynchronously on `session_start`
+- clone/fetch is deferred through `@pi-ohm/core/jobs`; startup never waits for it
+- local refs require no materialization
 - existing cache with mismatched origin is deleted and recloned
 - clone uses `git clone --depth 100 [--branch branch] -- remote target`
-- refresh uses `git fetch --all --prune` and `git reset --hard`
+- refresh first compares local `HEAD` with `git ls-remote`; fetch/reset only runs
+  when the remote SHA differs or the configured branch is not checked out
 
 ## Runtime model
 
@@ -152,7 +154,7 @@ Sort by reference name for deterministic prompt text.
 
 Initial package can include:
 
-- `/ohm-references` user command to inspect resolved references and cache status
+- `/ohm-references` user command to inspect resolved references and deferred job status
 - optional autocomplete provider for `@alias` and `@alias/path` that keeps the
   alias in the editor, shows nested picker descriptions as relative paths, and
   emits a collapsed custom reference message on submit

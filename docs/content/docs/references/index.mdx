@@ -67,14 +67,16 @@ Git references accept common repository forms:
 - `https://github.com/owner/repo.git`
 - `ssh://git@github.com/owner/repo`
 
-Git refs are assigned a deterministic cache path immediately, then cloned or
-refreshed in the background on session start.
+Git refs are assigned a deterministic cache path immediately. Clone/fetch work
+is deferred quietly after startup, and existing clones are checked with
+`git ls-remote` before any fetch runs.
 
 ```text
 ${XDG_DATA_HOME:-~/.local/share}/pi-ohm/agent/references/repos/<host>/<path>
 ```
 
 If an existing cache points at the wrong origin, it is deleted and recloned.
+Local `path` references are never cloned or refreshed.
 
 ## Agent behavior
 

@@ -23,6 +23,10 @@
       "types": "./dist/grammar.d.ts",
       "default": "./dist/grammar.js"
     },
+    "./jobs": {
+      "types": "./dist/jobs.d.ts",
+      "default": "./dist/jobs.js"
+    },
     "./paths": {
       "types": "./dist/paths.d.ts",
       "default": "./dist/paths.js"
@@ -61,7 +65,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/errors.ts src/grammar.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts src/logging/index.ts src/pi-in-pi/index.ts src/pi-in-pi/experimental.ts"
+    "build": "vp pack src/errors.ts src/grammar.ts src/jobs.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts src/logging/index.ts src/pi-in-pi/index.ts src/pi-in-pi/experimental.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "catalog:pi",

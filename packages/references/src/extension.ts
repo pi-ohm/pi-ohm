@@ -9,6 +9,7 @@ import type {
 } from "@earendil-works/pi-tui";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { createDeferredJobs, type DeferredJobs } from "@pi-ohm/core/jobs";
 import { loadReferencesConfig } from "./config";
 import {
   materializeGitReferences,
@@ -23,7 +24,6 @@ export * from "./repository";
 export * from "./cache";
 export * from "./references";
 
-const STATUS_KEY = "ohm-references";
 const MAX_AUTOCOMPLETE_ITEMS = 30;
 const AUTOCOMPLETE_DESCRIPTION_TAG = "[Ω:REF]";
 const REFERENCE_MESSAGE_TYPE = "ohm-reference";
@@ -49,6 +49,7 @@ interface ReferenceInvocationDetails {
 }
 
 const EMPTY_REFERENCES_STATE: ReferencesState = { references: [], diagnostics: [] };
+const STARTUP_REFRESH_DELAY_MS = 1_500;
 
 type AddAutocompleteProvider = ExtensionContext["ui"]["addAutocompleteProvider"];
 
@@ -454,6 +455,13 @@ async function loadResolvedReferences(cwd: string) {
   });
 }
 
+async function exists(target: string): Promise<boolean> {
+  return fs.access(target).then(
+    () => true,
+    () => false,
+  );
+}
+
 function renderReferences(references: readonly ReferenceInfo[]): string {
   if (references.length === 0) return "No references configured.";
   return references
@@ -478,32 +486,83 @@ function renderReferences(references: readonly ReferenceInfo[]): string {
     .join("\n\n");
 }
 
-function startMaterialization(input: {
+function renderJobs(jobs: DeferredJobs): string | undefined {
+  const snapshots = jobs.snapshots();
+  if (snapshots.length === 0) return undefined;
+  return snapshots
+    .slice()
+    .sort((left, right) => left.key.localeCompare(right.key))
+    .map((snapshot) => {
+      const label = snapshot.label ? ` ${snapshot.label}` : "";
+      const error = snapshot.error ? `\n  error: ${snapshot.error}` : "";
+      return `- ${snapshot.status}${label}${error}`;
+    })
+    .join("\n");
+}
+
+function enqueueMaterialization(input: {
+  readonly jobs: DeferredJobs;
   readonly pi: Pick<ExtensionAPI, "exec">;
-  readonly ctx: ExtensionContext;
   readonly references: readonly ReferenceInfo[];
+  readonly delayMs?: number;
 }): void {
-  void materializeGitReferences({
+  input.references
+    .filter((reference) => reference.source.type === "git")
+    .forEach((reference) => {
+      input.jobs.enqueue({
+        key: `references:${reference.path}`,
+        label: `@${reference.name}`,
+        delayMs: input.delayMs,
+        run: async ({ signal }) => {
+          const result = await materializeGitReferences({
+            pi: input.pi,
+            references: [reference],
+            signal,
+          });
+          const diagnostic = result.diagnostics[0];
+          if (diagnostic) throw new Error(diagnostic.message);
+        },
+      });
+    });
+}
+
+function referencedReferences(input: {
+  readonly references: readonly ReferenceInfo[];
+  readonly invocations: readonly ReferenceInvocation[];
+}): readonly ReferenceInfo[] {
+  const names = new Set(input.invocations.map((invocation) => invocation.name));
+  return input.references.filter((reference) => names.has(reference.name));
+}
+
+async function ensureReferenceReady(input: {
+  readonly jobs: DeferredJobs;
+  readonly pi: Pick<ExtensionAPI, "exec">;
+  readonly references: readonly ReferenceInfo[];
+  readonly value: string | undefined;
+  readonly signal?: AbortSignal;
+}): Promise<string | undefined> {
+  if (!input.value?.startsWith("@")) return undefined;
+  const invocation = resolveReferenceToken(input.value, input.references);
+  if (!invocation) return undefined;
+  const reference = input.references.find((candidate) => candidate.name === invocation.name);
+  if (!reference || reference.source.type !== "git") return undefined;
+
+  if (await exists(reference.path)) {
+    enqueueMaterialization({ jobs: input.jobs, pi: input.pi, references: [reference] });
+    return undefined;
+  }
+
+  const result = await materializeGitReferences({
     pi: input.pi,
-    references: input.references,
-    ...(input.ctx.signal ? { signal: input.ctx.signal } : {}),
-  }).then((result) => {
-    if (!input.ctx.hasUI) return;
-    if (result.diagnostics.length > 0) {
-      input.ctx.ui.notify(
-        `references: ${result.diagnostics.length} git materialization issue(s)`,
-        "error",
-      );
-      return;
-    }
-    if (result.results.length > 0) {
-      input.ctx.ui.setStatus(STATUS_KEY, `refs:${input.references.length}`);
-    }
+    references: [reference],
+    ...(input.signal ? { signal: input.signal } : {}),
   });
+  return result.diagnostics[0]?.message;
 }
 
 export default function registerReferencesExtension(pi: ExtensionAPI): void {
   const states = new Map<string, ReferencesState>();
+  const jobs = createDeferredJobs();
 
   pi.registerMessageRenderer<ReferenceInvocationDetails>(
     REFERENCE_MESSAGE_TYPE,
@@ -523,11 +582,14 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
     const references = loaded.value.resolved.references;
     states.set(key, loaded.value.resolved);
     if (ctx.hasUI) {
-      ctx.ui.setStatus(STATUS_KEY, `refs:${references.length}`);
       addAutocomplete?.((current) => createReferencesAutocompleteProvider(current, getReferences));
     }
 
-    startMaterialization({ pi, ctx, references });
+    enqueueMaterialization({ jobs, pi, references, delayMs: STARTUP_REFRESH_DELAY_MS });
+  });
+
+  pi.on("session_shutdown", () => {
+    jobs.cancelAll();
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
@@ -540,7 +602,11 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
     const message = createReferenceMessage(invocations);
     if (!guidance && !message) return;
 
-    startMaterialization({ pi, ctx, references });
+    enqueueMaterialization({
+      jobs,
+      pi,
+      references: referencedReferences({ references, invocations }),
+    });
     return {
       ...(message ? { message } : {}),
       ...(guidance ? { systemPrompt: `${event.systemPrompt}\n\n${guidance}` } : {}),
@@ -553,18 +619,50 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
 
     const references = loaded.value.resolved.references;
     if (isToolCallEventType("read", event)) {
+      const reason = await ensureReferenceReady({
+        jobs,
+        pi,
+        references,
+        value: event.input.path,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
+      if (reason) return { block: true, reason };
       event.input.path = rewriteReferencePath(event.input.path, references) ?? event.input.path;
       return;
     }
     if (isToolCallEventType("ls", event)) {
+      const reason = await ensureReferenceReady({
+        jobs,
+        pi,
+        references,
+        value: event.input.path,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
+      if (reason) return { block: true, reason };
       event.input.path = rewriteReferencePath(event.input.path, references);
       return;
     }
     if (isToolCallEventType("grep", event)) {
+      const reason = await ensureReferenceReady({
+        jobs,
+        pi,
+        references,
+        value: event.input.path,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
+      if (reason) return { block: true, reason };
       event.input.path = rewriteReferencePath(event.input.path, references);
       return;
     }
     if (isToolCallEventType("find", event)) {
+      const reason = await ensureReferenceReady({
+        jobs,
+        pi,
+        references,
+        value: event.input.path,
+        ...(ctx.signal ? { signal: ctx.signal } : {}),
+      });
+      if (reason) return { block: true, reason };
       event.input.path = rewriteReferencePath(event.input.path, references);
       return;
     }
@@ -593,6 +691,7 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
         "Pi OHM references",
         "",
         renderReferences(loaded.value.resolved.references),
+        ...(renderJobs(jobs) ? ["", "Jobs:", renderJobs(jobs)] : []),
         "",
         `loadedFrom: ${loaded.value.loaded.loadedFrom.length > 0 ? loaded.value.loaded.loadedFrom.join(", ") : "defaults"}`,
         ...(loaded.value.resolved.diagnostics.length > 0

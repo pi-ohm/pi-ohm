@@ -18,7 +18,9 @@ export interface RepositoryCacheResult {
   readonly remote: string;
   readonly localPath: string;
   readonly status: "cached" | "cloned" | "refreshed";
+  readonly freshness: "fresh" | "unknown";
   readonly head?: string;
+  readonly remoteHead?: string;
   readonly branch?: string;
 }
 
@@ -32,6 +34,7 @@ export interface EnsureRepositoryInput {
 }
 
 const GIT_TIMEOUT_MS = 120_000;
+const GIT_REMOTE_CHECK_TIMEOUT_MS = 15_000;
 
 export function defaultReferencesCacheRoot(): string {
   return path.join(resolveOhmAgentDataHome(), "references", "repos");
@@ -119,12 +122,13 @@ async function gitOptional(input: {
   readonly cwd: string;
   readonly args: readonly string[];
   readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
 }): Promise<string | undefined> {
   const result = await Result.tryPromise({
     try: () =>
       input.pi.exec("git", [...input.args], {
         cwd: input.cwd,
-        timeout: GIT_TIMEOUT_MS,
+        timeout: input.timeoutMs ?? GIT_TIMEOUT_MS,
         ...(input.signal ? { signal: input.signal } : {}),
       }),
     catch: (cause) => cause,
@@ -138,12 +142,44 @@ async function gitOptional(input: {
 
 function statusForRepository(input: {
   readonly reuse: boolean;
-  readonly refresh?: boolean;
   readonly branchMatches?: boolean;
+  readonly head?: string;
+  readonly remoteHead?: string;
 }): "cached" | "cloned" | "refreshed" {
   if (!input.reuse) return "cloned";
-  if (input.branchMatches === false || input.refresh) return "refreshed";
+  if (input.branchMatches === false) return "refreshed";
+  if (input.head && input.remoteHead && input.head !== input.remoteHead) return "refreshed";
   return "cached";
+}
+
+function parseLsRemoteHead(output: string): string | undefined {
+  const line = output
+    .split("\n")
+    .map((item) => item.trim())
+    .find((item) => item.length > 0 && !item.startsWith("ref:"));
+  const sha = line?.split(/\s+/)[0];
+  if (!sha || !/^[0-9a-f]{40}$/i.test(sha)) return undefined;
+  return sha;
+}
+
+async function remoteHead(input: {
+  readonly pi: Pick<ExtensionAPI, "exec">;
+  readonly cwd: string;
+  readonly remote: string;
+  readonly branch?: string;
+  readonly signal?: AbortSignal;
+}): Promise<string | undefined> {
+  const output = await gitOptional({
+    pi: input.pi,
+    cwd: input.cwd,
+    args: input.branch
+      ? ["ls-remote", "--heads", input.remote, input.branch]
+      : ["ls-remote", input.remote, "HEAD"],
+    signal: input.signal,
+    timeoutMs: GIT_REMOTE_CHECK_TIMEOUT_MS,
+  });
+  if (!output) return undefined;
+  return parseLsRemoteHead(output);
 }
 
 async function resetTarget(input: {
@@ -228,9 +264,28 @@ export async function ensureRepository(
         signal: input.signal,
       })
     : undefined;
+  const currentHead = reuse
+    ? await gitOptional({
+        pi: input.pi,
+        cwd: localPath,
+        args: ["rev-parse", "HEAD"],
+        signal: input.signal,
+      })
+    : undefined;
+  const checkedRemoteHead =
+    reuse && input.refresh
+      ? await remoteHead({
+          pi: input.pi,
+          cwd: localPath,
+          remote: input.reference.remote,
+          branch: input.branch,
+          ...(input.signal ? { signal: input.signal } : {}),
+        })
+      : undefined;
   const status = statusForRepository({
     reuse,
-    refresh: input.refresh,
+    head: currentHead,
+    remoteHead: checkedRemoteHead,
     ...(input.branch ? { branchMatches: currentBranch === input.branch } : {}),
   });
 
@@ -325,7 +380,9 @@ export async function ensureRepository(
     remote: input.reference.remote,
     localPath,
     status,
+    freshness: head && checkedRemoteHead && head === checkedRemoteHead ? "fresh" : "unknown",
     ...(head ? { head } : {}),
+    ...(checkedRemoteHead ? { remoteHead: checkedRemoteHead } : {}),
     ...(branch ? { branch } : {}),
   });
 }

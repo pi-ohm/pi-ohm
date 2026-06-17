@@ -28,6 +28,10 @@ Config lives under `references` in `.pi/ohm.json` or global `ohm.json`.
 No model-facing tool is registered. Agents use existing Pi tools with absolute
 paths from system guidance and per-prompt reference invocation blocks.
 
+Git references are refreshed quietly through deferred jobs. Startup does not
+wait for clone/fetch work, and cached clones are checked with `git ls-remote`
+before fetching. Local `path` references are used directly.
+
 ## Prompt references
 
 Autocomplete inserts the reference alias, not the absolute path. If you select
