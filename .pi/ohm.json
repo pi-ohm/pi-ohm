@@ -22,6 +22,12 @@
       "branch": "main",
       "description": "Use whenever working on Pi-related code.",
       "hidden": false
+    },
+    "codex": {
+      "repository": "https://github.com/openai/codex",
+      "branch": "main",
+      "description": "Lightweight coding agent that runs in your terminal.",
+      "hidden": false
     }
   }
 }
