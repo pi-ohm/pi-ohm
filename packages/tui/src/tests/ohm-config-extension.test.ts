@@ -10,7 +10,10 @@ import {
   registerConfig,
   registerGlobalConfigModule,
 } from "@pi-ohm/core/config";
-import registerOhmConfigExtension, { runOhmConfigCommand } from "../ohm-config-extension";
+import registerOhmConfigExtension, {
+  runOhmConfigCommand,
+  type OhmConfigAction,
+} from "../ohm-config-extension";
 
 const demo = registerConfig({
   namespace: "demo",
@@ -41,7 +44,14 @@ async function withConfig<T>(
   });
 }
 
-void test("runOhmConfigCommand mounts the registered module config", async () => {
+function theme() {
+  return {
+    bold: (text: string) => text,
+    fg: (_name: "accent" | "dim" | "muted" | "warning", text: string) => text,
+  };
+}
+
+void test("runOhmConfigCommand opens custom menu and views effective config", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(
       path.join(cwd, ".pi", "ohm.json"),
@@ -50,15 +60,24 @@ void test("runOhmConfigCommand mounts the registered module config", async () =>
     );
     registerGlobalConfigModule(demo);
 
-    let widget: ((...args: readonly unknown[]) => unknown) | undefined;
     const statuses: string[] = [];
+    const editorTexts: string[] = [];
     await runOhmConfigCommand({
       cwd,
       hasUI: true,
       sessionManager: { getSessionFile: () => undefined },
       ui: {
-        setWidget(_key, content) {
-          widget = content;
+        async custom(factory) {
+          let selected: OhmConfigAction | undefined;
+          const component = factory({ requestRender() {} }, theme(), undefined, (value) => {
+            selected = value;
+          });
+          component.handleInput?.("\r");
+          return selected;
+        },
+        async editor(_title, prefill) {
+          editorTexts.push(prefill ?? "");
+          return undefined;
         },
         setStatus(_key, text) {
           if (text) statuses.push(text);
@@ -66,17 +85,50 @@ void test("runOhmConfigCommand mounts the registered module config", async () =>
       },
     });
 
-    assert.equal(typeof widget, "function");
     assert.equal(statuses.includes("ohm:1 config modules"), true);
-    const component = widget?.();
-    assert.equal(typeof component, "object");
+    assert.match(editorTexts.join("\n"), /"count": 7/);
   });
 });
 
-void test("registerOhmConfigExtension registers /ohm once", () => {
+void test("runOhmConfigCommand edits project config from the custom menu", async () => {
+  await withConfig(async ({ cwd }) => {
+    const file = path.join(cwd, ".pi", "ohm.json");
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 7 } }), "utf8");
+    registerGlobalConfigModule(demo);
+
+    await runOhmConfigCommand({
+      cwd,
+      hasUI: true,
+      sessionManager: { getSessionFile: () => undefined },
+      ui: {
+        async custom(factory) {
+          let selected: OhmConfigAction | undefined;
+          const component = factory({ requestRender() {} }, theme(), undefined, (value) => {
+            selected = value;
+          });
+          component.handleInput?.("\x1b[B");
+          component.handleInput?.("\r");
+          return selected;
+        },
+        async editor() {
+          return JSON.stringify({ demo: { count: 9 } });
+        },
+        notify() {},
+        setStatus() {},
+      },
+    });
+
+    assert.deepEqual(JSON.parse(await fs.readFile(file, "utf8")), { demo: { count: 9 } });
+  });
+});
+
+void test("registerOhmConfigExtension skips registration when /ohm already exists", () => {
   clearGlobalConfigModulesForTesting();
   const commands: string[] = [];
   const pi = {
+    getCommands() {
+      return commands.map((name) => ({ name }));
+    },
     on() {},
     registerCommand(name: string) {
       commands.push(name);
@@ -85,6 +137,7 @@ void test("registerOhmConfigExtension registers /ohm once", () => {
 
   registerOhmConfigExtension(pi);
   registerOhmConfigExtension(pi);
+  registerOhmConfigExtension({ ...pi, getCommands: () => [{ name: "ohm" }] });
 
   assert.deepEqual(commands, ["ohm"]);
 });

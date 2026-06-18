@@ -13,6 +13,9 @@ void test("registerSubagentsExtension registers subagents command", () => {
     getThinkingLevel(): "medium" {
       return "medium";
     },
+    getCommands() {
+      return [];
+    },
     on() {},
     registerCommand(name) {
       commands.push(name);
