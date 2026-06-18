@@ -9,8 +9,14 @@ import type {
 } from "@earendil-works/pi-tui";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  pickConfig,
+  watchConfig,
+  type LoadedExtensionConfig,
+  type WatchedConfig,
+} from "@pi-ohm/core/config";
 import { createDeferredJobs, type DeferredJobs } from "@pi-ohm/core/jobs";
-import { loadReferencesConfig } from "./config";
+import { isReferencesRuntimeConfig, loadReferencesConfig, referencesConfigModule } from "./config";
 import {
   materializeGitReferences,
   renderReferenceGuidance,
@@ -455,6 +461,19 @@ async function loadResolvedReferences(cwd: string) {
   });
 }
 
+function resolveWatchedReferences(cwd: string, loaded: LoadedExtensionConfig) {
+  const config = pickConfig({
+    loaded,
+    module: referencesConfigModule,
+    is: isReferencesRuntimeConfig,
+  });
+  if (Result.isError(config)) return Result.err(config.error);
+  return Result.ok({
+    loaded,
+    resolved: resolveConfiguredReferences({ cwd, config: config.value }),
+  });
+}
+
 async function exists(target: string): Promise<boolean> {
   return fs.access(target).then(
     () => true,
@@ -563,6 +582,7 @@ async function ensureReferenceReady(input: {
 export default function registerReferencesExtension(pi: ExtensionAPI): void {
   const states = new Map<string, ReferencesState>();
   const jobs = createDeferredJobs();
+  const watchers = new Set<WatchedConfig>();
 
   pi.registerMessageRenderer<ReferenceInvocationDetails>(
     REFERENCE_MESSAGE_TYPE,
@@ -576,7 +596,23 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
       ? bridgeReferencesAutocomplete({ host: ctx.ui, getReferences })
       : undefined;
 
-    const loaded = await loadResolvedReferences(ctx.cwd);
+    const watched = watchConfig({
+      cwd: ctx.cwd,
+      modules: [referencesConfigModule],
+      canApply: () => ctx.isIdle(),
+    });
+    watchers.add(watched);
+    watched.subscribe((loadedConfig) => {
+      const loaded = resolveWatchedReferences(ctx.cwd, loadedConfig);
+      if (Result.isError(loaded)) return;
+      states.set(key, loaded.value.resolved);
+      enqueueMaterialization({ jobs, pi, references: loaded.value.resolved.references });
+    });
+
+    const started = await watched.start();
+    if (Result.isError(started)) return;
+
+    const loaded = resolveWatchedReferences(ctx.cwd, started.value);
     if (Result.isError(loaded)) return;
 
     const references = loaded.value.resolved.references;
@@ -588,8 +624,14 @@ export default function registerReferencesExtension(pi: ExtensionAPI): void {
     enqueueMaterialization({ jobs, pi, references, delayMs: STARTUP_REFRESH_DELAY_MS });
   });
 
-  pi.on("session_shutdown", () => {
+  pi.on("agent_end", async () => {
+    await Promise.all([...watchers].map((watcher) => watcher.flush()));
+  });
+
+  pi.on("session_shutdown", async () => {
     jobs.cancelAll();
+    await Promise.all([...watchers].map((watcher) => watcher.stop()));
+    watchers.clear();
   });
 
   pi.on("before_agent_start", async (event, ctx) => {

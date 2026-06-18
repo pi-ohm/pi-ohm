@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import chokidar, { type FSWatcher } from "chokidar";
 import { Type, type StaticDecode, type TSchema } from "typebox";
 import { Value } from "typebox/value";
 
@@ -86,6 +87,23 @@ export interface RegisterConfigInput<Config, Schema extends TSchema> {
 export interface LoadConfigInput {
   readonly cwd: string;
   readonly modules: readonly RegisteredConfigModule[];
+}
+
+export interface WatchConfigInput extends LoadConfigInput {
+  readonly debounceMs?: number;
+  readonly canApply?: () => boolean;
+}
+
+export type ConfigSubscriber = (config: LoadedExtensionConfig) => void | Promise<void>;
+
+export interface WatchedConfig {
+  start(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>>;
+  get(): LoadedExtensionConfig | undefined;
+  pending(): LoadedExtensionConfig | undefined;
+  reload(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>>;
+  flush(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig | undefined>>;
+  subscribe(subscriber: ConfigSubscriber): () => void;
+  stop(): Promise<void>;
 }
 
 export interface ConfigRegistryInput {
@@ -252,6 +270,175 @@ export function pickConfig<Config>(
       message: `Loaded extension config is missing namespace "${input.module.namespace}"`,
     }),
   );
+}
+
+export function watchConfig(input: WatchConfigInput): WatchedConfig {
+  return new WatchedExtensionConfig(input);
+}
+
+class WatchedExtensionConfig implements WatchedConfig {
+  readonly #input: WatchConfigInput;
+  readonly #subscribers = new Set<ConfigSubscriber>();
+  #watcher: FSWatcher | undefined;
+  #timer: ReturnType<typeof setTimeout> | undefined;
+  #current: LoadedExtensionConfig | undefined;
+  #pending: LoadedExtensionConfig | undefined;
+  #currentSnapshot = "";
+  #started = false;
+
+  constructor(input: WatchConfigInput) {
+    this.#input = input;
+  }
+
+  async start(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
+    if (this.#started) {
+      const current = this.#current;
+      if (current) return Result.ok(current);
+    }
+
+    const loaded = await loadConfig(this.#input);
+    if (Result.isError(loaded)) return loaded;
+
+    this.#started = true;
+    this.#apply(loaded.value, false);
+    this.#watcher = this.#createWatcher(loaded.value.paths);
+    return Result.ok(loaded.value);
+  }
+
+  get(): LoadedExtensionConfig | undefined {
+    return this.#current;
+  }
+
+  pending(): LoadedExtensionConfig | undefined {
+    return this.#pending;
+  }
+
+  async reload(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig>> {
+    const loaded = await loadConfig(this.#input);
+    if (Result.isError(loaded)) return loaded;
+
+    const next = this.#guardDiagnostics(loaded.value);
+    if (this.#canApply()) {
+      this.#apply(next, true);
+      return Result.ok(next);
+    }
+
+    this.#pending = next;
+    return Result.ok(next);
+  }
+
+  async flush(): Promise<ExtensionConfigLoadResult<LoadedExtensionConfig | undefined>> {
+    const pending = this.#pending;
+    if (!pending) return Result.ok(undefined);
+    if (!this.#canApply()) return Result.ok(undefined);
+
+    this.#pending = undefined;
+    this.#apply(pending, true);
+    return Result.ok(pending);
+  }
+
+  subscribe(subscriber: ConfigSubscriber): () => void {
+    this.#subscribers.add(subscriber);
+    return () => {
+      this.#subscribers.delete(subscriber);
+    };
+  }
+
+  async stop(): Promise<void> {
+    this.#started = false;
+    this.#pending = undefined;
+    this.#subscribers.clear();
+    if (this.#timer) clearTimeout(this.#timer);
+    this.#timer = undefined;
+    const watcher = this.#watcher;
+    this.#watcher = undefined;
+    if (watcher) await watcher.close();
+  }
+
+  #canApply(): boolean {
+    return this.#input.canApply?.() ?? true;
+  }
+
+  #createWatcher(paths: ExtensionConfigPaths): FSWatcher {
+    const watcher = chokidar.watch([paths.globalConfigFile, paths.projectConfigFile], {
+      ignoreInitial: true,
+      awaitWriteFinish: {
+        stabilityThreshold: Math.max(this.#input.debounceMs ?? 100, 50),
+        pollInterval: 10,
+      },
+    });
+    watcher.on("all", () => {
+      this.#scheduleReload();
+    });
+    return watcher;
+  }
+
+  #scheduleReload(): void {
+    if (this.#timer) clearTimeout(this.#timer);
+    this.#timer = setTimeout(() => {
+      this.#timer = undefined;
+      void this.reload();
+    }, this.#input.debounceMs ?? 100);
+  }
+
+  #guardDiagnostics(next: LoadedExtensionConfig): LoadedExtensionConfig {
+    const current = this.#current;
+    if (!current || next.diagnostics.length === 0) return next;
+    return {
+      ...next,
+      config: current.config,
+      loadedFrom: current.loadedFrom,
+    };
+  }
+
+  #apply(next: LoadedExtensionConfig, notify: boolean): void {
+    const snapshot = comparableConfigSnapshot(next);
+    if (snapshot === this.#currentSnapshot) {
+      this.#current = next;
+      return;
+    }
+
+    this.#current = next;
+    this.#currentSnapshot = snapshot;
+    if (!notify) return;
+    for (const subscriber of this.#subscribers) {
+      void Promise.resolve(subscriber(next)).catch(() => undefined);
+    }
+  }
+}
+
+function comparableConfigSnapshot(config: LoadedExtensionConfig): string {
+  return JSON.stringify({
+    config: config.config,
+    loadedFrom: config.loadedFrom,
+    diagnostics: config.diagnostics.map(comparableDiagnostic),
+  });
+}
+
+function comparableDiagnostic(diagnostic: ExtensionConfigDiagnostic): unknown {
+  if (diagnostic.kind === "invalid-schema") {
+    return {
+      kind: diagnostic.kind,
+      path: diagnostic.path,
+      namespace: diagnostic.namespace,
+      message: diagnostic.message,
+      errors: diagnostic.errors,
+    };
+  }
+  if (diagnostic.kind === "merge-failed") {
+    return {
+      kind: diagnostic.kind,
+      path: diagnostic.path,
+      namespace: diagnostic.namespace,
+      message: diagnostic.message,
+      cause: diagnostic.cause.message,
+    };
+  }
+  return {
+    kind: diagnostic.kind,
+    path: diagnostic.path,
+    message: diagnostic.message,
+  };
 }
 
 async function readConfigFile(file: string): Promise<ReadConfigFileResult> {

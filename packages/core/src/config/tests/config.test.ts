@@ -5,7 +5,15 @@ import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
-import { ConfigRegistry, loadConfig, registerConfig, resolveExtensionConfigPaths } from "../index";
+import {
+  ConfigRegistry,
+  loadConfig,
+  pickConfig,
+  registerConfig,
+  resolveExtensionConfigPaths,
+  watchConfig,
+  type LoadedExtensionConfig,
+} from "../index";
 
 const DemoSchema = Type.Object(
   {
@@ -22,6 +30,37 @@ interface DemoConfig {
   readonly enabled: boolean;
   readonly count: number;
   readonly label: string;
+}
+
+function isDemoConfig(value: unknown): value is DemoConfig {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  return (
+    typeof Reflect.get(value, "enabled") === "boolean" &&
+    typeof Reflect.get(value, "count") === "number" &&
+    typeof Reflect.get(value, "label") === "string"
+  );
+}
+
+function readDemoConfig(loaded: LoadedExtensionConfig): DemoConfig {
+  const config = pickConfig({ loaded, module: demo, is: isDemoConfig });
+  if (Result.isError(config)) assert.fail(config.error.message);
+  return config.value;
+}
+
+async function waitFor(input: {
+  readonly until: () => boolean;
+  readonly message: string;
+  readonly timeoutMs?: number;
+}): Promise<void> {
+  const started = Date.now();
+  const timeout = input.timeoutMs ?? 2_000;
+
+  while (!input.until()) {
+    if (Date.now() - started > timeout) assert.fail(input.message);
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+  }
 }
 
 const demo = registerConfig({
@@ -273,5 +312,138 @@ void test("loadConfig reports schema diagnostics and keeps last valid value", as
     assert.equal(loaded.value.diagnostics.length, 1);
     assert.equal(loaded.value.diagnostics[0]?.kind, "invalid-schema");
     assert.equal(loaded.value.diagnostics[0]?.namespace, "demo");
+  });
+});
+
+void test("watchConfig publishes debounced file changes", async () => {
+  await withConfigEnv(async ({ cwd }) => {
+    const file = path.join(cwd, ".pi", "ohm.json");
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 1 } }), "utf8");
+
+    const watched = watchConfig({ cwd, modules: [demo], debounceMs: 30 });
+    const started = await watched.start();
+    assert.equal(Result.isOk(started), true);
+    if (Result.isError(started)) assert.fail(started.error.message);
+    assert.equal(readDemoConfig(started.value).count, 1);
+
+    const seen: LoadedExtensionConfig[] = [];
+    watched.subscribe((loaded) => {
+      seen.push(loaded);
+    });
+
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 2, label: "changed" } }), "utf8");
+    await waitFor({
+      until: () => seen.length === 1,
+      message: "watchConfig did not publish file change",
+    });
+
+    const current = watched.get();
+    assert.ok(current);
+    assert.equal(readDemoConfig(current).count, 2);
+    assert.equal(readDemoConfig(seen[0] ?? current).label, "changed");
+    await watched.stop();
+  });
+});
+
+void test("watchConfig stages changes while apply is blocked and flushes latest pending config", async () => {
+  await withConfigEnv(async ({ cwd }) => {
+    const file = path.join(cwd, ".pi", "ohm.json");
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 1 } }), "utf8");
+
+    const gate = { idle: false };
+    const watched = watchConfig({
+      cwd,
+      modules: [demo],
+      canApply: () => gate.idle,
+    });
+    const started = await watched.start();
+    assert.equal(Result.isOk(started), true);
+    if (Result.isError(started)) assert.fail(started.error.message);
+
+    const seen: LoadedExtensionConfig[] = [];
+    watched.subscribe((loaded) => {
+      seen.push(loaded);
+    });
+
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 2 } }), "utf8");
+    const stagedTwo = await watched.reload();
+    assert.equal(Result.isOk(stagedTwo), true);
+    if (Result.isError(stagedTwo)) assert.fail(stagedTwo.error.message);
+    assert.equal(readDemoConfig(watched.get() ?? started.value).count, 1);
+    assert.equal(readDemoConfig(watched.pending() ?? started.value).count, 2);
+    assert.equal(seen.length, 0);
+
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 3 } }), "utf8");
+    const stagedThree = await watched.reload();
+    assert.equal(Result.isOk(stagedThree), true);
+    if (Result.isError(stagedThree)) assert.fail(stagedThree.error.message);
+    assert.equal(readDemoConfig(watched.pending() ?? started.value).count, 3);
+
+    gate.idle = true;
+    const flushed = await watched.flush();
+    assert.equal(Result.isOk(flushed), true);
+    if (Result.isError(flushed)) assert.fail(flushed.error.message);
+    assert.equal(readDemoConfig(watched.get() ?? started.value).count, 3);
+    assert.equal(watched.pending(), undefined);
+    assert.equal(seen.length, 1);
+    await watched.stop();
+  });
+});
+
+void test("watchConfig keeps last good config when reload has diagnostics", async () => {
+  await withConfigEnv(async ({ cwd }) => {
+    const file = path.join(cwd, ".pi", "ohm.json");
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 4 } }), "utf8");
+
+    const watched = watchConfig({ cwd, modules: [demo] });
+    const started = await watched.start();
+    assert.equal(Result.isOk(started), true);
+    if (Result.isError(started)) assert.fail(started.error.message);
+    assert.equal(readDemoConfig(started.value).count, 4);
+
+    const seen: LoadedExtensionConfig[] = [];
+    watched.subscribe((loaded) => {
+      seen.push(loaded);
+    });
+
+    await fs.writeFile(file, "{ nope", "utf8");
+    const reloaded = await watched.reload();
+    assert.equal(Result.isOk(reloaded), true);
+    if (Result.isError(reloaded)) assert.fail(reloaded.error.message);
+
+    const current = watched.get();
+    assert.ok(current);
+    assert.equal(readDemoConfig(current).count, 4);
+    assert.equal(current.diagnostics[0]?.kind, "invalid-json");
+    assert.equal(seen.length, 1);
+    assert.equal(readDemoConfig(seen[0] ?? current).count, 4);
+    await watched.stop();
+  });
+});
+
+void test("watchConfig unsubscribe removes subscriber", async () => {
+  await withConfigEnv(async ({ cwd }) => {
+    const file = path.join(cwd, ".pi", "ohm.json");
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 1 } }), "utf8");
+
+    const watched = watchConfig({ cwd, modules: [demo] });
+    const started = await watched.start();
+    assert.equal(Result.isOk(started), true);
+    if (Result.isError(started)) assert.fail(started.error.message);
+
+    const seen: LoadedExtensionConfig[] = [];
+    const unsubscribe = watched.subscribe((loaded) => {
+      seen.push(loaded);
+    });
+    unsubscribe();
+
+    await fs.writeFile(file, JSON.stringify({ demo: { count: 5 } }), "utf8");
+    const reloaded = await watched.reload();
+    assert.equal(Result.isOk(reloaded), true);
+    if (Result.isError(reloaded)) assert.fail(reloaded.error.message);
+
+    assert.equal(readDemoConfig(watched.get() ?? started.value).count, 5);
+    assert.equal(seen.length, 0);
+    await watched.stop();
   });
 });

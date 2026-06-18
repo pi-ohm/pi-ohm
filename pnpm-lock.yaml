@@ -12,6 +12,9 @@ catalogs:
     better-result:
       specifier: 2.9.2
       version: 2.9.2
+    chokidar:
+      specifier: ^4.0.3
+      version: 4.0.3
     drizzle-orm:
       specifier: ^0.45.2
       version: 0.45.2
@@ -218,6 +221,9 @@ importers:
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
+      chokidar:
+        specifier: 'catalog:'
+        version: 4.0.3
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.2(@cloudflare/workers-types@4.20260612.1)(@libsql/client@0.17.3)
@@ -2876,6 +2882,10 @@ packages:
   character-reference-invalid@2.0.1:
     resolution: {integrity: sha512-iBZ4F4wRbyORVsu0jPV7gXkOsGYjGHPmAyv+HiHG8gi5PtC9KI2j1+v8/tlibRvjoWX027ypmG/n0HtO5t7unw==}
 
+  chokidar@4.0.3:
+    resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
+    engines: {node: '>= 14.16.0'}
+
   chokidar@5.0.0:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
     engines: {node: '>= 20.19.0'}
@@ -4368,6 +4378,10 @@ packages:
 
   readable-stream@2.3.8:
     resolution: {integrity: sha512-8p0AUk4XODgIewSi0l8Epjs+EVnWiK7NoDIEGU0HhE7+ZyY8D1IMY7odu5lRrFXGg71L15KG8QrPmum45RTtdA==}
+
+  readdirp@4.1.2:
+    resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
+    engines: {node: '>= 14.18.0'}
 
   readdirp@5.0.0:
     resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
@@ -7362,6 +7376,10 @@ snapshots:
 
   character-reference-invalid@2.0.1: {}
 
+  chokidar@4.0.3:
+    dependencies:
+      readdirp: 4.1.2
+
   chokidar@5.0.0:
     dependencies:
       readdirp: 5.0.0
@@ -9086,6 +9104,8 @@ snapshots:
       safe-buffer: 5.1.2
       string_decoder: 1.1.1
       util-deprecate: 1.0.2
+
+  readdirp@4.1.2: {}
 
   readdirp@5.0.0: {}
 
