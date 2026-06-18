@@ -30,7 +30,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/extension.ts src/config.ts src/agent-controller.ts"
+    "build": "vp pack src/extension.ts src/config.ts src/agent-controller.ts src/spawn-config.ts"
   },
   "dependencies": {
     "@earendil-works/pi-agent-core": "catalog:pi",

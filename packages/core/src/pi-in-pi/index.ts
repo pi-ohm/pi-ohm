@@ -15,6 +15,8 @@ import { debugResult, type Debug, createDebug } from "../logging";
 import type { ExtensionDb, ExtensionDbModule } from "../db";
 import { resolveOhmAgentDataHome } from "../paths";
 
+export * from "./spawn-config";
+
 export type PipId = string;
 
 export type PipStatus =

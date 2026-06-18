@@ -1,33 +1,23 @@
 import {
-  AuthStorage,
   defineTool,
   type AgentToolResult,
   type ExtensionAPI,
-  ModelRegistry,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import path from "node:path";
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import {
-  getModels,
-  getProviders,
-  Type,
-  type Api,
-  type Model,
-  type Static,
-} from "@earendil-works/pi-ai";
+import { Type, type Api, type Model, type Static } from "@earendil-works/pi-ai";
 import { Result, type Result as BetterResult } from "better-result";
 import { createSdkPipRunner, PipController, type PipStatus } from "@pi-ohm/core/pip";
-import { loadConfig, pickConfig, resolveExtensionConfigDir } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig } from "@pi-ohm/core/config";
 import {
   isSubagentRuntimeConfig,
   resolveSubagentAgentRuntimeConfig,
   subagentsConfigModule,
-  type ResolvedSubagentAgentRuntimeConfig,
 } from "./config";
 import { INTEGRATED_SUBAGENTS } from "./catalog";
+import { resolveSpawnConfig, type ResolvedSpawnConfig } from "./spawn-config";
 
-const defaultModel = "openai-codex/gpt-5.4-mini:medium";
+export { resolveSpawnConfig } from "./spawn-config";
+export type { ResolvedSpawnConfig } from "./spawn-config";
 
 const ThinkingLevelSchema = Type.Union([
   Type.Literal("off"),
@@ -77,16 +67,6 @@ interface ControllerRecord {
   readonly taskIds: Map<string, string>;
   readonly taskControllers: Map<string, PipController>;
   readonly controllers: Map<string, PipController>;
-}
-
-interface ResolvedSpawnConfig {
-  readonly agentType: string;
-  readonly model: Model<Api>;
-  readonly modelKey: string;
-  readonly agentDir: string;
-  readonly thinking: ThinkingLevel;
-  readonly tools?: readonly string[];
-  readonly prompt: string;
 }
 
 export function registerAgentControllerTool(
@@ -416,89 +396,8 @@ function controllerKey(config: ResolvedSpawnConfig): string {
   return `${config.modelKey}:${config.thinking}:${config.tools?.join(",") ?? "default"}`;
 }
 
-export async function resolveSpawnConfig(input: {
-  readonly cwd: string;
-  readonly params: SpawnAgentArgs;
-  readonly currentModel?: Model<Api>;
-  readonly currentThinking?: ThinkingLevel;
-}): Promise<BetterResult<ResolvedSpawnConfig, Error>> {
-  const loaded = await loadConfig({ cwd: input.cwd, modules: [subagentsConfigModule] });
-  if (Result.isError(loaded)) return Result.err(loaded.error);
-
-  const subagents = pickConfig({
-    loaded: loaded.value,
-    module: subagentsConfigModule,
-    is: isSubagentRuntimeConfig,
-  });
-  if (Result.isError(subagents)) return Result.err(subagents.error);
-
-  const agentType = input.params.agent_type?.trim() || input.params.task_name.trim();
-  const currentModelPattern = input.currentModel ? modelKey(input.currentModel) : undefined;
-  const baseAgent = resolveSubagentAgentRuntimeConfig({
-    config: { subagents: subagents.value },
-    subagentId: agentType,
-    modelPattern: input.params.model ?? currentModelPattern,
-  });
-  const agent = resolveSubagentAgentRuntimeConfig({
-    config: { subagents: subagents.value },
-    subagentId: agentType,
-    modelPattern: input.params.model ?? baseAgent?.model ?? currentModelPattern,
-  });
-  if (agent?.disabled) {
-    return Result.err(new Error(`Subagent '${agentType}' was not found`));
-  }
-  const agentDir = resolveExtensionConfigDir();
-  const modelSpec = Result.try({
-    try: () =>
-      parseModelSpec({
-        agentDir,
-        spec: input.params.model ?? agent?.model,
-        currentModel: input.currentModel,
-      }),
-    catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
-  });
-  if (Result.isError(modelSpec)) return Result.err(modelSpec.error);
-  const thinking =
-    input.params.thinking ??
-    (input.params.model || agent?.model ? modelSpec.value.thinkingLevel : input.currentThinking) ??
-    modelSpec.value.thinkingLevel;
-
-  return Result.ok({
-    agentType,
-    model: modelSpec.value.model,
-    modelKey: modelSpec.value.modelKey,
-    agentDir,
-    thinking,
-    tools: resolveTools(agent),
-    prompt: resolvePrompt({ agent, prompt: input.params.prompt }),
-  });
-}
-
 function modelKey(model: Model<Api>): string {
   return `${model.provider}/${model.id}`;
-}
-
-function resolveTools(
-  agent: ResolvedSubagentAgentRuntimeConfig | undefined,
-): readonly string[] | undefined {
-  if (!agent?.tools) return undefined;
-
-  const denied = new Set(
-    Object.entries(agent.permissions)
-      .filter((entry) => entry[1] === "deny")
-      .map((entry) => entry[0]),
-  );
-  const tools = agent.tools.filter((tool) => !denied.has(tool.trim().toLowerCase()));
-  if (tools.length === 0) return undefined;
-  return tools;
-}
-
-function resolvePrompt(input: {
-  readonly agent: ResolvedSubagentAgentRuntimeConfig | undefined;
-  readonly prompt: string;
-}): string {
-  if (!input.agent?.prompt) return input.prompt;
-  return `${input.agent.prompt}\n\nTask:\n${input.prompt}`;
 }
 
 function resolveTarget(record: ControllerRecord, target: string): string {
@@ -507,88 +406,6 @@ function resolveTarget(record: ControllerRecord, target: string): string {
 
 function resolveController(record: ControllerRecord, pipId: string): PipController | undefined {
   return record.taskControllers.get(pipId);
-}
-
-function parseModelSpec(input: {
-  readonly agentDir: string;
-  readonly spec: string | undefined;
-  readonly currentModel?: Model<Api>;
-}): {
-  readonly model: Model<Api>;
-  readonly modelKey: string;
-  readonly thinkingLevel: ThinkingLevel;
-} {
-  if (!input.spec && input.currentModel) {
-    return {
-      model: input.currentModel,
-      modelKey: modelKey(input.currentModel),
-      thinkingLevel: "medium",
-    };
-  }
-
-  const spec = input.spec ?? defaultModel;
-  const slash = spec.indexOf("/");
-  if (slash <= 0 || slash >= spec.length - 1) {
-    throw new Error(`Invalid subagent model '${spec}'. Expected '<provider>/<model>'`);
-  }
-
-  const colon = spec.lastIndexOf(":");
-  const provider = spec.slice(0, slash).trim();
-  const modelId = spec.slice(slash + 1, colon > slash ? colon : undefined).trim();
-  if (provider.length === 0 || modelId.length === 0) {
-    throw new Error(`Invalid subagent model '${spec}'. Expected '<provider>/<model>'`);
-  }
-
-  const thinkingLevel = parseThinkingLevel(colon > slash ? spec.slice(colon + 1) : "medium");
-  const registry = ModelRegistry.create(
-    AuthStorage.create(path.join(input.agentDir, "auth.json")),
-    path.join(input.agentDir, "models.json"),
-  );
-  const registeredModel = registry.find(provider, modelId);
-  if (registeredModel)
-    return { model: registeredModel, modelKey: `${provider}/${modelId}`, thinkingLevel };
-
-  const knownProvider = getProviders().find((candidate) => candidate === provider);
-  const model = knownProvider
-    ? (getModels(knownProvider).find((candidate) => candidate.id === modelId) ??
-      createExternalModel({ provider, modelId }))
-    : createExternalModel({ provider, modelId });
-  return { model, modelKey: `${provider}/${modelId}`, thinkingLevel };
-}
-
-function createExternalModel(input: {
-  readonly provider: string;
-  readonly modelId: string;
-}): Model<Api> {
-  const api: Api = input.provider;
-  return {
-    id: input.modelId,
-    name: input.modelId,
-    api,
-    provider: input.provider,
-    baseUrl: "",
-    reasoning: true,
-    input: ["text"],
-    cost: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-    },
-    contextWindow: 128000,
-    maxTokens: 8192,
-  };
-}
-
-function parseThinkingLevel(input: string): ThinkingLevel {
-  const level = input.trim().toLowerCase();
-  if (level === "off") return "off";
-  if (level === "minimal") return "minimal";
-  if (level === "low") return "low";
-  if (level === "medium") return "medium";
-  if (level === "high") return "high";
-  if (level === "xhigh") return "xhigh";
-  throw new Error(`Unknown subagent thinking level '${input}'`);
 }
 
 function statusResult(status: PipStatus): string | null {
