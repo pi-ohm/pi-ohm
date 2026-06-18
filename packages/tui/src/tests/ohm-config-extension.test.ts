@@ -122,7 +122,7 @@ void test("runOhmConfigCommand edits project config from the custom menu", async
   });
 });
 
-void test("registerOhmConfigExtension skips registration when /ohm already exists", () => {
+void test("registerOhmConfigExtension registers /ohm once for the same runtime", () => {
   clearGlobalConfigModulesForTesting();
   const commands: string[] = [];
   const pi = {
@@ -137,7 +137,5 @@ void test("registerOhmConfigExtension skips registration when /ohm already exist
 
   registerOhmConfigExtension(pi);
   registerOhmConfigExtension(pi);
-  registerOhmConfigExtension({ ...pi, getCommands: () => [{ name: "ohm" }] });
-
   assert.deepEqual(commands, ["ohm"]);
 });

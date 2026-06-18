@@ -14,7 +14,12 @@ import {
 import { renderOhmConfigPanelLines } from "./ohm-config-panel";
 
 const STATUS_KEY = "pi-ohm-config";
-const REGISTERED = new WeakSet<object>();
+const REGISTERED_KEY = Symbol.for("@pi-ohm/tui/ohm-config/registered");
+const GLOBAL_REGISTRY = globalThis as typeof globalThis & {
+  [REGISTERED_KEY]?: WeakSet<object>;
+};
+const REGISTERED = GLOBAL_REGISTRY[REGISTERED_KEY] ?? new WeakSet<object>();
+GLOBAL_REGISTRY[REGISTERED_KEY] = REGISTERED;
 
 export type OhmConfigAction = "view" | "edit-project" | "edit-global" | "reload" | "close";
 
@@ -38,7 +43,6 @@ interface OhmConfigCommandContext {
 }
 
 interface OhmConfigRegistrationApi {
-  getCommands(): readonly { readonly name: string }[];
   on: ExtensionAPI["on"];
   registerCommand: ExtensionAPI["registerCommand"];
 }
@@ -53,12 +57,6 @@ function sessionKey(ctx: {
   readonly sessionManager?: { getSessionFile(): string | undefined };
 }): string {
   return ctx.sessionManager?.getSessionFile() ?? ctx.cwd;
-}
-
-function commandAlreadyRegistered(pi: Pick<OhmConfigRegistrationApi, "getCommands">): boolean {
-  return pi
-    .getCommands()
-    .some((command) => command.name === "ohm" || command.name.startsWith("ohm:"));
 }
 
 async function readEditableConfig(file: string): Promise<string> {
@@ -263,7 +261,6 @@ export async function runOhmConfigCommand(
 
 export default function registerOhmConfigExtension(pi: OhmConfigRegistrationApi): void {
   if (REGISTERED.has(pi)) return;
-  if (commandAlreadyRegistered(pi)) return;
   REGISTERED.add(pi);
 
   const mounted = new Set<string>();
