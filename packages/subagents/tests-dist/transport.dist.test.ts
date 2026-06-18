@@ -5,6 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
+
+const UnknownRecordSchema = Type.Record(Type.String(), Type.Unknown());
 
 interface RegisteredToolDefinition {
   readonly name: string;
@@ -21,12 +25,8 @@ interface RegisteredToolDefinition {
   ) => Promise<unknown>;
 }
 
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isRegisteredToolDefinition(value: unknown): value is RegisteredToolDefinition {
-  if (!isObjectRecord(value)) return false;
+  if (!Value.Check(UnknownRecordSchema, value)) return false;
   const name = Reflect.get(value, "name");
   const execute = Reflect.get(value, "execute");
   return typeof name === "string" && typeof execute === "function";
@@ -35,7 +35,7 @@ function isRegisteredToolDefinition(value: unknown): value is RegisteredToolDefi
 function resolveRegisterSubagentTools(
   module: unknown,
 ): (pi: Pick<ExtensionAPI, "registerTool">) => unknown {
-  if (!isObjectRecord(module)) {
+  if (!Value.Check(UnknownRecordSchema, module)) {
     throw new Error("Invalid dist module export shape");
   }
 
@@ -60,7 +60,7 @@ function resolveToolDefinition(
 }
 
 function extractToolText(result: unknown): string {
-  if (!isObjectRecord(result)) {
+  if (!Value.Check(UnknownRecordSchema, result)) {
     throw new Error("Tool result is not an object");
   }
 
@@ -70,7 +70,7 @@ function extractToolText(result: unknown): string {
   }
 
   for (const part of content) {
-    if (!isObjectRecord(part)) continue;
+    if (!Value.Check(UnknownRecordSchema, part)) continue;
     if (Reflect.get(part, "type") !== "text") continue;
     const text = Reflect.get(part, "text");
     if (typeof text === "string") return text;
@@ -80,16 +80,16 @@ function extractToolText(result: unknown): string {
 }
 
 function extractToolDetails(result: unknown): Record<string, unknown> {
-  if (!isObjectRecord(result)) {
+  if (!Value.Check(UnknownRecordSchema, result)) {
     throw new Error("Tool result is not an object");
   }
 
   const details = Reflect.get(result, "details");
-  if (!isObjectRecord(details)) {
+  if (!Value.Check(UnknownRecordSchema, details)) {
     throw new Error("Tool result details block missing");
   }
 
-  return details;
+  return Value.Decode(UnknownRecordSchema, details);
 }
 
 function buildLineRange(start: number, end: number): string {

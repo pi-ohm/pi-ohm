@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
-import type { StaticDecode, TSchema } from "typebox";
+import { Type, type StaticDecode, type TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 export interface ExtensionConfigPaths {
@@ -174,7 +174,8 @@ export class ConfigRegistry {
   }
 }
 
-type JsonMap = Record<string, unknown>;
+const JsonMapSchema = Type.Record(Type.String(), Type.Unknown());
+type JsonMap = StaticDecode<typeof JsonMapSchema>;
 
 interface ReadConfigFileResult {
   readonly path: string;
@@ -182,13 +183,9 @@ interface ReadConfigFileResult {
   readonly diagnostic?: ExtensionConfigDiagnostic;
 }
 
-function isJsonMap(value: unknown): value is JsonMap {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isNodeErrorCode(value: unknown, code: string): boolean {
-  if (!isJsonMap(value)) return false;
-  return value.code === code;
+  if (!Value.Check(JsonMapSchema, value)) return false;
+  return Reflect.get(value, "code") === code;
 }
 
 function causeMessage(cause: unknown): string {
@@ -298,7 +295,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
     };
   }
 
-  if (!isJsonMap(parsed.value)) {
+  if (!Value.Check(JsonMapSchema, parsed.value)) {
     return {
       path: file,
       value: undefined,
@@ -310,7 +307,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
     };
   }
 
-  return { path: file, value: parsed.value };
+  return { path: file, value: Value.Decode(JsonMapSchema, parsed.value) };
 }
 
 function schemaErrors(schema: TSchema, value: unknown): readonly string[] {

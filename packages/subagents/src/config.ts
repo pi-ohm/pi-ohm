@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import {
   parseSubagentAgentPatch,
@@ -12,6 +13,10 @@ import {
 export const SubagentsConfigSchema = Type.Record(
   Type.String({ minLength: 1 }),
   SubagentAgentPatchSchema,
+);
+const SubagentRuntimeConfigSchema = Type.Object(
+  { agents: SubagentsConfigSchema },
+  { additionalProperties: false },
 );
 
 type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
@@ -46,10 +51,6 @@ export interface SubagentRuntimeConfig {
   agents: Record<string, SubagentAgentRuntimeConfig>;
 }
 
-interface JsonMap {
-  readonly [key: string]: unknown;
-}
-
 interface RuntimeConfigWithSubagents {
   readonly subagents?: SubagentRuntimeConfig;
 }
@@ -71,10 +72,6 @@ export const subagentsConfigModule = registerConfig({
     );
   },
 });
-
-function isJsonMap(value: unknown): value is JsonMap {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
   if (typeof value !== "number") return undefined;
@@ -100,13 +97,11 @@ function normalizeSubagentToolPermissionDecision(
 }
 
 function normalizeSubagentToolPermissionMap(
-  value: unknown,
+  value: SubagentAgentPatch["permissions"] | undefined,
   fallback: Readonly<Record<string, SubagentToolPermissionDecision>>,
 ): Readonly<Record<string, SubagentToolPermissionDecision>> {
-  if (!isJsonMap(value)) return fallback;
-
   const normalized: Record<string, SubagentToolPermissionDecision> = { ...fallback };
-  for (const [rawToolName, rawDecision] of Object.entries(value)) {
+  for (const [rawToolName, rawDecision] of Object.entries(value ?? {})) {
     const toolName = rawToolName.trim().toLowerCase();
     if (toolName.length === 0) continue;
 
@@ -135,7 +130,7 @@ export function normalizeSubagentModelOverride(value: unknown): string | undefin
 }
 
 function mergeSubagentAgentConfig(
-  patch: JsonMap,
+  patch: SubagentAgentPatch,
   fallback: SubagentAgentRuntimeConfig | undefined,
 ): SubagentAgentRuntimeConfig | undefined {
   const parsedPatch = parseSubagentAgentPatch(patch);
@@ -177,7 +172,7 @@ function mergeSubagentAgentConfig(
 }
 
 function normalizeInlineSubagentAgents(
-  value: JsonMap | undefined,
+  value: SubagentsConfigPatch | undefined,
   fallback: Record<string, SubagentAgentRuntimeConfig>,
 ): Record<string, SubagentAgentRuntimeConfig> {
   const normalized = structuredClone(fallback);
@@ -186,7 +181,6 @@ function normalizeInlineSubagentAgents(
   for (const [rawKey, rawValue] of Object.entries(value)) {
     const key = rawKey.trim().toLowerCase();
     if (key.length === 0) continue;
-    if (!isJsonMap(rawValue)) continue;
 
     const merged = mergeSubagentAgentConfig(rawValue, normalized[key]);
     if (!merged) continue;
@@ -198,11 +192,10 @@ function normalizeInlineSubagentAgents(
 
 export function mergeSubagentRuntimeConfig(input: {
   readonly current: SubagentRuntimeConfig | undefined;
-  readonly patch: unknown;
+  readonly patch: SubagentsConfigPatch | undefined;
 }): SubagentRuntimeConfig {
-  const patch = isJsonMap(input.patch) ? input.patch : undefined;
   const defaults = input.current ?? DEFAULT_SUBAGENT_RUNTIME_CONFIG;
-  const agents = normalizeInlineSubagentAgents(patch, defaults.agents);
+  const agents = normalizeInlineSubagentAgents(input.patch, defaults.agents);
 
   return {
     agents,
@@ -258,8 +251,7 @@ export function resolveSubagentAgentRuntimeConfig(input: {
 }
 
 export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntimeConfig {
-  if (!isJsonMap(value)) return false;
-  return isJsonMap(value.agents);
+  return Value.Check(SubagentRuntimeConfigSchema, value);
 }
 
 export {

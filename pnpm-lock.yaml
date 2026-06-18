@@ -287,6 +287,9 @@ importers:
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
+      typebox:
+        specifier: ^1.0.68
+        version: 1.2.8
       zod:
         specifier: 'catalog:'
         version: 4.4.3

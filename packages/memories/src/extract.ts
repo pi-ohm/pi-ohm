@@ -1,4 +1,6 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import type { Stage1Output } from "./db";
 
 interface TextBlock {
@@ -25,18 +27,25 @@ interface EntryLike {
   readonly timestamp?: unknown;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const TextBlockSchema = Type.Object(
+  { type: Type.Literal("text"), text: Type.String() },
+  { additionalProperties: true },
+);
+const ToolBlockSchema = Type.Object(
+  {
+    type: Type.Literal("toolCall"),
+    name: Type.String(),
+    arguments: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
 
 function isTextBlock(value: unknown): value is TextBlock {
-  if (!isRecord(value)) return false;
-  return value.type === "text" && typeof value.text === "string";
+  return Value.Check(TextBlockSchema, value);
 }
 
 function isToolBlock(value: unknown): value is ToolBlock {
-  if (!isRecord(value)) return false;
-  return value.type === "toolCall" && typeof value.name === "string";
+  return Value.Check(ToolBlockSchema, value);
 }
 
 function textContent(content: unknown): string {

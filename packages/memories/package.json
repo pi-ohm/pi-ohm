@@ -34,6 +34,7 @@
     "@earendil-works/pi-tui": "catalog:pi",
     "@libsql/client": "catalog:",
     "better-result": "catalog:",
+    "typebox": "^1.0.68",
     "zod": "catalog:"
   },
   "peerDependencies": {

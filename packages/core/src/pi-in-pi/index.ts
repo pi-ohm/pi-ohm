@@ -378,8 +378,6 @@ export function createPipChildSessionPath(input: {
 }
 
 export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> {
-  if (!isRecord(input)) return invalidEntry("parent entry is not an object");
-
   const kind = readStringField(input, "kind");
   const pipId = readStringField(input, "pipId");
   const ownerPackage = readStringField(input, "ownerPackage");
@@ -398,7 +396,7 @@ export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> 
   if (kind === "pip_spawned") {
     const childSessionId = readStringField(input, "childSessionId");
     const childSessionPath = readNullableStringField(input, "childSessionPath");
-    const status = parsePipStatus(Reflect.get(input, "status"));
+    const status = parsePipStatus(readField(input, "status"));
     if (!childSessionId || Result.isError(status)) {
       return invalidEntry("spawned entry is missing child session data", pipId);
     }
@@ -417,7 +415,7 @@ export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> 
   }
 
   if (kind === "pip_status_changed" || kind === "pip_closed" || kind === "pip_resumed") {
-    const status = parsePipStatus(Reflect.get(input, "status"));
+    const status = parsePipStatus(readField(input, "status"));
     if (Result.isError(status)) return invalidEntry("status entry has invalid status", pipId);
     return Result.ok({
       kind,
@@ -432,7 +430,7 @@ export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> 
 
   if (kind === "pip_error") {
     const error = readStringField(input, "error");
-    const status = parsePipStatus(Reflect.get(input, "status"));
+    const status = parsePipStatus(readField(input, "status"));
     if (!error || Result.isError(status) || status.value.state !== "errored") {
       return invalidEntry("error entry has invalid error status", pipId);
     }
@@ -452,7 +450,6 @@ export function parsePipParentEntry(input: unknown): PipResult<PipSessionEntry> 
 }
 
 export function parsePipChildEntry(input: unknown): PipResult<PipChildIdentityEntry> {
-  if (!isRecord(input)) return invalidEntry("child entry is not an object");
   const kind = readStringField(input, "kind");
   const pipId = readStringField(input, "pipId");
   const ownerPackage = readStringField(input, "ownerPackage");
@@ -471,10 +468,9 @@ export function extractPipParentEntries(
 ): PipResult<readonly PipSessionEntry[]> {
   const parsed: PipSessionEntry[] = [];
   for (const entry of entries) {
-    if (!isRecord(entry)) continue;
     if (readStringField(entry, "type") !== "custom") continue;
     if (readStringField(entry, "customType") !== ENTRY_TYPE) continue;
-    const data = parsePipParentEntry(Reflect.get(entry, "data"));
+    const data = parsePipParentEntry(readField(entry, "data"));
     if (Result.isError(data)) return Result.err(data.error);
     parsed.push(data.value);
   }
@@ -1202,7 +1198,6 @@ function parseStatus(
 }
 
 function parsePipStatus(input: unknown): PipResult<PipStatus> {
-  if (!isRecord(input)) return invalidEntry("status is not an object");
   const state = readStringField(input, "state");
   const result = readNullableStringField(input, "result");
   const error = readStringField(input, "error");
@@ -1228,13 +1223,13 @@ function invalidEntry(message: string, pipId?: string): PipResult<never> {
   );
 }
 
-function isRecord(value: unknown): value is object {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function readField(value: unknown, field: string): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  return Reflect.get(value, field);
 }
 
 function readStringField(value: unknown, field: string): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const fieldValue = Reflect.get(value, field);
+  const fieldValue = readField(value, field);
   if (typeof fieldValue !== "string") return undefined;
   const trimmed = fieldValue.trim();
   if (trimmed.length === 0) return undefined;
@@ -1242,8 +1237,7 @@ function readStringField(value: unknown, field: string): string | undefined {
 }
 
 function readNullableStringField(value: unknown, field: string): string | null {
-  if (typeof value !== "object" || value === null) return null;
-  const fieldValue = Reflect.get(value, field);
+  const fieldValue = readField(value, field);
   if (fieldValue === null || fieldValue === undefined) return null;
   if (typeof fieldValue !== "string") return null;
   const trimmed = fieldValue.trim();
@@ -1252,8 +1246,7 @@ function readNullableStringField(value: unknown, field: string): string | null {
 }
 
 function readNumberField(value: unknown, field: string): number | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const fieldValue = Reflect.get(value, field);
+  const fieldValue = readField(value, field);
   if (typeof fieldValue === "number") return fieldValue;
   if (typeof fieldValue === "bigint") return Number(fieldValue);
   return undefined;

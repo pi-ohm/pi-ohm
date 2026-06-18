@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { CODEX_STAGE_ONE_SYSTEM_PROMPT } from "./codex-prompts";
 import type { MemoryPaths } from "./paths";
 import { renderConsolidationPrompt, renderStageOneInputPrompt } from "./prompt";
@@ -21,6 +23,15 @@ export interface Stage1ModelOutput {
   readonly raw_memory: string;
 }
 
+const Stage1ModelOutputSchema = Type.Object(
+  {
+    rollout_summary: Type.String(),
+    rollout_slug: Type.Union([Type.String(), Type.Null()]),
+    raw_memory: Type.String(),
+  },
+  { additionalProperties: true },
+);
+
 function modelArgs(model: string): string[] {
   const trimmed = model.trim();
   if (trimmed.length === 0) return [];
@@ -37,17 +48,8 @@ function parseJsonObject(text: string): unknown {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isStage1ModelOutput(value: unknown): value is Stage1ModelOutput {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.rollout_summary === "string" &&
-    (typeof value.rollout_slug === "string" || value.rollout_slug === null) &&
-    typeof value.raw_memory === "string"
-  );
+  return Value.Check(Stage1ModelOutputSchema, value);
 }
 
 export async function runPiPrint(input: {

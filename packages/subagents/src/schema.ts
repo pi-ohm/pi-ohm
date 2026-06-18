@@ -3,6 +3,7 @@ import { Value } from "typebox/value";
 
 const NonEmptyStringSchema = Type.String({ minLength: 1 });
 const NonEmptyStringArraySchema = Type.Array(NonEmptyStringSchema, { minItems: 1 });
+const UnknownRecordSchema = Type.Record(Type.String(), Type.Unknown());
 
 export const SubagentToolPermissionDecisionSchema = Type.Union([
   Type.Literal("allow"),
@@ -31,10 +32,6 @@ export type SubagentToolPermissionDecisionPatch = Static<
   typeof SubagentToolPermissionDecisionSchema
 >;
 export type SubagentAgentPatch = Static<typeof SubagentAgentPatchSchema>;
-
-function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function toTrimmedString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -67,7 +64,7 @@ function toBoolean(value: unknown): boolean | undefined {
 function normalizeSubagentPermissionMapInput(
   value: unknown,
 ): Static<typeof SubagentToolPermissionMapSchema> | undefined {
-  if (!isObjectRecord(value)) return undefined;
+  if (!Value.Check(UnknownRecordSchema, value)) return undefined;
 
   const normalized: Record<string, SubagentToolPermissionDecisionPatch> = {};
   for (const [rawToolName, rawDecision] of Object.entries(value)) {
@@ -89,7 +86,7 @@ function normalizeSubagentPermissionMapInput(
 }
 
 function normalizeSubagentAgentPatchInput(input: unknown): unknown {
-  if (!isObjectRecord(input)) return input;
+  if (!Value.Check(UnknownRecordSchema, input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
   const disabled = toBoolean(Reflect.get(input, "disabled"));

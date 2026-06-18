@@ -1,6 +1,7 @@
 import path from "node:path";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
 
 export const LocalReferenceConfigSchema = Type.Object(
@@ -53,10 +54,6 @@ export type ReferencesRuntimeConfig = Readonly<Record<string, ReferenceEntryConf
 
 const DEFAULT_REFERENCES_CONFIG: ReferencesRuntimeConfig = {};
 
-interface JsonMap {
-  readonly [key: string]: unknown;
-}
-
 export const referencesConfigModule = registerConfig({
   namespace: "references",
   schema: ReferencesConfigSchema,
@@ -65,10 +62,6 @@ export const referencesConfigModule = registerConfig({
     return Result.ok(mergeReferencesConfig(base, patch));
   },
 });
-
-export function isJsonMap(value: unknown): value is JsonMap {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function trimString(value: string): string | undefined {
   const trimmed = value.trim();
@@ -132,29 +125,8 @@ export function mergeReferencesConfig(
   return entries;
 }
 
-function isLocalReferenceConfig(value: unknown): value is LocalReferenceConfig {
-  if (!isJsonMap(value)) return false;
-  if (typeof value.path !== "string") return false;
-  if (value.description !== undefined && typeof value.description !== "string") return false;
-  if (value.hidden !== undefined && typeof value.hidden !== "boolean") return false;
-  return true;
-}
-
-function isGitReferenceConfig(value: unknown): value is GitReferenceConfig {
-  if (!isJsonMap(value)) return false;
-  if (typeof value.repository !== "string") return false;
-  if (value.branch !== undefined && typeof value.branch !== "string") return false;
-  if (value.description !== undefined && typeof value.description !== "string") return false;
-  if (value.hidden !== undefined && typeof value.hidden !== "boolean") return false;
-  return true;
-}
-
 export function isReferencesRuntimeConfig(value: unknown): value is ReferencesRuntimeConfig {
-  if (!isJsonMap(value)) return false;
-  return Object.values(value).every(
-    (entry) =>
-      typeof entry === "string" || isLocalReferenceConfig(entry) || isGitReferenceConfig(entry),
-  );
+  return Value.Check(ReferencesConfigSchema, value);
 }
 
 export async function loadReferencesConfig(cwd: string) {
