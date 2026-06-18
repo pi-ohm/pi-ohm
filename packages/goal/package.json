@@ -1,0 +1,47 @@
+{
+  "name": "@pi-ohm/goal",
+  "version": "0.6.4",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/goal#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/goal"
+  },
+  "files": [
+    "dist/",
+    "drizzle/",
+    "ARCH.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./extension": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack src/index.ts src/extension.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@pi-ohm/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.79.4"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  }
+}
