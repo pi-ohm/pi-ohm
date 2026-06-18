@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { isSessionSearchConfig, sessionSearchConfigModule } from "./config";
 
 async function loadSessionSearchConfig(cwd: string) {
@@ -18,6 +19,9 @@ async function loadSessionSearchConfig(cwd: string) {
 }
 
 export default function registerSessionSearchExtension(pi: ExtensionAPI): void {
+  registerGlobalConfigModule(sessionSearchConfigModule);
+  registerOhmConfigExtension(pi);
+
   pi.on("session_start", async (_event, ctx) => {
     const config = await loadSessionSearchConfig(ctx.cwd);
     if (Result.isError(config)) return;

@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { isModesConfig, modesConfigModule, type Mode } from "./config";
 
 async function loadModesConfig(cwd: string) {
@@ -63,6 +64,9 @@ async function refreshModeStatus(ctx: ExtensionContext): Promise<void> {
 }
 
 export default function registerModesExtension(pi: ExtensionAPI): void {
+  registerGlobalConfigModule(modesConfigModule);
+  registerOhmConfigExtension(pi);
+
   pi.on("session_start", async (_event, ctx) => {
     await refreshModeStatus(ctx);
   });

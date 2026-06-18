@@ -11,10 +11,12 @@ import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   pickConfig,
+  registerGlobalConfigModule,
   watchConfig,
   type LoadedExtensionConfig,
   type WatchedConfig,
 } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { createDeferredJobs, type DeferredJobs } from "@pi-ohm/core/jobs";
 import { isReferencesRuntimeConfig, loadReferencesConfig, referencesConfigModule } from "./config";
 import {
@@ -580,6 +582,9 @@ async function ensureReferenceReady(input: {
 }
 
 export default function registerReferencesExtension(pi: ExtensionAPI): void {
+  registerGlobalConfigModule(referencesConfigModule);
+  registerOhmConfigExtension(pi);
+
   const states = new Map<string, ReferencesState>();
   const jobs = createDeferredJobs();
   const watchers = new Set<WatchedConfig>();

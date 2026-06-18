@@ -137,6 +137,8 @@ export interface PickConfigInput<Config> {
   readonly is: (value: unknown) => value is Config;
 }
 
+const GLOBAL_CONFIG_MODULES = new Map<string, RegisteredConfigModule>();
+
 export class ConfigRegistry {
   readonly cwd: string;
   readonly #modules: RegisteredConfigModule[] = [];
@@ -274,6 +276,22 @@ export function pickConfig<Config>(
 
 export function watchConfig(input: WatchConfigInput): WatchedConfig {
   return new WatchedExtensionConfig(input);
+}
+
+export function registerGlobalConfigModule(module: RegisteredConfigModule): void {
+  const namespace = module.namespace.trim();
+  if (namespace.length === 0) return;
+  GLOBAL_CONFIG_MODULES.set(namespace, module);
+}
+
+export function getGlobalConfigModules(): readonly RegisteredConfigModule[] {
+  return [...GLOBAL_CONFIG_MODULES.values()].sort((left, right) =>
+    left.namespace.localeCompare(right.namespace),
+  );
+}
+
+export function clearGlobalConfigModulesForTesting(): void {
+  GLOBAL_CONFIG_MODULES.clear();
 }
 
 class WatchedExtensionConfig implements WatchedConfig {

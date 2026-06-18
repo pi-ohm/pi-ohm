@@ -3,10 +3,12 @@ import { Result } from "better-result";
 import {
   loadConfig,
   pickConfig,
+  registerGlobalConfigModule,
   watchConfig,
   type LoadedExtensionConfig,
   type WatchedConfig,
 } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { registerAgentControllerTool } from "./agent-controller";
 import {
   isSubagentRuntimeConfig,
@@ -124,6 +126,9 @@ export default function registerSubagentsExtension(
     "appendEntry" | "getThinkingLevel" | "on" | "registerCommand" | "registerTool"
   >,
 ): void {
+  registerGlobalConfigModule(subagentsConfigModule);
+  registerOhmConfigExtension(pi);
+
   const mounted = new Set<string>();
   const watchers = new Set<WatchedConfig>();
 

@@ -18,6 +18,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./ohm-config": {
+      "types": "./dist/ohm-config-extension.d.ts",
+      "default": "./dist/ohm-config-extension.js"
     }
   },
   "publishConfig": {
@@ -25,11 +29,13 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/index.ts src/extension.ts"
+    "build": "vp pack src/index.ts src/extension.ts src/ohm-config-extension.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",
-    "@earendil-works/pi-tui": "catalog:pi"
+    "@earendil-works/pi-tui": "catalog:pi",
+    "@pi-ohm/core": "workspace:*",
+    "better-result": "catalog:"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.79.4",

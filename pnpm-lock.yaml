@@ -272,6 +272,9 @@ importers:
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
+      '@pi-ohm/tui':
+        specifier: workspace:*
+        version: link:../tui
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
@@ -308,6 +311,9 @@ importers:
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
+      '@pi-ohm/tui':
+        specifier: workspace:*
+        version: link:../tui
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
@@ -326,6 +332,9 @@ importers:
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
+      '@pi-ohm/tui':
+        specifier: workspace:*
+        version: link:../tui
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
@@ -359,6 +368,9 @@ importers:
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
+      '@pi-ohm/tui':
+        specifier: workspace:*
+        version: link:../tui
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
@@ -374,6 +386,9 @@ importers:
       '@pi-ohm/core':
         specifier: workspace:*
         version: link:../core
+      '@pi-ohm/tui':
+        specifier: workspace:*
+        version: link:../tui
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
@@ -419,6 +434,12 @@ importers:
       '@earendil-works/pi-tui':
         specifier: catalog:pi
         version: 0.79.4
+      '@pi-ohm/core':
+        specifier: workspace:*
+        version: link:../core
+      better-result:
+        specifier: 'catalog:'
+        version: 2.9.2
 
 packages:
 

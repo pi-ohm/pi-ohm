@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { handoffConfigModule, isHandoffConfig } from "./config";
 
 async function loadHandoffConfig(cwd: string) {
@@ -48,6 +49,9 @@ async function refreshStatus(ctx: ExtensionContext): Promise<void> {
 }
 
 export default function registerHandoffExtension(pi: ExtensionAPI): void {
+  registerGlobalConfigModule(handoffConfigModule);
+  registerOhmConfigExtension(pi);
+
   pi.on("session_start", async (_event, ctx) => {
     await refreshStatus(ctx);
   });

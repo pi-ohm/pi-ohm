@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
-import { loadConfig, pickConfig } from "@pi-ohm/core/config";
+import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
+import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { isPainterConfig, painterConfigModule } from "./config";
 
 async function loadPainterConfig(cwd: string) {
@@ -18,6 +19,9 @@ async function loadPainterConfig(cwd: string) {
 }
 
 export default function registerPainterExtension(pi: ExtensionAPI): void {
+  registerGlobalConfigModule(painterConfigModule);
+  registerOhmConfigExtension(pi);
+
   pi.on("session_start", async (_event, ctx) => {
     const config = await loadPainterConfig(ctx.cwd);
     if (Result.isError(config)) return;

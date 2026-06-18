@@ -7,9 +7,12 @@ import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
 import {
   ConfigRegistry,
+  clearGlobalConfigModulesForTesting,
+  getGlobalConfigModules,
   loadConfig,
   pickConfig,
   registerConfig,
+  registerGlobalConfigModule,
   resolveExtensionConfigPaths,
   watchConfig,
   type LoadedExtensionConfig,
@@ -264,6 +267,28 @@ void test("ConfigRegistry rejects duplicate module namespaces", () => {
 
   const duplicate = registry.value.register(demo);
   assert.equal(Result.isError(duplicate), true);
+});
+
+void test("global config module registry is idempotent and sorted", () => {
+  clearGlobalConfigModulesForTesting();
+  const alpha = registerConfig({
+    namespace: "alpha",
+    schema: DemoSchema,
+    defaults: { enabled: true, count: 1, label: "alpha" },
+    merge(base: DemoConfig) {
+      return Result.ok(base);
+    },
+  });
+
+  registerGlobalConfigModule(demo);
+  registerGlobalConfigModule(alpha);
+  registerGlobalConfigModule(demo);
+
+  assert.deepEqual(
+    getGlobalConfigModules().map((module) => module.namespace),
+    ["alpha", "demo"],
+  );
+  clearGlobalConfigModulesForTesting();
 });
 
 void test("loadConfig reports invalid JSON as diagnostics without crashing", async () => {

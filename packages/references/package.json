@@ -48,6 +48,7 @@
     "@earendil-works/pi-coding-agent": "catalog:pi",
     "@earendil-works/pi-tui": "catalog:pi",
     "@pi-ohm/core": "workspace:*",
+    "@pi-ohm/tui": "workspace:*",
     "better-result": "catalog:",
     "typebox": "^1.0.68"
   },
