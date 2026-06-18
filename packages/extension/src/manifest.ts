@@ -6,7 +6,6 @@ export const OHM_FEATURE_PACKAGES = [
   "@pi-ohm/session-search",
   "@pi-ohm/painter",
   "@pi-ohm/references",
-  "@pi-ohm/profiler",
 ] as const;
 
 export const OHM_RECOMMENDED_NEXT = [

@@ -245,9 +245,6 @@ importers:
       '@pi-ohm/painter':
         specifier: workspace:*
         version: link:../painter
-      '@pi-ohm/profiler':
-        specifier: workspace:*
-        version: link:../profiler
       '@pi-ohm/references':
         specifier: workspace:*
         version: link:../references

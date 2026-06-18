@@ -34,7 +34,6 @@
     "@pi-ohm/memories": "workspace:*",
     "@pi-ohm/modes": "workspace:*",
     "@pi-ohm/painter": "workspace:*",
-    "@pi-ohm/profiler": "workspace:*",
     "@pi-ohm/references": "workspace:*",
     "@pi-ohm/session-search": "workspace:*",
     "@pi-ohm/subagents": "workspace:*",
