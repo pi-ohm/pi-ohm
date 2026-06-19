@@ -2,6 +2,7 @@ import { setOhmInputStatus, type OhmInputStatusContext } from "@pi-ohm/tui";
 import type { Goal } from "./model";
 
 const GOAL_STATUS_KEY = "ohm-goal";
+const GOAL_STATUS_SEPARATOR = [{ text: { left: " ─┤ ", right: " ├" }, color: "inherit" }] as const;
 
 export function formatDuration(seconds: number): string {
   const safe = Math.max(0, Math.floor(seconds));
@@ -71,7 +72,12 @@ export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined
     const startedAtMs = Date.now();
     setOhmInputStatus(ctx, {
       key: GOAL_STATUS_KEY,
-      text: () => formatGoalStatus(activeGoalWithElapsedTime(goal, startedAtMs)),
+      text: () => {
+        const status = formatGoalStatus(activeGoalWithElapsedTime(goal, startedAtMs));
+        if (status === undefined) return undefined;
+        return [{ text: status, color: "dim" }];
+      },
+      separator: GOAL_STATUS_SEPARATOR,
       priority: 20,
       refreshMs: 1_000,
     });
@@ -90,7 +96,8 @@ export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined
 
   setOhmInputStatus(ctx, {
     key: GOAL_STATUS_KEY,
-    text,
+    text: [{ text, color: "dim" }],
+    separator: GOAL_STATUS_SEPARATOR,
     footerText: text,
     priority: 20,
   });

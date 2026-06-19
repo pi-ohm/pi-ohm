@@ -110,6 +110,33 @@ defineTest("setOhmInputStatus falls back to footer status without input support"
   assert.deepEqual(calls, [{ key: "ohm-mode", text: "mode:smart" }]);
 });
 
+defineTest("setOhmInputStatus flattens rich text for footer fallback", () => {
+  const calls: Array<{ key: string; text: string | undefined }> = [];
+
+  setOhmInputStatus(
+    {
+      hasUI: true,
+      mode: "tui",
+      ui: {
+        setStatus: (key, text) => {
+          calls.push({ key, text });
+        },
+      },
+    },
+    {
+      key: "ohm-goal",
+      text: [
+        { text: "Pursuing goal ", color: "dim" },
+        { text: "(34s)", color: "warning" },
+      ],
+      separator: [{ text: { left: " ─┤ ", right: " ├" }, color: "dim" }],
+      priority: 20,
+    },
+  );
+
+  assert.deepEqual(calls, [{ key: "ohm-goal", text: "Pursuing goal (34s)" }]);
+});
+
 defineTest("setOhmInputStatus uses footer status outside TUI mode", () => {
   const footerCalls: Array<{ key: string; text: string | undefined }> = [];
   const inputCalls: Array<{ key: string; text: string | undefined }> = [];
