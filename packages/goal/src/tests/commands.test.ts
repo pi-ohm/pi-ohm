@@ -12,7 +12,7 @@ import {
 } from "../queued-work";
 import type { GoalRuntime } from "../runtime";
 import { createGoalRuntime, type GoalRuntimeContext } from "../runtime";
-import { formatGoalStatus, renderGoalReport } from "../ui";
+import { formatGoalStatus, renderGoalReport, setGoalStatus } from "../ui";
 
 interface SentGoalMessage {
   readonly message: Parameters<ExtensionAPI["sendMessage"]>[0];
@@ -142,6 +142,27 @@ void test("formatGoalStatus renders persistent input-border text", () => {
   assert.match(renderGoalReport(activeGoal), /objective: ship goal/);
 });
 
+void test("setGoalStatus renders live time only while a model turn is running", () => {
+  const statuses: string[] = [];
+  const ctx: Parameters<typeof setGoalStatus>[0] = {
+    hasUI: true,
+    mode: "tui",
+    ui: {
+      setStatus(_key: string, text: string | undefined) {
+        if (text !== undefined) statuses.push(text);
+      },
+    },
+  };
+
+  setGoalStatus(ctx, goal({ timeUsedSeconds: 34 }), { now: () => 12_000 });
+  setGoalStatus(ctx, goal({ timeUsedSeconds: 34 }), {
+    now: () => 12_400,
+    runtimeStartedAtMs: 9_000,
+  });
+
+  assert.deepEqual(statuses, ["Pursuing goal (34s)", "Pursuing goal (37s)"]);
+});
+
 void test("runGoalCommand queues continuation after setting a goal", async () => {
   const events: string[] = [];
 
@@ -247,6 +268,7 @@ void test("createGoalRuntime suppresses continuation after abort until user inpu
   const sent: SentGoalMessage[] = [];
   const previousDbPath = process.env.EXTENSION_DB_PATH;
   process.env.EXTENSION_DB_PATH = ":memory:";
+  let currentTime = 1_000;
 
   const runtime = createGoalRuntime(
     {
@@ -254,7 +276,7 @@ void test("createGoalRuntime suppresses continuation after abort until user inpu
         sent.push({ message, options });
       },
     },
-    { createGoalId: () => "goal-abort", now: () => 1_000 },
+    { createGoalId: () => "goal-abort", now: () => currentTime },
   );
   const ctx = createRuntimeContext();
 
@@ -263,11 +285,34 @@ void test("createGoalRuntime suppresses continuation after abort until user inpu
     assert.equal(Result.isOk(created), true);
     if (Result.isError(created)) assert.fail(created.error.message);
 
-    await runtime.handleAgentEnd({ messages: [{ role: "assistant", stopReason: "aborted" }] }, ctx);
+    await runtime.recordTurnStart(
+      { type: "turn_start", turnIndex: 1, timestamp: currentTime },
+      ctx,
+    );
+    currentTime = 3_400;
+    await runtime.handleAgentEnd(
+      {
+        messages: [{ role: "assistant", stopReason: "aborted", usage: { input: 2, output: 3 } }],
+      },
+      ctx,
+    );
     assert.equal(sent.length, 0);
 
+    const afterAbort = await runtime.getGoal(ctx);
+    assert.equal(Result.isOk(afterAbort), true);
+    if (Result.isError(afterAbort)) assert.fail(afterAbort.error.message);
+    assert.equal(afterAbort.value?.status, "active");
+    assert.equal(afterAbort.value?.timeUsedSeconds, 3);
+    assert.equal(afterAbort.value?.tokensUsed, 5);
+
+    currentTime = 10_000;
     await runtime.handleAgentEnd({ messages: [] }, ctx);
     assert.equal(sent.length, 0);
+
+    const afterSuppressedEnd = await runtime.getGoal(ctx);
+    assert.equal(Result.isOk(afterSuppressedEnd), true);
+    if (Result.isError(afterSuppressedEnd)) assert.fail(afterSuppressedEnd.error.message);
+    assert.equal(afterSuppressedEnd.value?.timeUsedSeconds, 3);
 
     await runtime.handleInput({ source: "interactive", text: "continue" }, ctx);
     await runtime.handleAgentEnd({ messages: [] }, ctx);

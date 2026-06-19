@@ -62,6 +62,10 @@ interface TurnAccounting {
   readonly turnKey: string;
 }
 
+interface GoalTurnAccounting extends TurnAccounting {
+  readonly goalId: string;
+}
+
 interface GoalSessionRuntime {
   readonly db: ExtensionDb;
   readonly store: GoalStore;
@@ -197,6 +201,13 @@ export function tokenDeltaFromAssistantMessage(message: unknown): number {
   return input + output;
 }
 
+function tokenDeltaFromMessages(messages: readonly unknown[]): number {
+  return messages.reduce<number>(
+    (total, message) => total + tokenDeltaFromAssistantMessage(message),
+    0,
+  );
+}
+
 function messageWasAborted(message: unknown): boolean {
   if (!isRecord(message)) return false;
   return (
@@ -314,6 +325,19 @@ function promptForContinuation(goal: Goal, prompt: GoalContinuationPromptKind): 
   return compactContinuationPrompt(goal);
 }
 
+function runtimeStartedAtMsForStatus(
+  record: GoalSessionRuntime,
+  goal: Goal | undefined,
+): number | undefined {
+  if (goal?.status !== "active") return undefined;
+  if (record.turn?.goalId !== goal.goalId) return undefined;
+  return record.turn.startedAtMs;
+}
+
+function isGoalTurn(turn: TurnAccounting | undefined): turn is GoalTurnAccounting {
+  return typeof turn?.goalId === "string" && turn.goalId.length > 0;
+}
+
 export function createGoalRuntime(
   pi: Pick<ExtensionAPI, "sendMessage">,
   options: GoalRuntimeOptions = {},
@@ -363,7 +387,29 @@ export function createGoalRuntime(
       setGoalStatus(ctx, undefined);
       return;
     }
-    setGoalStatus(ctx, state.value.goal);
+    setGoalStatus(ctx, state.value.goal, {
+      now,
+      runtimeStartedAtMs: runtimeStartedAtMsForStatus(state.value.record, state.value.goal),
+    });
+  }
+
+  async function accountTurn(input: {
+    readonly id: string;
+    readonly record: GoalSessionRuntime;
+    readonly turn: GoalTurnAccounting;
+    readonly tokenDelta: number;
+  }): Promise<GoalResult<Goal>> {
+    const endedAtMs = now();
+    const elapsedMs = Math.max(0, endedAtMs - input.turn.startedAtMs);
+    const timeDeltaSeconds = Math.ceil(elapsedMs / 1_000);
+    return input.record.store.accountUsage({
+      sessionId: input.id,
+      goalId: input.turn.goalId,
+      tokenDelta: input.tokenDelta,
+      timeDeltaSeconds,
+      now: endedAtMs,
+      turnKey: input.turn.turnKey,
+    });
   }
 
   async function mutateAndRefresh<T>(
@@ -643,6 +689,7 @@ export function createGoalRuntime(
         startedAtMs: event.timestamp,
         turnKey: turnKey(ctx, event.turnIndex),
       };
+      await refreshStatus(ctx);
     },
 
     async recordTurnEnd(event, ctx) {
@@ -652,21 +699,16 @@ export function createGoalRuntime(
 
       const turn = state.value.record.turn;
       state.value.record.turn = undefined;
-      if (!turn?.goalId) {
+      if (!isGoalTurn(turn)) {
         await refreshStatus(ctx);
         return;
       }
 
-      const elapsedMs = Math.max(0, now() - turn.startedAtMs);
-      const timeDeltaSeconds = Math.ceil(elapsedMs / 1_000);
-      const tokenDelta = tokenDeltaFromAssistantMessage(event.message);
-      const accounted = await state.value.record.store.accountUsage({
-        sessionId: state.value.id,
-        goalId: turn.goalId,
-        tokenDelta,
-        timeDeltaSeconds,
-        now: now(),
-        turnKey: turn.turnKey,
+      const accounted = await accountTurn({
+        id: state.value.id,
+        record: state.value.record,
+        turn,
+        tokenDelta: tokenDeltaFromAssistantMessage(event.message),
       });
       if (Result.isOk(accounted) && accounted.value.status === "budget_limited" && ctx.hasUI) {
         ctx.ui.notify?.("Goal token budget reached", "warning");
@@ -678,9 +720,25 @@ export function createGoalRuntime(
       if (agentEndWasAborted(event)) {
         const state = await current(ctx);
         if (Result.isOk(state)) {
-          clearContinuationState(state.value.record);
+          const turn = state.value.record.turn;
           state.value.record.turn = undefined;
+          clearContinuationState(state.value.record);
           state.value.record.continuationSuppressedAfterAbort = true;
+          if (isGoalTurn(turn)) {
+            const accounted = await accountTurn({
+              id: state.value.id,
+              record: state.value.record,
+              turn,
+              tokenDelta: tokenDeltaFromMessages(event.messages),
+            });
+            if (
+              Result.isOk(accounted) &&
+              accounted.value.status === "budget_limited" &&
+              ctx.hasUI
+            ) {
+              ctx.ui.notify?.("Goal token budget reached", "warning");
+            }
+          }
           await refreshStatus(ctx);
         }
         return;

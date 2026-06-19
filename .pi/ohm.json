@@ -34,6 +34,12 @@
       "branch": "main",
       "description": "Codex-style goal tracking and continuation for pi.",
       "hidden": false
+    },
+    "flue": {
+      "repository": "https://github.com/withastro/flue",
+      "branch": "main",
+      "description": "The sandbox agent framework.",
+      "hidden": false
     }
   }
 }

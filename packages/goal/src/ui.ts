@@ -26,8 +26,8 @@ export function formatGoalStatus(goal: Goal | undefined): string | undefined {
   return `Goal achieved (${duration})`;
 }
 
-function activeGoalWithElapsedTime(goal: Goal, startedAtMs: number): Goal {
-  const elapsedSeconds = Math.floor(Math.max(0, Date.now() - startedAtMs) / 1_000);
+function activeGoalWithRuntime(goal: Goal, startedAtMs: number, now: () => number): Goal {
+  const elapsedSeconds = Math.floor(Math.max(0, now() - startedAtMs) / 1_000);
   if (elapsedSeconds === 0) return goal;
   return {
     ...goal,
@@ -67,17 +67,23 @@ export function renderGoalReport(goal: Goal | undefined): string {
   ].join("\n");
 }
 
-export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined): void {
-  if (goal?.status === "active") {
-    const startedAtMs = Date.now();
+export function setGoalStatus(
+  ctx: OhmInputStatusContext,
+  goal: Goal | undefined,
+  options: { readonly runtimeStartedAtMs?: number; readonly now?: () => number } = {},
+): void {
+  if (goal?.status === "active" && options.runtimeStartedAtMs !== undefined) {
+    const now = options.now ?? Date.now;
+    const runtimeStartedAtMs = options.runtimeStartedAtMs;
     setOhmInputStatus(ctx, {
       key: GOAL_STATUS_KEY,
       text: () => {
-        const status = formatGoalStatus(activeGoalWithElapsedTime(goal, startedAtMs));
+        const status = formatGoalStatus(activeGoalWithRuntime(goal, runtimeStartedAtMs, now));
         if (status === undefined) return undefined;
         return [{ text: status, color: "dim" }];
       },
       separator: GOAL_STATUS_SEPARATOR,
+      placement: "right",
       priority: 20,
       refreshMs: 1_000,
     });
@@ -98,6 +104,7 @@ export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined
     key: GOAL_STATUS_KEY,
     text: [{ text, color: "dim" }],
     separator: GOAL_STATUS_SEPARATOR,
+    placement: "right",
     footerText: text,
     priority: 20,
   });

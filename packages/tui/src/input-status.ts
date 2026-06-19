@@ -50,6 +50,8 @@ export type OhmInputStatusText =
 
 export type OhmInputStatusSeparator = OhmInputStatusSegmentText | readonly OhmInputStatusSegment[];
 
+export type OhmInputStatusPlacement = "left" | "right";
+
 export type OhmInputStatusEditorFactory = (
   tui: TUI,
   theme: EditorTheme,
@@ -74,6 +76,7 @@ export interface OhmInputStatusInput {
   readonly key: string;
   readonly text: OhmInputStatusText;
   readonly footerText?: string;
+  readonly placement?: OhmInputStatusPlacement;
   readonly priority?: number;
   readonly refreshMs?: number;
   readonly color?: OhmInputStatusColor;
@@ -85,6 +88,7 @@ export interface OhmInputStatusInput {
 interface InputStatusEntry {
   readonly key: string;
   readonly text: OhmInputStatusText;
+  readonly placement: OhmInputStatusPlacement;
   readonly priority: number;
   readonly refreshMs?: number;
   readonly color?: OhmInputStatusColor;
@@ -106,11 +110,17 @@ interface SeparatorParts {
 
 interface ResolvedEntry {
   readonly key: string;
+  readonly placement: OhmInputStatusPlacement;
   readonly priority: number;
   readonly content: readonly StatusPart[];
   readonly separator?: OhmInputStatusSeparator;
   readonly borderColor?: OhmInputStatusColor;
   readonly borderPriority: number;
+}
+
+interface StatusRowParts {
+  readonly left: readonly StatusPart[];
+  readonly right: readonly StatusPart[];
 }
 
 const DEFAULT_PRIORITY = 100;
@@ -226,6 +236,7 @@ function resolvedEntries(): readonly ResolvedEntry[] {
       return [
         {
           key: entry.key,
+          placement: entry.placement,
           priority: entry.priority,
           content: parts,
           separator: entry.separator,
@@ -243,6 +254,28 @@ function inputStatusParts(entriesToRender: readonly ResolvedEntry[]): readonly S
     const right = separator.paired ? separator.right : [];
     return [...left, ...entry.content, ...right];
   });
+}
+
+function trimLeadingPadding(parts: readonly StatusPart[]): readonly StatusPart[] {
+  const first = parts[0];
+  if (first === undefined) return parts;
+
+  const text = first.text.trimStart();
+  if (text === first.text) return parts;
+
+  const rest = parts.slice(1);
+  if (text.length === 0) return rest;
+
+  return [{ ...first, text }, ...rest];
+}
+
+function inputStatusRowParts(entriesToRender: readonly ResolvedEntry[]): StatusRowParts {
+  return {
+    left: inputStatusParts(entriesToRender.filter((entry) => entry.placement === "left")),
+    right: trimLeadingPadding(
+      inputStatusParts(entriesToRender.filter((entry) => entry.placement === "right")),
+    ),
+  };
 }
 
 function selectedBorderColor(
@@ -305,6 +338,7 @@ function updateInputStatus(input: OhmInputStatusInput): void {
   entries.set(input.key, {
     key: input.key,
     text: input.text,
+    placement: input.placement ?? "left",
     priority,
     refreshMs: input.refreshMs ?? (typeof input.text === "function" ? 1_000 : undefined),
     color: input.color,
@@ -379,10 +413,16 @@ function renderParts(input: {
     .join("");
 }
 
+function padAfter(text: string): string {
+  if (text.length === 0) return "";
+  if (text.endsWith(" ") || text.endsWith("─") || text.endsWith("├")) return "";
+  return " ";
+}
+
 function headerLine(input: {
   readonly width: number;
   readonly prefix: string;
-  readonly parts: readonly StatusPart[];
+  readonly row: StatusRowParts;
   readonly borderColor: OhmInputStatusColor | undefined;
   readonly theme: Theme | undefined;
   readonly editorTheme: EditorTheme;
@@ -392,13 +432,6 @@ function headerLine(input: {
 
   const left = input.prefix.endsWith(" ") ? input.prefix : `${input.prefix} `;
   const leftWidth = visibleWidth(left);
-  const maxLabelWidth = Math.max(1, input.width - leftWidth - 1);
-  const label = truncateParts(input.parts, maxLabelWidth);
-  const labelText = partsText(label);
-  const rightPad =
-    labelText.endsWith(" ") || labelText.endsWith("─") || labelText.endsWith("├") ? "" : " ";
-  const remaining = input.width - leftWidth - partsWidth(label) - visibleWidth(rightPad);
-  if (remaining < 1) return undefined;
 
   const border = (text: string) =>
     colorText({
@@ -409,15 +442,70 @@ function headerLine(input: {
       fallback: input.defaultBorderColor,
     });
 
+  if (input.row.right.length === 0) {
+    const maxLabelWidth = Math.max(1, input.width - leftWidth - 1);
+    const label = truncateParts(input.row.left, maxLabelWidth);
+    const rightPad = padAfter(partsText(label));
+    const remaining = input.width - leftWidth - partsWidth(label) - visibleWidth(rightPad);
+    if (remaining < 1) return undefined;
+
+    return [
+      border(left),
+      renderParts({
+        parts: label,
+        theme: input.theme,
+        editorTheme: input.editorTheme,
+        inheritedColor: border,
+      }),
+      border(`${rightPad}${"─".repeat(remaining)}`),
+    ].join("");
+  }
+
+  const leftNaturalWidth = partsWidth(input.row.left);
+  const rightNaturalWidth = partsWidth(input.row.right);
+  const leftPadReserve = input.row.left.length > 0 ? 1 : 0;
+  const rightPadReserve = input.row.right.length > 0 ? 1 : 0;
+  const contentBudget = input.width - leftWidth - 2 - leftPadReserve - rightPadReserve;
+  if (contentBudget < 1) return undefined;
+
+  const rightWidth = Math.min(rightNaturalWidth, Math.max(1, Math.floor(contentBudget / 2)));
+  const leftWidthBudget = Math.min(leftNaturalWidth, Math.max(0, contentBudget - rightWidth));
+  const rightWidthBudget = Math.min(
+    rightNaturalWidth,
+    Math.max(1, contentBudget - leftWidthBudget),
+  );
+  const leftLabel = truncateParts(input.row.left, leftWidthBudget);
+  const rightLabel = truncateParts(input.row.right, rightWidthBudget);
+  const leftPad = padAfter(partsText(leftLabel));
+  const rightPad = padAfter(partsText(rightLabel));
+  const fillWidth =
+    input.width -
+    leftWidth -
+    partsWidth(leftLabel) -
+    visibleWidth(leftPad) -
+    partsWidth(rightLabel) -
+    visibleWidth(rightPad);
+  if (fillWidth < 2) return undefined;
+
+  const middleWidth = Math.max(1, fillWidth - 1);
+  const tailWidth = fillWidth - middleWidth;
+
   return [
     border(left),
     renderParts({
-      parts: label,
+      parts: leftLabel,
       theme: input.theme,
       editorTheme: input.editorTheme,
       inheritedColor: border,
     }),
-    border(`${rightPad}${"─".repeat(remaining)}`),
+    border(`${leftPad}${"─".repeat(middleWidth)}`),
+    renderParts({
+      parts: rightLabel,
+      theme: input.theme,
+      editorTheme: input.editorTheme,
+      inheritedColor: border,
+    }),
+    border(`${rightPad}${"─".repeat(tailWidth)}`),
   ].join("");
 }
 
@@ -447,7 +535,7 @@ class OhmInputStatusEditor extends CustomEditor {
     const line = headerLine({
       width,
       prefix: headerPrefix(first),
-      parts: inputStatusParts(entriesToRender),
+      row: inputStatusRowParts(entriesToRender),
       borderColor: selectedBorderColor(entriesToRender),
       theme: this.ohmTheme,
       editorTheme: this.ohmEditorTheme,

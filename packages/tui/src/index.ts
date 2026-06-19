@@ -9,6 +9,7 @@ export {
   type OhmInputStatusMode,
   type OhmInputStatusOptions,
   type OhmInputStatusPair,
+  type OhmInputStatusPlacement,
   type OhmInputStatusSegment,
   type OhmInputStatusSegmentText,
   type OhmInputStatusSeparator,
