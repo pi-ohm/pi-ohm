@@ -10,16 +10,16 @@ import {
   type ResolvedSubagentAgentRuntimeConfig,
 } from "./config";
 
+export const DEFAULT_AGENT_TYPE = "default";
+
 export interface SpawnConfigParams {
   readonly task_name: string;
-  readonly prompt: string;
-  readonly summary?: string;
+  readonly message: string;
   readonly agent_type?: string;
   readonly model?: string;
-  readonly thinking?: ThinkingLevel;
-  readonly max_turns?: number;
-  readonly run_in_background?: boolean;
-  readonly fork_context?: boolean;
+  readonly reasoning_effort?: ThinkingLevel;
+  readonly service_tier?: string;
+  readonly fork_turns?: string;
 }
 
 export interface ResolvedSpawnConfig extends ResolvedPipAgentConfig {
@@ -43,7 +43,7 @@ export async function resolveSpawnConfig(input: {
   });
   if (Result.isError(subagents)) return Result.err(subagents.error);
 
-  const agentType = input.params.agent_type?.trim() || input.params.task_name.trim();
+  const agentType = input.params.agent_type?.trim() || DEFAULT_AGENT_TYPE;
   const currentModelPattern = input.currentModel
     ? `${input.currentModel.provider}/${input.currentModel.id}`
     : undefined;
@@ -64,9 +64,9 @@ export async function resolveSpawnConfig(input: {
   const config = resolvePipAgentConfig({
     config: {
       model: input.params.model ?? agent?.model,
-      thinking: input.params.thinking,
+      thinking: input.params.reasoning_effort,
       tools: resolveTools(agent),
-      prompt: resolvePrompt({ agent, prompt: input.params.prompt }),
+      prompt: resolvePrompt({ agent, message: input.params.message }),
     },
     currentModel: input.currentModel,
     currentThinking: input.currentThinking,
@@ -76,7 +76,7 @@ export async function resolveSpawnConfig(input: {
   return Result.ok({
     ...config.value,
     agentType,
-    prompt: config.value.prompt ?? input.params.prompt,
+    prompt: config.value.prompt ?? input.params.message,
   });
 }
 
@@ -97,8 +97,8 @@ function resolveTools(
 
 function resolvePrompt(input: {
   readonly agent: ResolvedSubagentAgentRuntimeConfig | undefined;
-  readonly prompt: string;
+  readonly message: string;
 }): string {
-  if (!input.agent?.prompt) return input.prompt;
-  return `${input.agent.prompt}\n\nTask:\n${input.prompt}`;
+  if (!input.agent?.prompt) return input.message;
+  return `${input.agent.prompt}\n\nTask:\n${input.message}`;
 }

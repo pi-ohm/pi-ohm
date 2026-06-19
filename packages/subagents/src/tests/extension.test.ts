@@ -18,6 +18,7 @@ void test("registerSubagentsExtension registers subagents command", () => {
       commands.push(name);
     },
     registerTool() {},
+    sendMessage() {},
   });
 
   assert.equal(commands.includes("subagents"), true);

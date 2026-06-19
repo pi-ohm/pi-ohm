@@ -19,7 +19,7 @@ test("renders input status through a real TUI text snapshot", async () => {
   await mkdir(dir, { recursive: true });
   await writeFile(
     harness,
-    `import { ProcessTerminal, truncateToWidth, TUI, visibleWidth } from "@earendil-works/pi-tui";\nimport { setOhmInputStatus } from ${JSON.stringify(source)};\n\nfunction border(width, text) {\n  const left = "── ";\n  const right = " ";\n  const chrome = visibleWidth(left) + visibleWidth(right) + 1;\n  const label = truncateToWidth(text, Math.max(1, width - chrome), "…");\n  const remaining = Math.max(1, width - visibleWidth(left) - visibleWidth(right) - visibleWidth(label));\n  return left + label + right + "─".repeat(remaining);\n}\n\nclass StatusHost {\n  constructor() {\n    this.statuses = new Map();\n  }\n\n  attach(tui) {\n    this.tui = tui;\n  }\n\n  setInputStatus(key, text, options) {\n    if (text === undefined || text.length === 0) {\n      this.statuses.delete(key);\n    } else {\n      this.statuses.set(key, { text, priority: options?.priority ?? 100 });\n    }\n    this.tui?.requestRender();\n  }\n\n  setStatus() {}\n\n  invalidate() {}\n\n  render(width) {\n    const text = Array.from(this.statuses.entries())\n      .sort(([leftKey, left], [rightKey, right]) => left.priority === right.priority ? leftKey.localeCompare(rightKey) : left.priority - right.priority)\n      .map(([, entry]) => entry.text)\n      .join(" | ");\n    return [border(width, text)];\n  }\n}\n\nconst tui = new TUI(new ProcessTerminal());\nconst host = new StatusHost();\nhost.attach(tui);\ntui.addChild(host);\ntui.start();\nsetOhmInputStatus({ hasUI: true, mode: "tui", ui: host }, { key: "ohm-mode", text: "smart", priority: 10 });\nsetOhmInputStatus({ hasUI: true, mode: "tui", ui: host }, { key: "ohm-goal", text: "Pursuing goal (34s)", priority: 20 });\nconst shutdown = () => {\n  tui.stop();\n  process.exit(0);\n};\nprocess.once("SIGINT", shutdown);\nprocess.once("SIGTERM", shutdown);\nsetInterval(() => {}, 1000);\n`,
+    `import { ProcessTerminal, TUI } from "@earendil-works/pi-tui";\nimport { setOhmInputStatus } from ${JSON.stringify(source)};\n\nconst tui = new TUI(new ProcessTerminal());\nconst theme = { borderColor: (text) => text, selectList: {} };\nconst keybindings = { matches: () => false };\nlet factory;\nlet editor;\nlet seconds = 34;\nconst ui = {\n  setStatus() {},\n  setEditorComponent(next) {\n    factory = next;\n    if (!next) return;\n    editor = next(tui, theme, keybindings);\n    tui.addChild(editor);\n  },\n  getEditorComponent() {\n    return factory;\n  },\n};\n\ntui.start();\nsetOhmInputStatus({ hasUI: true, mode: "tui", ui }, { key: "ohm-mode", text: "smart", priority: 10 });\nsetOhmInputStatus({ hasUI: true, mode: "tui", ui }, { key: "ohm-goal", text: () => "Pursuing goal (" + seconds + "s)", priority: 20, refreshMs: 50 });\nsetTimeout(() => {\n  seconds = 35;\n}, 250);\nconst shutdown = () => {\n  tui.stop();\n  process.exit(0);\n};\nprocess.once("SIGINT", shutdown);\nprocess.once("SIGTERM", shutdown);\nsetInterval(() => {}, 1000);\n`,
   );
 
   const session = await launchTerminal({
@@ -35,7 +35,7 @@ test("renders input status through a real TUI text snapshot", async () => {
   });
 
   try {
-    await session.waitForText("smart | Pursuing goal (34s)", { timeout: 10_000 });
+    await session.waitForText("smart | Pursuing goal (35s)", { timeout: 10_000 });
     const text = await session.text({ trimEnd: true });
     const line = text.split("\n").find((value) => value.includes("Pursuing goal"));
 
@@ -44,7 +44,7 @@ test("renders input status through a real TUI text snapshot", async () => {
     }
 
     expect(line).toMatchInlineSnapshot(
-      `"── smart | Pursuing goal (34s) ─────────────────────────────────────────"`,
+      `"── smart | Pursuing goal (35s) ─────────────────────────────────────────"`,
     );
   } finally {
     session.close();

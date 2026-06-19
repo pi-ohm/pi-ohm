@@ -52,6 +52,10 @@ export interface GoalMessageStartEvent<TMessage extends GoalContextMessage = Goa
   readonly message: TMessage;
 }
 
+export interface GoalAgentEndEvent {
+  readonly messages: readonly unknown[];
+}
+
 interface TurnAccounting {
   readonly goalId?: string;
   readonly startedAtMs: number;
@@ -62,6 +66,7 @@ interface GoalSessionRuntime {
   readonly db: ExtensionDb;
   readonly store: GoalStore;
   readonly config: GoalConfig;
+  continuationSuppressedAfterAbort?: boolean;
   turn?: TurnAccounting;
   continuationQueuedForGoalId?: string;
   continuationScheduledDelayMs?: number;
@@ -71,6 +76,7 @@ interface GoalSessionRuntime {
 
 export type GoalContinuationSkipReason =
   | "already_pending"
+  | "aborted"
   | "auto_continue_disabled"
   | "disabled"
   | "no_goal"
@@ -143,7 +149,7 @@ export interface GoalRuntime {
     ctx: GoalRuntimeContext,
     input?: GoalContinueInput,
   ): Promise<GoalResult<GoalContinuationResult>>;
-  handleAgentEnd(ctx: GoalRuntimeContext): Promise<void>;
+  handleAgentEnd(event: GoalAgentEndEvent, ctx: GoalRuntimeContext): Promise<void>;
   handleBeforeAgentStart(event: GoalBeforeAgentStartEvent, ctx: GoalRuntimeContext): Promise<void>;
   handleContext<TMessage extends GoalContextMessage>(
     event: GoalContextEvent<TMessage>,
@@ -189,6 +195,17 @@ export function tokenDeltaFromAssistantMessage(message: unknown): number {
   const input = nonNegativeInteger(Reflect.get(usage, "input"));
   const output = nonNegativeInteger(Reflect.get(usage, "output"));
   return input + output;
+}
+
+function messageWasAborted(message: unknown): boolean {
+  if (!isRecord(message)) return false;
+  return (
+    Reflect.get(message, "role") === "assistant" && Reflect.get(message, "stopReason") === "aborted"
+  );
+}
+
+function agentEndWasAborted(event: GoalAgentEndEvent): boolean {
+  return event.messages.some(messageWasAborted);
 }
 
 function sessionId(ctx: GoalRuntimeContext): GoalResult<string> {
@@ -277,6 +294,10 @@ function clearContinuationTimer(record: GoalSessionRuntime): void {
 function clearContinuationState(record: GoalSessionRuntime): void {
   clearContinuationTimer(record);
   record.continuationQueuedForGoalId = undefined;
+}
+
+function clearAbortSuppression(record: GoalSessionRuntime): void {
+  record.continuationSuppressedAfterAbort = undefined;
 }
 
 function clearContinuationStateFor(record: GoalSessionRuntime, goalId: string): void {
@@ -408,6 +429,9 @@ export function createGoalRuntime(
     if (!state.value.record.config.enabled) {
       return Result.ok({ state: "skipped", reason: "disabled", goal });
     }
+    if (state.value.record.continuationSuppressedAfterAbort) {
+      return Result.ok({ state: "skipped", reason: "aborted", goal });
+    }
     if (!state.value.record.config.autoContinue) {
       return Result.ok({ state: "skipped", reason: "auto_continue_disabled", goal });
     }
@@ -484,6 +508,7 @@ export function createGoalRuntime(
       return mutateAndRefresh(ctx, (id, record) =>
         Result.gen(async function* () {
           clearContinuationState(record);
+          clearAbortSuppression(record);
           const created = yield* Result.await(
             record.store.create({
               sessionId: id,
@@ -504,6 +529,7 @@ export function createGoalRuntime(
       return mutateAndRefresh(ctx, (id, record) =>
         Result.gen(async function* () {
           clearContinuationState(record);
+          clearAbortSuppression(record);
           const created = yield* Result.await(
             record.store.create({
               sessionId: id,
@@ -523,6 +549,7 @@ export function createGoalRuntime(
     async editGoal(ctx, input) {
       return mutateAndRefresh(ctx, async (id, record) => {
         clearContinuationState(record);
+        clearAbortSuppression(record);
         const goal = await record.store.get(id);
         if (Result.isError(goal)) return Result.err(goal.error);
         if (!goal.value) {
@@ -556,6 +583,7 @@ export function createGoalRuntime(
             }),
           );
         }
+        clearAbortSuppression(record);
         if (status !== "active") clearContinuationState(record);
         return record.store.setStatus({
           sessionId: id,
@@ -595,6 +623,7 @@ export function createGoalRuntime(
       return mutateAndRefresh(ctx, (id, record) =>
         Result.gen(async function* () {
           clearContinuationState(record);
+          clearAbortSuppression(record);
           const cleared = yield* Result.await(record.store.clear({ sessionId: id, now: now() }));
           return Result.ok(cleared);
         }),
@@ -645,7 +674,18 @@ export function createGoalRuntime(
       await refreshStatus(ctx);
     },
 
-    async handleAgentEnd(ctx) {
+    async handleAgentEnd(event, ctx) {
+      if (agentEndWasAborted(event)) {
+        const state = await current(ctx);
+        if (Result.isOk(state)) {
+          clearContinuationState(state.value.record);
+          state.value.record.turn = undefined;
+          state.value.record.continuationSuppressedAfterAbort = true;
+          await refreshStatus(ctx);
+        }
+        return;
+      }
+
       const continued = await continueIfIdle(ctx, {
         delayMs: 0,
         kind: "continuation",
@@ -688,6 +728,7 @@ export function createGoalRuntime(
       const goalId = continuationGoalIdFromPrompt(event.text);
       if (event.source !== "extension") {
         clearContinuationState(state.value.record);
+        clearAbortSuppression(state.value.record);
         return undefined;
       }
       if (!goalId) return undefined;

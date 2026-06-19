@@ -53,6 +53,9 @@ const ALLOWED_SCOPES = new Set([
   "ci",
   "references",
   "ref",
+  "goal",
+  "perf",
+  "profiler",
 ]);
 
 const HEADER_PATTERN =

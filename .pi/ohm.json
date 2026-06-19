@@ -28,6 +28,12 @@
       "branch": "main",
       "description": "Lightweight coding agent that runs in your terminal.",
       "hidden": false
+    },
+    "pi-codex-goal": {
+      "repository": "https://github.com/fitchmultz/pi-codex-goal",
+      "branch": "main",
+      "description": "Codex-style goal tracking and continuation for pi.",
+      "hidden": false
     }
   }
 }

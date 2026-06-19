@@ -123,7 +123,7 @@ export async function runSubagentsCommand(
 export default function registerSubagentsExtension(
   pi: Pick<
     ExtensionAPI,
-    "appendEntry" | "getThinkingLevel" | "on" | "registerCommand" | "registerTool"
+    "appendEntry" | "getThinkingLevel" | "on" | "registerCommand" | "registerTool" | "sendMessage"
   >,
 ): void {
   registerGlobalConfigModule(subagentsConfigModule);

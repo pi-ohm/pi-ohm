@@ -1,9 +1,11 @@
 export {
   setOhmInputStatus,
   type OhmInputStatusContext,
+  type OhmInputStatusEditorFactory,
   type OhmInputStatusInput,
   type OhmInputStatusMode,
   type OhmInputStatusOptions,
+  type OhmInputStatusText,
   type OhmInputStatusUI,
 } from "./input-status";
 

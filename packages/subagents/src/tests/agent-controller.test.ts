@@ -4,15 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
+import { Value } from "typebox/value";
 import {
   createSubagentToolRuntime,
   createSubagentTools,
   resolveAvailableAgents,
+  resolveForkMode,
   resolveSpawnConfig,
+  sliceForkEntries,
 } from "../agent-controller";
 
-void test("createSubagentTools registers individual lifecycle tools", () => {
+void test("createSubagentTools registers the Codex v2 tool surface", () => {
   const pi = {
     appendEntry(customType: string, data?: unknown) {
       assert.equal(customType.length > 0, true);
@@ -20,6 +24,9 @@ void test("createSubagentTools registers individual lifecycle tools", () => {
     },
     getThinkingLevel(): "medium" {
       return "medium";
+    },
+    sendMessage() {
+      return undefined;
     },
   };
 
@@ -29,15 +36,146 @@ void test("createSubagentTools registers individual lifecycle tools", () => {
     tools.map((tool) => tool.name),
     [
       "spawn_agent",
-      "send_agent_input",
+      "send_message",
+      "followup_task",
       "wait_agent",
-      "close_agent",
-      "resume_agent",
-      "get_agent_result",
+      "interrupt_agent",
       "list_agents",
     ],
   );
 });
+
+void test("createSubagentTools uses v2-only argument schemas", () => {
+  const pi = {
+    appendEntry(customType: string, data?: unknown) {
+      assert.equal(customType.length > 0, true);
+      assert.equal(data !== undefined, true);
+    },
+    getThinkingLevel(): "medium" {
+      return "medium";
+    },
+    sendMessage() {
+      return undefined;
+    },
+  };
+  const tools = createSubagentTools(createSubagentToolRuntime(pi));
+  const spawn = tools.find((tool) => tool.name === "spawn_agent");
+  const send = tools.find((tool) => tool.name === "send_message");
+  const followup = tools.find((tool) => tool.name === "followup_task");
+  const wait = tools.find((tool) => tool.name === "wait_agent");
+
+  assert.ok(spawn);
+  assert.ok(send);
+  assert.ok(followup);
+  assert.ok(wait);
+  assert.equal(
+    Value.Check(spawn.parameters, {
+      task_name: "inspect_task",
+      message: "inspect this diff",
+      fork_turns: "none",
+      reasoning_effort: "high",
+    }),
+    true,
+  );
+  assert.equal(
+    Value.Check(spawn.parameters, {
+      task_name: "inspect_task",
+      prompt: "legacy prompt",
+      summary: "legacy summary",
+      fork_context: true,
+    }),
+    false,
+  );
+  assert.equal(Value.Check(send.parameters, { target: "/root/a", message: "note" }), true);
+  assert.equal(
+    Value.Check(send.parameters, { target: "/root/a", message: "note", interrupt: true }),
+    false,
+  );
+  assert.equal(
+    Value.Check(followup.parameters, { target: "/root/a", message: "task", items: [] }),
+    false,
+  );
+  assert.equal(Value.Check(wait.parameters, { timeout_ms: 1 }), true);
+  assert.equal(Value.Check(wait.parameters, { targets: ["/root/a"], timeout_ms: 1 }), false);
+});
+
+void test("resolveForkMode accepts last-N fork_turns", () => {
+  const fork = resolveForkMode("2");
+
+  assert.equal(Result.isOk(fork), true);
+  if (Result.isError(fork)) assert.fail(fork.error.message);
+  assert.deepEqual(fork.value, { kind: "last", turns: 2 });
+
+  const zero = resolveForkMode("0");
+  assert.equal(Result.isError(zero), true);
+  const invalid = resolveForkMode("banana");
+  assert.equal(Result.isError(invalid), true);
+});
+
+void test("sliceForkEntries keeps the last N user turns and rechains the suffix", () => {
+  const entries = [
+    customEntry("startup", null),
+    userEntry("u1", "startup", "one"),
+    customEntry("tool1", "u1"),
+    userEntry("u2", "tool1", "two"),
+    customEntry("tool2", "u2"),
+    userEntry("u3", "tool2", "three"),
+  ];
+
+  const sliced = sliceForkEntries(entries, 2);
+
+  assert.deepEqual(
+    sliced.map((entry) => entry.id),
+    ["u2", "tool2", "u3"],
+  );
+  assert.deepEqual(
+    sliced.map((entry) => entry.parentId),
+    [null, "u2", "tool2"],
+  );
+});
+
+void test("sliceForkEntries drops startup prefix when requested turns exceed history", () => {
+  const entries = [customEntry("startup", null), userEntry("u1", "startup", "one")];
+
+  const sliced = sliceForkEntries(entries, 10);
+
+  assert.deepEqual(
+    sliced.map((entry) => entry.id),
+    ["u1"],
+  );
+  assert.deepEqual(
+    sliced.map((entry) => entry.parentId),
+    [null],
+  );
+});
+
+void test("sliceForkEntries returns no context when there are no user turns", () => {
+  assert.deepEqual(sliceForkEntries([customEntry("startup", null)], 1), []);
+});
+
+function userEntry(id: string, parentId: string | null, content: string): SessionEntry {
+  return {
+    type: "message",
+    id,
+    parentId,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    message: {
+      role: "user",
+      content,
+      timestamp: 1,
+    },
+  };
+}
+
+function customEntry(id: string, parentId: string | null): SessionEntry {
+  return {
+    type: "custom",
+    id,
+    parentId,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    customType: "test",
+  };
+}
 
 async function withConfig<T>(
   run: (input: { readonly cwd: string; readonly agent: string }) => Promise<T>,
@@ -91,8 +229,7 @@ void test("resolveSpawnConfig applies agent prompt, model thinking, tools, and t
       params: {
         task_name: "reviewer",
         agent_type: "reviewer",
-        prompt: "inspect this diff",
-        summary: "review summary",
+        message: "inspect this diff",
       },
     });
 
@@ -150,8 +287,7 @@ void test("resolveSpawnConfig uses Pi model registry custom providers before ext
       params: {
         task_name: "researcher",
         agent_type: "researcher",
-        prompt: "find facts",
-        summary: "research summary",
+        message: "find facts",
       },
     });
 
@@ -162,6 +298,37 @@ void test("resolveSpawnConfig uses Pi model registry custom providers before ext
     assert.equal(config.value.model.api, "openai-completions");
     assert.equal(config.value.model.baseUrl, "https://registry-provider.example/v1");
     assert.equal(config.value.model.contextWindow, 32000);
+  });
+});
+
+void test("resolveSpawnConfig uses the default agent config when agent_type is omitted", async () => {
+  await withConfig(async ({ cwd }) => {
+    await fs.writeFile(
+      path.join(cwd, ".pi", "ohm.json"),
+      JSON.stringify({
+        subagents: {
+          default: {
+            tools: ["read"],
+            prompt: "default agent prompt",
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const config = await resolveSpawnConfig({
+      cwd,
+      params: {
+        task_name: "inspect_task",
+        message: "inspect this diff",
+      },
+    });
+
+    assert.equal(Result.isOk(config), true);
+    if (Result.isError(config)) assert.fail(config.error.message);
+    assert.equal(config.value.agentType, "default");
+    assert.deepEqual(config.value.tools, ["read"]);
+    assert.equal(config.value.prompt, "default agent prompt\n\nTask:\ninspect this diff");
   });
 });
 
@@ -205,8 +372,7 @@ void test("resolveSpawnConfig defaults to current session model when no model is
       params: {
         task_name: "reviewer",
         agent_type: "reviewer",
-        prompt: "inspect this diff",
-        summary: "review summary",
+        message: "inspect this diff",
       },
     });
 
@@ -220,7 +386,7 @@ void test("resolveSpawnConfig defaults to current session model when no model is
   });
 });
 
-void test("resolveSpawnConfig lets spawn args override configured model and thinking", async () => {
+void test("resolveSpawnConfig lets spawn args override configured model and reasoning effort", async () => {
   await withConfig(async ({ cwd }) => {
     await fs.writeFile(
       path.join(cwd, ".pi", "ohm.json"),
@@ -240,10 +406,9 @@ void test("resolveSpawnConfig lets spawn args override configured model and thin
       params: {
         task_name: "researcher",
         agent_type: "researcher",
-        prompt: "find facts",
-        summary: "research summary",
+        message: "find facts",
         model: "external-provider/runtime-model:minimal",
-        thinking: "off",
+        reasoning_effort: "off",
       },
     });
 
@@ -275,8 +440,7 @@ void test("resolveSpawnConfig hides disabled subagents from model-facing tools",
       params: {
         task_name: "reviewer",
         agent_type: "reviewer",
-        prompt: "inspect this diff",
-        summary: "review summary",
+        message: "inspect this diff",
       },
     });
 

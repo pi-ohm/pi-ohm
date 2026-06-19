@@ -242,3 +242,41 @@ void test("createGoalRuntime queues marked followUp continuation messages", asyn
     if (previousDbPath !== undefined) process.env.EXTENSION_DB_PATH = previousDbPath;
   }
 });
+
+void test("createGoalRuntime suppresses continuation after abort until user input", async () => {
+  const sent: SentGoalMessage[] = [];
+  const previousDbPath = process.env.EXTENSION_DB_PATH;
+  process.env.EXTENSION_DB_PATH = ":memory:";
+
+  const runtime = createGoalRuntime(
+    {
+      sendMessage(message, options) {
+        sent.push({ message, options });
+      },
+    },
+    { createGoalId: () => "goal-abort", now: () => 1_000 },
+  );
+  const ctx = createRuntimeContext();
+
+  try {
+    const created = await runtime.createUserGoal(ctx, { objective: "ship abort handling" });
+    assert.equal(Result.isOk(created), true);
+    if (Result.isError(created)) assert.fail(created.error.message);
+
+    await runtime.handleAgentEnd({ messages: [{ role: "assistant", stopReason: "aborted" }] }, ctx);
+    assert.equal(sent.length, 0);
+
+    await runtime.handleAgentEnd({ messages: [] }, ctx);
+    assert.equal(sent.length, 0);
+
+    await runtime.handleInput({ source: "interactive", text: "continue" }, ctx);
+    await runtime.handleAgentEnd({ messages: [] }, ctx);
+
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0]?.options?.deliverAs, "followUp");
+  } finally {
+    runtime.shutdown(ctx);
+    if (previousDbPath === undefined) delete process.env.EXTENSION_DB_PATH;
+    if (previousDbPath !== undefined) process.env.EXTENSION_DB_PATH = previousDbPath;
+  }
+});

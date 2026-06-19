@@ -41,8 +41,8 @@ export default function registerGoalExtension(pi: ExtensionAPI): void {
     await runtime.handleToolExecutionEnd(ctx);
   });
 
-  pi.on("agent_end", async (_event, ctx) => {
-    await runtime.handleAgentEnd(ctx);
+  pi.on("agent_end", async (event, ctx) => {
+    await runtime.handleAgentEnd(event, ctx);
   });
 
   pi.on("session_tree", async (_event, ctx) => {

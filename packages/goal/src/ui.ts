@@ -25,6 +25,15 @@ export function formatGoalStatus(goal: Goal | undefined): string | undefined {
   return `Goal achieved (${duration})`;
 }
 
+function activeGoalWithElapsedTime(goal: Goal, startedAtMs: number): Goal {
+  const elapsedSeconds = Math.floor(Math.max(0, Date.now() - startedAtMs) / 1_000);
+  if (elapsedSeconds === 0) return goal;
+  return {
+    ...goal,
+    timeUsedSeconds: goal.timeUsedSeconds + elapsedSeconds,
+  };
+}
+
 function tokenBudgetText(goal: Goal): string {
   if (goal.tokenBudget === undefined) return `${goal.tokensUsed} / unlimited`;
   return `${goal.tokensUsed} / ${goal.tokenBudget}`;
@@ -58,7 +67,27 @@ export function renderGoalReport(goal: Goal | undefined): string {
 }
 
 export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined): void {
+  if (goal?.status === "active") {
+    const startedAtMs = Date.now();
+    setOhmInputStatus(ctx, {
+      key: GOAL_STATUS_KEY,
+      text: () => formatGoalStatus(activeGoalWithElapsedTime(goal, startedAtMs)),
+      priority: 20,
+      refreshMs: 1_000,
+    });
+    return;
+  }
+
   const text = formatGoalStatus(goal);
+  if (text === undefined) {
+    setOhmInputStatus(ctx, {
+      key: GOAL_STATUS_KEY,
+      text,
+      priority: 20,
+    });
+    return;
+  }
+
   setOhmInputStatus(ctx, {
     key: GOAL_STATUS_KEY,
     text,
