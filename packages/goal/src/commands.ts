@@ -1,7 +1,6 @@
 import { Result } from "better-result";
-import type { ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadGoalConfig } from "./config";
-import type { GoalRuntime } from "./runtime";
+import type { GoalContinuationResult, GoalRuntime, GoalRuntimeContext } from "./runtime";
 import { renderGoalReport } from "./ui";
 
 export type GoalCommand =
@@ -11,6 +10,16 @@ export type GoalCommand =
   | { readonly kind: "pause" }
   | { readonly kind: "resume" }
   | { readonly kind: "clear" };
+
+export type GoalCommandUi = GoalRuntimeContext["ui"] & {
+  confirm(title: string, message: string): Promise<boolean>;
+  editor(title: string, prefill?: string): Promise<string | undefined>;
+  notify(message: string, type?: "info" | "warning" | "error"): void;
+};
+
+export type GoalCommandContext = Omit<GoalRuntimeContext, "ui"> & {
+  readonly ui: GoalCommandUi;
+};
 
 export function parseGoalCommand(args: string): GoalCommand {
   const trimmed = args.trim();
@@ -31,7 +40,7 @@ export function parseGoalCommand(args: string): GoalCommand {
   return { kind: "set", objective: trimmed };
 }
 
-async function showText(ctx: ExtensionCommandContext, title: string, text: string): Promise<void> {
+async function showText(ctx: GoalCommandContext, title: string, text: string): Promise<void> {
   if (!ctx.hasUI) {
     console.log(text);
     return;
@@ -40,7 +49,7 @@ async function showText(ctx: ExtensionCommandContext, title: string, text: strin
   await ctx.ui.editor(title, text);
 }
 
-function reportError(ctx: ExtensionContext, message: string): void {
+function reportError(ctx: GoalCommandContext, message: string): void {
   if (!ctx.hasUI) {
     console.log(message);
     return;
@@ -50,7 +59,7 @@ function reportError(ctx: ExtensionContext, message: string): void {
 }
 
 async function confirmGoalReplacement(
-  ctx: ExtensionCommandContext,
+  ctx: GoalCommandContext,
   runtime: GoalRuntime,
 ): Promise<boolean> {
   const current = await runtime.getGoal(ctx);
@@ -66,7 +75,7 @@ async function confirmGoalReplacement(
 }
 
 async function resolveEditedObjective(
-  ctx: ExtensionCommandContext,
+  ctx: GoalCommandContext,
   runtime: GoalRuntime,
   objective: string | undefined,
 ): Promise<string | undefined> {
@@ -86,7 +95,7 @@ async function resolveEditedObjective(
 
 export async function runGoalCommand(
   args: string,
-  ctx: ExtensionCommandContext,
+  ctx: GoalCommandContext,
   runtime: GoalRuntime,
 ): Promise<void> {
   const command = parseGoalCommand(args);
@@ -110,6 +119,7 @@ export async function runGoalCommand(
       return;
     }
     if (ctx.hasUI) ctx.ui.notify("Goal set", "info");
+    await continueGoal(ctx, runtime, { kind: "command_start", prompt: "full" });
     return;
   }
 
@@ -122,6 +132,9 @@ export async function runGoalCommand(
       return;
     }
     if (ctx.hasUI) ctx.ui.notify("Goal updated", "info");
+    if (edited.value.status === "active") {
+      await continueGoal(ctx, runtime, { kind: "command_edit", prompt: "full" });
+    }
     return;
   }
 
@@ -134,6 +147,9 @@ export async function runGoalCommand(
   if (command.kind === "resume") {
     const resumed = await runtime.setUserStatus(ctx, "active");
     if (Result.isError(resumed)) reportError(ctx, resumed.error.message);
+    if (Result.isOk(resumed)) {
+      await continueGoal(ctx, runtime, { kind: "command_resume", prompt: "compact" });
+    }
     return;
   }
 
@@ -147,7 +163,7 @@ export async function runGoalCommand(
 
 export async function runOhmGoalCommand(
   _args: string,
-  ctx: ExtensionCommandContext,
+  ctx: GoalCommandContext,
   runtime: GoalRuntime,
 ): Promise<void> {
   const goal = await runtime.getGoal(ctx);
@@ -173,4 +189,31 @@ export async function runOhmGoalCommand(
   ].join("\n");
 
   await showText(ctx, "pi-ohm goal", text);
+}
+
+function reportContinuationSkip(ctx: GoalCommandContext, result: GoalContinuationResult): void {
+  if (result.state !== "skipped") return;
+  if (result.reason !== "unpersisted_session") return;
+
+  const message = "Goal set, but auto-continuation requires a persisted session";
+  if (!ctx.hasUI) {
+    console.log(message);
+    return;
+  }
+
+  ctx.ui.notify(message, "warning");
+}
+
+async function continueGoal(
+  ctx: GoalCommandContext,
+  runtime: GoalRuntime,
+  input: Parameters<GoalRuntime["continueIfIdle"]>[1],
+): Promise<void> {
+  const continued = await runtime.continueIfIdle(ctx, input);
+  if (Result.isError(continued)) {
+    reportError(ctx, continued.error.message);
+    return;
+  }
+
+  reportContinuationSkip(ctx, continued.value);
 }

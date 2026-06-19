@@ -18,7 +18,7 @@ const CreateGoalArgsSchema = Type.Object(
 );
 const UpdateGoalArgsSchema = Type.Object(
   {
-    status: Type.Union([Type.Literal("complete"), Type.Literal("blocked")]),
+    status: Type.Literal("complete"),
     note: Type.Optional(Type.String({ minLength: 1 })),
   },
   { additionalProperties: false },
@@ -109,11 +109,12 @@ export function createGoalTools(runtime: GoalRuntime): readonly ToolDefinition[]
       name: "update_goal",
       label: "Update Goal",
       description:
-        "Mark the current goal complete or blocked. The model cannot pause, resume, clear, or budget-limit goals.",
-      promptSnippet: "Use update_goal to mark the tracked goal complete or blocked.",
+        "Mark the current goal complete only after the objective is actually achieved and no required work remains.",
+      promptSnippet:
+        "Use update_goal to mark the tracked goal complete after an evidence-backed completion audit.",
       promptGuidelines: [
-        "Only mark a goal complete when the objective is fully satisfied.",
-        "Only mark a goal blocked when progress requires user input or an unavailable external dependency.",
+        "Only mark a goal complete when the objective is fully satisfied and verified.",
+        "Do not call update_goal just because work is stopping, budget is low, or partial progress looks sufficient.",
       ],
       parameters: UpdateGoalArgsSchema,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

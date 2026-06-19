@@ -17,8 +17,16 @@ export default function registerGoalExtension(pi: ExtensionAPI): void {
     await runtime.refreshStatus(ctx);
   });
 
-  pi.on("before_agent_start", async (_event, ctx) => {
-    await runtime.markContinuationStarted(ctx);
+  pi.on("input", async (event, ctx) => runtime.handleInput(event, ctx));
+
+  pi.on("context", async (event, ctx) => runtime.handleContext(event, ctx));
+
+  pi.on("before_agent_start", async (event, ctx) => {
+    await runtime.handleBeforeAgentStart(event, ctx);
+  });
+
+  pi.on("message_start", async (event, ctx) => {
+    await runtime.handleMessageStart(event, ctx);
   });
 
   pi.on("turn_start", async (event, ctx) => {
@@ -30,11 +38,15 @@ export default function registerGoalExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("tool_execution_end", async (_event, ctx) => {
-    await runtime.refreshStatus(ctx);
+    await runtime.handleToolExecutionEnd(ctx);
   });
 
   pi.on("agent_end", async (_event, ctx) => {
     await runtime.handleAgentEnd(ctx);
+  });
+
+  pi.on("session_tree", async (_event, ctx) => {
+    await runtime.handleSessionTree(ctx);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {

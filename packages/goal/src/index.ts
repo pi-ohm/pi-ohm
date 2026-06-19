@@ -1,5 +1,12 @@
 export { default } from "./extension";
-export { parseGoalCommand, runGoalCommand, runOhmGoalCommand, type GoalCommand } from "./commands";
+export {
+  parseGoalCommand,
+  runGoalCommand,
+  runOhmGoalCommand,
+  type GoalCommand,
+  type GoalCommandContext,
+  type GoalCommandUi,
+} from "./commands";
 export {
   DEFAULT_GOAL_CONFIG,
   GoalConfigSchema,
@@ -29,7 +36,35 @@ export {
   type GoalResult,
   type GoalStatus,
 } from "./model";
-export { createGoalRuntime, tokenDeltaFromAssistantMessage, type GoalRuntime } from "./runtime";
+export {
+  budgetLimitPrompt,
+  compactContinuationPrompt,
+  continuationGoalIdFromPrompt,
+  continuationPrompt,
+  objectiveUpdatedPrompt,
+  staleContinuationMessage,
+  supersededContinuationMessage,
+  type GoalContinuationPromptKind,
+} from "./prompts";
+export {
+  applyGoalContextRewrites,
+  GOAL_CONTINUATION_CUSTOM_TYPE,
+  isGoalQueuedWorkDetails,
+  queuedGoalWorkMessageId,
+  type GoalContextRewriteResult,
+  type GoalQueuedWorkDetails,
+  type GoalQueuedWorkKind,
+} from "./queued-work";
+export {
+  createGoalRuntime,
+  tokenDeltaFromAssistantMessage,
+  type GoalContinueInput,
+  type GoalContinuationResult,
+  type GoalContinuationSkipReason,
+  type GoalRuntime,
+  type GoalRuntimeContext,
+  type GoalRuntimeSessionManager,
+} from "./runtime";
 export {
   createGoalStore,
   type AccountGoalUsageInput,

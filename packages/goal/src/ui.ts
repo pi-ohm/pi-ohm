@@ -1,5 +1,4 @@
-import { setOhmInputStatus } from "@pi-ohm/tui";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { setOhmInputStatus, type OhmInputStatusContext } from "@pi-ohm/tui";
 import type { Goal } from "./model";
 
 const GOAL_STATUS_KEY = "ohm-goal";
@@ -58,7 +57,7 @@ export function renderGoalReport(goal: Goal | undefined): string {
   ].join("\n");
 }
 
-export function setGoalStatus(ctx: ExtensionContext, goal: Goal | undefined): void {
+export function setGoalStatus(ctx: OhmInputStatusContext, goal: Goal | undefined): void {
   const text = formatGoalStatus(goal);
   setOhmInputStatus(ctx, {
     key: GOAL_STATUS_KEY,
