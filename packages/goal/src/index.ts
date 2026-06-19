@@ -1,8 +1,43 @@
-import type { ExtensionDbModule } from "@pi-ohm/core/db";
-
 export { default } from "./extension";
-
-export const goalDbModule = {
-  id: "goal",
-  migrationsFolder: new URL("../drizzle/goal", import.meta.url).pathname,
-} satisfies ExtensionDbModule;
+export { parseGoalCommand, runGoalCommand, runOhmGoalCommand, type GoalCommand } from "./commands";
+export {
+  DEFAULT_GOAL_CONFIG,
+  GoalConfigSchema,
+  goalConfigModule,
+  isGoalConfig,
+  loadGoalConfig,
+  type GoalConfig,
+} from "./config";
+export { goalDbModule } from "./db";
+export {
+  GOAL_EVENT_KINDS,
+  GOAL_STATUSES,
+  GoalError,
+  createGoalError,
+  isGoalEventKind,
+  isGoalStatus,
+  isTerminalGoalStatus,
+  isUnfinishedGoal,
+  normalizeObjective,
+  normalizeSessionId,
+  normalizeTokenBudget,
+  type Goal,
+  type GoalCreateSource,
+  type GoalErrorCode,
+  type GoalEvent,
+  type GoalEventKind,
+  type GoalResult,
+  type GoalStatus,
+} from "./model";
+export { createGoalRuntime, tokenDeltaFromAssistantMessage, type GoalRuntime } from "./runtime";
+export {
+  createGoalStore,
+  type AccountGoalUsageInput,
+  type ClearGoalInput,
+  type CreateGoalInput,
+  type GoalStore,
+  type SetGoalStatusInput,
+  type UpdateGoalObjectiveInput,
+} from "./store";
+export { createGoalTools } from "./tools";
+export { formatDuration, formatGoalStatus, renderGoalReport, setGoalStatus } from "./ui";
