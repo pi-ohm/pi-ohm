@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
+import { setOhmInputStatus } from "@pi-ohm/tui";
 import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
 import { isModesConfig, modesConfigModule, type Mode } from "./config";
 
@@ -60,7 +61,12 @@ async function refreshModeStatus(ctx: ExtensionContext): Promise<void> {
   if (Result.isError(config)) return;
   if (!ctx.hasUI) return;
 
-  ctx.ui.setStatus("ohm-mode", `mode:${config.value.config.defaultMode}`);
+  setOhmInputStatus(ctx, {
+    key: "ohm-mode",
+    text: config.value.config.defaultMode,
+    footerText: `mode:${config.value.config.defaultMode}`,
+    priority: 10,
+  });
 }
 
 export default function registerModesExtension(pi: ExtensionAPI): void {

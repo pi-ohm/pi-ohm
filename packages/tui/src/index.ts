@@ -1,4 +1,13 @@
 export {
+  setOhmInputStatus,
+  type OhmInputStatusContext,
+  type OhmInputStatusInput,
+  type OhmInputStatusMode,
+  type OhmInputStatusOptions,
+  type OhmInputStatusUI,
+} from "./input-status";
+
+export {
   createOhmConfigPanelComponent,
   renderOhmConfigPanelLines,
   type OhmConfigPanelInput,

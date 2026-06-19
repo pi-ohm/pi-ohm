@@ -154,11 +154,11 @@ Important invariants:
 
 Footer/status examples:
 
-- `Pursuing goal (40K / 50K)`
+- `Pursuing goal (34s)`
 - `Goal paused (/goal resume)`
 - `Goal blocked (/goal resume)`
 - `Goal hit usage limits (/goal resume)`
-- `Goal unmet (50K / 50K)`
+- `Goal unmet (6h 30m)`
 - `Goal achieved (2h 14m)`
 
 Command/editor UI should show:

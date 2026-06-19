@@ -58,8 +58,10 @@
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
     "tsx": "^4.20.0",
+    "tuistory": "^0.10.0",
     "typescript": "^5.9.3",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "packageManager": "pnpm@10.25.0",
   "pnpm": {
