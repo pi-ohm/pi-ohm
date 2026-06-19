@@ -369,6 +369,15 @@ importers:
         specifier: ^1.0.68
         version: 1.2.8
 
+  packages/pip-flue:
+    dependencies:
+      '@flue/sdk':
+        specifier: ^1.0.0-beta.1
+        version: 1.0.0-beta.1
+      '@pi-ohm/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/profiler:
     dependencies:
       '@earendil-works/pi-coding-agent':
@@ -807,6 +816,11 @@ packages:
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
 
+  '@durable-streams/client@0.2.6':
+    resolution: {integrity: sha512-uHKKbWpsKLhFMeGjG0PgM6LXE3oEIi7FHKlJZkmYGxcqd4Yjjd/QEvnQnDzteRP4Av1uJVM8qjTL7kfKsgeS/w==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
   '@earendil-works/pi-agent-core@0.79.4':
     resolution: {integrity: sha512-xkaZ3yK2XbP9HYdHrrdj/6HqZPM0o/mwbjMSU4RTJyR3HjDG0ZrPz76Hg6s0W+G4u6PpJr1mGx/srCG+3eQA8A==}
     engines: {node: '>=22.19.0'}
@@ -1007,6 +1021,9 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@flue/sdk@1.0.0-beta.1':
+    resolution: {integrity: sha512-61VS3lcPey8ZHLGC6lk94yzuNxSHqaROqmgrswnoH2E/1ILR+ZYoLmKYTbQuOi0lulBl/ykh1WlvTQztFg2/nA==}
 
   '@fontsource/iosevka-curly@5.2.5':
     resolution: {integrity: sha512-IwcvgwOpytFc59R3eeQrCGi4jYZrm07KvDM9DX2lvoSTr0rbw5hMvZf/y0PkPE6tmAG4ZEX1cPJ5sHXYizBufw==}
@@ -1351,6 +1368,9 @@ packages:
 
   '@mdx-js/mdx@3.1.1':
     resolution: {integrity: sha512-f6ZO2ifpwAQIpzGWaBQT2TXxPv6z3RBzQKpVftEWN78Vl/YweF1uwussDx8ECAXVtr3Rs89fKyG9YlzUs9DyGQ==}
+
+  '@microsoft/fetch-event-source@2.0.1':
+    resolution: {integrity: sha512-W6CLUJ2eBMw3Rec70qrsEW0jOm/3twwJv21mrmj2yORiaVmVYGS4sSS5yUwvQc1ZlDLYGPnClVWmUUMagKNsfA==}
 
   '@mistralai/mistralai@2.2.1':
     resolution: {integrity: sha512-uKU8CZmL2RzYKmplsU01hii4p3pe4HqJefpWNRWXm1Tcm0Sm4xXfwSLIy4k7ZCPlbETCGcp69E7hZs+WOJ5itQ==}
@@ -3430,6 +3450,9 @@ packages:
     resolution: {integrity: sha512-6bIM7fsJxeo3uXv7OncQYsBAMPJ7V16Slahl/6M98C/i2q+vB1+4a0MtrvYwDFEUrwDSbAmeLDRXsOBwrL7yAg==}
     hasBin: true
 
+  fastq@1.20.1:
+    resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
+
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
@@ -4645,6 +4668,10 @@ packages:
     resolution: {integrity: sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg==}
     engines: {node: '>= 4'}
 
+  reusify@1.1.0:
+    resolution: {integrity: sha512-g6QUff04oZpHs0eG5p83rFLhHeV00ug/Yf9nZM6fLeUrPguBTkTQOdpAWWspMh55TZfVQDPaN3NQJfbVRAxdIw==}
+    engines: {iojs: '>=1.0.0', node: '>=0.10.0'}
+
   rolldown@1.0.3:
     resolution: {integrity: sha512-i00lAJ2ks1BYr7rjNjKC7BcqAS7nVfiT3QX1SI5aY+AFHblCmaUf9OE9dbdzDvW6dJxbi2ZCZiy9v3CcwOiX3g==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -5721,6 +5748,11 @@ snapshots:
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
 
+  '@durable-streams/client@0.2.6':
+    dependencies:
+      '@microsoft/fetch-event-source': 2.0.1
+      fastq: 1.20.1
+
   '@earendil-works/pi-agent-core@0.79.4(ws@8.21.0)(zod@4.4.3)':
     dependencies:
       '@earendil-works/pi-ai': 0.79.4(ws@8.21.0)(zod@4.4.3)
@@ -5905,6 +5937,10 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
 
   '@floating-ui/utils@0.2.11': {}
+
+  '@flue/sdk@1.0.0-beta.1':
+    dependencies:
+      '@durable-streams/client': 0.2.6
 
   '@fontsource/iosevka-curly@5.2.5': {}
 
@@ -6221,6 +6257,8 @@ snapshots:
       vfile: 6.0.3
     transitivePeerDependencies:
       - supports-color
+
+  '@microsoft/fetch-event-source@2.0.1': {}
 
   '@mistralai/mistralai@2.2.1':
     dependencies:
@@ -8016,6 +8054,10 @@ snapshots:
       strnum: 2.4.0
       xml-naming: 0.1.0
 
+  fastq@1.20.1:
+    dependencies:
+      reusify: 1.1.0
+
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
       picomatch: 4.0.4
@@ -9599,6 +9641,8 @@ snapshots:
   retry@0.12.0: {}
 
   retry@0.13.1: {}
+
+  reusify@1.1.0: {}
 
   rolldown@1.0.3:
     dependencies:

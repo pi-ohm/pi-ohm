@@ -1,0 +1,34 @@
+{
+  "name": "@pi-ohm/pip-flue",
+  "version": "0.6.4",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/pip-flue#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/pip-flue"
+  },
+  "files": [
+    "dist/",
+    "ARCH.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack src/index.ts"
+  },
+  "dependencies": {
+    "@flue/sdk": "^1.0.0-beta.1",
+    "@pi-ohm/core": "workspace:*"
+  }
+}
