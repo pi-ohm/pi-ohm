@@ -24,8 +24,8 @@ you should uphold these standards whenever you write code in this repo:
 ## Rules
 
 1. New work goes in `packages/*` (feature package per capability).
-2. Keep command namespace under `ohm-*`.
-3. Register settings via `@juanibiapina/pi-extension-settings`.
+2. Keep debug command namespace under `/ohm-*` but use `/<extension or domain>` for user commands, omitting the `ohm-`.
+3. Register settings via `@pi-ohm/core/config`, see ./packages/core/src/config/index.ts.
 4. Support config in:
    - `.pi/ohm.json`
    - `${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/ohm.json`
@@ -39,7 +39,7 @@ you should uphold these standards whenever you write code in this repo:
 
 ## Packaging goal
 
-Each feature package should be installable by itself through npm, which is the Pi's means of distribution:
+Each feature package should be installable by itself through npm, which is Pi's means of distribution:
 
 amp features:
 
@@ -52,6 +52,13 @@ amp features:
 helpers:
 
 - `@pi-ohm/core`: includes logging, config, event bus, and db abstractions.
+- `@pi-ohm/tui`: tui specific things
+
+other packages, "extras":
+
+- `@pi-ohm/goal` - @openai/codex style looping over a single prompt, invoked by /goal.
+- `@pi-ohm/references` - allow use to invoked "@" references (local docs, git repos, npm/jsr, crates) in the editor/input defined in the config. @anomalyco/opencode introduced this and we copied it.
+- `@pi-ohm/profiler` - extension startup profiler
 
 Full bundle package:
 
@@ -62,6 +69,7 @@ Full bundle package:
 1. **You should write failing tests before implementing features.**
 2. If you encounter a bug, you should write a test for that bug to hash out why it's failing, and then fix the bug.
 3. Tests should live in test folders alongside the files that you're testing (e.g., `packages/tui/src/extension.ts` has tests in `packages/tui/src/tests/extension.test.ts`).
+4. Use tui snapshots for testing tui-related things.
 
 ## TODO.md & ARCH.md
 
@@ -77,7 +85,7 @@ You want to break tasks in TODO.md down into verifiable, demoable "sprints". Som
 
 ## Error Handling
 
-- All errors should be handled via `better-result` package: https://github.com/dmmulroy/better-result. You should use the better-result skill for more information.
+- All **errors** should be handled via `better-result` package: https://github.com/dmmulroy/better-result. You should use the better-result skill for more information. Avoid nested try/catch at all costs.
 
 ## Style Guide
 
