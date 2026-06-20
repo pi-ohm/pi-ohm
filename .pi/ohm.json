@@ -1,4 +1,5 @@
 {
+  "$schema": "../.schema/schema.json",
   "subagents": {
     "librarian": {
       "model": "openai-codex/gpt-5.5:medium"
@@ -8,6 +9,13 @@
     },
     "finder": {
       "model": "openai-codex/gpt-5.5:low"
+    },
+    "experimental": {
+      "summarize_history": {
+        "enabled": true,
+        "type": "compact",
+        "model": "openai-codex/gpt-5.5:medium"
+      }
     }
   },
   "references": {
@@ -47,5 +55,9 @@
       "description": "Monorepo of pi extensions and skills. Most important one is ./packages/pi-codex-conversion.",
       "hidden": false
     }
+  },
+  "goal": {
+    "enabled": true,
+    "autoContinue": true
   }
 }
