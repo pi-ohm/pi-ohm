@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { launchTerminal } from "tuistory";
 
@@ -8,7 +9,11 @@ const require = createRequire(import.meta.url);
 const source = new URL("../input-status.ts", import.meta.url).href;
 
 function workspaceTempDir(): string {
-  return join(process.cwd(), ".tmp", `pi-ohm-input-status-${process.pid}-${Date.now()}`);
+  return join(
+    fileURLToPath(new URL("../../", import.meta.url)),
+    ".tmp",
+    `pi-ohm-input-status-${process.pid}-${Date.now()}`,
+  );
 }
 
 test("renders input status through a real TUI text snapshot", async () => {
