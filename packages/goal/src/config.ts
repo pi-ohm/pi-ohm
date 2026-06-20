@@ -1,6 +1,9 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
+import { GoalConfigSchema } from "./schema";
+
+export { GoalConfigSchema } from "./schema";
 
 export interface GoalConfig {
   readonly enabled: boolean;
@@ -12,15 +15,6 @@ export const DEFAULT_GOAL_CONFIG: GoalConfig = {
   enabled: true,
   autoContinue: true,
 };
-
-export const GoalConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-    autoContinue: Type.Optional(Type.Boolean()),
-    defaultTokenBudget: Type.Optional(Type.Integer({ minimum: 1 })),
-  },
-  { additionalProperties: false },
-);
 
 type GoalConfigPatch = StaticDecode<typeof GoalConfigSchema>;
 

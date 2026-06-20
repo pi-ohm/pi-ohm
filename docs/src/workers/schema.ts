@@ -1,12 +1,12 @@
 import type { TSchema } from "typebox";
-import { GoalConfigSchema } from "../../../packages/goal/src/config";
-import { HandoffConfigSchema } from "../../../packages/handoff/src/config";
-import { ModesConfigSchema } from "../../../packages/modes/src/config";
-import { PainterConfigSchema } from "../../../packages/painter/src/config";
-import { ProfilerConfigSchema } from "../../../packages/profiler/src/config";
-import { ReferencesConfigSchema } from "../../../packages/references/src/config";
-import { SessionSearchConfigSchema } from "../../../packages/session-search/src/config";
-import { SubagentsConfigSchema } from "../../../packages/subagents/src/config";
+import { GoalConfigSchema } from "../../../packages/goal/src/schema";
+import { HandoffConfigSchema } from "../../../packages/handoff/src/schema";
+import { ModesConfigSchema } from "../../../packages/modes/src/schema";
+import { PainterConfigSchema } from "../../../packages/painter/src/schema";
+import { ProfilerConfigSchema } from "../../../packages/profiler/src/schema";
+import { ReferencesConfigSchema } from "../../../packages/references/src/schema";
+import { SessionSearchConfigSchema } from "../../../packages/session-search/src/schema";
+import { SubagentsConfigSchema } from "../../../packages/subagents/src/schema";
 
 interface SchemaSource {
   readonly key: string;

@@ -1,38 +1,16 @@
 import path from "node:path";
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { Value } from "typebox/value";
 import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
+import { ReferencesConfigSchema } from "./schema";
 
-export const LocalReferenceConfigSchema = Type.Object(
-  {
-    path: Type.String({ minLength: 1 }),
-    description: Type.Optional(Type.String()),
-    hidden: Type.Optional(Type.Boolean()),
-  },
-  { additionalProperties: false },
-);
-
-export const GitReferenceConfigSchema = Type.Object(
-  {
-    repository: Type.String({ minLength: 1 }),
-    branch: Type.Optional(Type.String()),
-    description: Type.Optional(Type.String()),
-    hidden: Type.Optional(Type.Boolean()),
-  },
-  { additionalProperties: false },
-);
-
-export const ReferenceEntryConfigSchema = Type.Union([
-  Type.String({ minLength: 1 }),
-  LocalReferenceConfigSchema,
+export {
   GitReferenceConfigSchema,
-]);
-
-export const ReferencesConfigSchema = Type.Record(
-  Type.String({ minLength: 1 }),
+  LocalReferenceConfigSchema,
   ReferenceEntryConfigSchema,
-);
+  ReferencesConfigSchema,
+} from "./schema";
 
 type ReferencesConfigPatch = StaticDecode<typeof ReferencesConfigSchema>;
 

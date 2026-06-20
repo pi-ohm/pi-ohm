@@ -1,8 +1,10 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { registerConfig } from "@pi-ohm/core/config";
+import { ModesConfigSchema, type Mode } from "./schema";
 
-export type Mode = "rush" | "smart" | "deep";
+export { ModesConfigSchema } from "./schema";
+export type { Mode } from "./schema";
 
 export interface ModesConfig {
   defaultMode: Mode;
@@ -11,15 +13,6 @@ export interface ModesConfig {
 export const DEFAULT_MODES_CONFIG: ModesConfig = {
   defaultMode: "smart",
 };
-
-export const ModesConfigSchema = Type.Object(
-  {
-    defaultMode: Type.Optional(
-      Type.Union([Type.Literal("rush"), Type.Literal("smart"), Type.Literal("deep")]),
-    ),
-  },
-  { additionalProperties: false },
-);
 
 type ModesConfigPatch = StaticDecode<typeof ModesConfigSchema>;
 

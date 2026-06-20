@@ -1,6 +1,9 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
+import { ProfilerConfigSchema } from "./schema";
+
+export { ProfilerConfigSchema } from "./schema";
 
 export interface ProfilerConfig {
   enabled: boolean;
@@ -21,19 +24,6 @@ export const DEFAULT_PROFILER_CONFIG: ProfilerConfig = {
   maxRows: 5,
   timeoutMs: 30_000,
 };
-
-export const ProfilerConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-    autoProfile: Type.Optional(Type.Boolean()),
-    includeLifecycle: Type.Optional(Type.Boolean()),
-    staleAfterMs: Type.Optional(Type.Number({ minimum: 0 })),
-    slowThresholdMs: Type.Optional(Type.Number({ minimum: 0 })),
-    maxRows: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
-    timeoutMs: Type.Optional(Type.Number({ minimum: 1_000 })),
-  },
-  { additionalProperties: false },
-);
 
 type ProfilerConfigPatch = StaticDecode<typeof ProfilerConfigSchema>;
 

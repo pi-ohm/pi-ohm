@@ -1,6 +1,9 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { registerConfig } from "@pi-ohm/core/config";
+import { PainterConfigSchema } from "./schema";
+
+export { PainterConfigSchema } from "./schema";
 
 export interface PainterConfig {
   enabled: boolean;
@@ -37,34 +40,6 @@ export const DEFAULT_PAINTER_CONFIG: PainterConfig = {
     apiVersion: "2025-04-01-preview",
   },
 };
-
-const ProviderConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-    model: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false },
-);
-
-const AzureOpenAiConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-    deployment: Type.Optional(Type.String()),
-    endpoint: Type.Optional(Type.String()),
-    apiVersion: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false },
-);
-
-export const PainterConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-    googleNanoBanana: Type.Optional(ProviderConfigSchema),
-    openai: Type.Optional(ProviderConfigSchema),
-    azureOpenai: Type.Optional(AzureOpenAiConfigSchema),
-  },
-  { additionalProperties: false },
-);
 
 type PainterConfigPatch = StaticDecode<typeof PainterConfigSchema>;
 

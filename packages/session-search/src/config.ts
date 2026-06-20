@@ -1,6 +1,9 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { type StaticDecode } from "typebox";
 import { registerConfig } from "@pi-ohm/core/config";
+import { SessionSearchConfigSchema } from "./schema";
+
+export { SessionSearchConfigSchema } from "./schema";
 
 export interface SessionSearchConfig {
   enabled: boolean;
@@ -9,13 +12,6 @@ export interface SessionSearchConfig {
 export const DEFAULT_SESSION_SEARCH_CONFIG: SessionSearchConfig = {
   enabled: true,
 };
-
-export const SessionSearchConfigSchema = Type.Object(
-  {
-    enabled: Type.Optional(Type.Boolean()),
-  },
-  { additionalProperties: false },
-);
 
 type SessionSearchConfigPatch = StaticDecode<typeof SessionSearchConfigSchema>;
 
