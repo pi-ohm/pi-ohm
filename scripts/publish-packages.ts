@@ -119,15 +119,18 @@ const repoRoot = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS = [
   "packages/core",
+  "packages/pip-flue",
   "packages/modes",
   "packages/handoff",
   "packages/memories",
   "packages/subagents",
   "packages/tui",
+  "packages/goal",
   "packages/session-search",
   "packages/painter",
   "packages/references",
   "packages/extension",
+  "packages/profiler",
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
