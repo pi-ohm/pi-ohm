@@ -21,14 +21,17 @@ on:
         options:
           - all
           - core
+          - pip-flue
           - modes
           - handoff
           - memories
           - subagents
           - tui
+          - goal
           - session-search
           - painter
           - references
+          - profiler
           - pi-ohm
       channel:
         description: "npm dist-tag channel"
@@ -72,8 +75,19 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish all packages to npm @dev
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev
+          set -euo pipefail
+
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel dev)
+          if [[ -z "${NPM_TOKEN:-}" ]]; then
+            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
+            cmd+=(--exclude pi-ohm)
+          fi
+
+          "${cmd[@]}"
 
   release-dev:
     if: ${{ github.ref_name == 'dev' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release')) }}
@@ -128,8 +142,19 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish released package versions to npm @latest
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
+          set -euo pipefail
+
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel latest)
+          if [[ -z "${NPM_TOKEN:-}" ]]; then
+            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
+            cmd+=(--exclude pi-ohm)
+          fi
+
+          "${cmd[@]}"
 
       - name: Resolve release version
         id: release_meta
@@ -225,12 +250,17 @@ jobs:
 
       - name: Publish selected package(s)
         shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
 
           case "${{ inputs.package }}" in
             core)
               only="@pi-ohm/core"
+              ;;
+            pip-flue)
+              only="@pi-ohm/pip-flue"
               ;;
             modes)
               only="@pi-ohm/modes"
@@ -247,6 +277,9 @@ jobs:
             tui)
               only="@pi-ohm/tui"
               ;;
+            goal)
+              only="@pi-ohm/goal"
+              ;;
             session-search)
               only="@pi-ohm/session-search"
               ;;
@@ -255,6 +288,9 @@ jobs:
               ;;
             references)
               only="@pi-ohm/references"
+              ;;
+            profiler)
+              only="@pi-ohm/profiler"
               ;;
             pi-ohm)
               only="pi-ohm"
@@ -271,6 +307,9 @@ jobs:
           cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
+          elif [[ -z "${NPM_TOKEN:-}" ]]; then
+            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
+            cmd+=(--exclude pi-ohm)
           fi
 
           echo "Running: ${cmd[*]}"

@@ -11,6 +11,7 @@ type PublishChannel = "latest" | "dev";
 interface CliArgs {
   channel: PublishChannel;
   only: string[] | null;
+  exclude: string[] | null;
   provenance: boolean | null;
 }
 
@@ -134,7 +135,7 @@ const PACKAGE_DIRS = [
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { channel: "latest", only: null, provenance: null };
+  const args: CliArgs = { channel: "latest", only: null, exclude: null, provenance: null };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -157,20 +158,24 @@ function parseArgs(argv: string[]): CliArgs {
     }
 
     if (arg === "--only" && argv[i + 1]) {
-      args.only = argv[i + 1]
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      args.only = parseList(argv[i + 1]);
       i += 1;
       continue;
     }
 
     if (arg.startsWith("--only=")) {
-      args.only = arg
-        .slice("--only=".length)
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      args.only = parseList(arg.slice("--only=".length));
+      continue;
+    }
+
+    if (arg === "--exclude" && argv[i + 1]) {
+      args.exclude = parseList(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--exclude=")) {
+      args.exclude = parseList(arg.slice("--exclude=".length));
       continue;
     }
 
@@ -195,6 +200,13 @@ function parseArgs(argv: string[]): CliArgs {
   }
 
   return args;
+}
+
+function parseList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 async function readJson(filePath: string): Promise<Record<string, unknown>> {
@@ -481,9 +493,13 @@ async function main(): Promise<void> {
     packages.push({ relDir, absDir, pkg: rawPkg as LoadedPackage["pkg"] });
   }
 
-  const selected = args.only
+  const included = args.only
     ? packages.filter((item) => args.only?.includes(item.pkg.name))
     : packages;
+
+  const selected = args.exclude
+    ? included.filter((item) => !args.exclude?.includes(item.pkg.name))
+    : included;
 
   if (selected.length === 0) {
     throw new Error("No packages selected for publishing.");
