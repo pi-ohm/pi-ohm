@@ -219,6 +219,7 @@ type PipChildRef =
 - No per-child Flue server.
 - No backwards compatibility constraints for early experiments.
 - No fake abort or delete semantics.
+- Support anything other than local sandbox for Flue in this MVP.
 
 ## Implementation phases
 
