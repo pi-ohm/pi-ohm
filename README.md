@@ -10,175 +10,29 @@
     <a href="ohm.moe">pi-ohm</a>
   </h4>
   <a href="https://www.npmjs.com/package/pi-ohm">
-    <img src="https://img.shields.io/npm/v/pi-ohm?label=npm%20(pi-ohm)" alt="npm version" />
+    <img src="https://img.shields.io/npm/v/pi-ohm/dev?style=plastic&label=pi-ohm%40dev" alt="npm version" />
+  </a>
+  <a href="https://www.npmjs.com/package/pi-ohm">
+    <img src="https://img.shields.io/npm/v/pi-ohm/latest?style=plastic&label=pi-ohm%40latest" alt="npm version" />
   </a>
 </p>
 
 > 🚧 WIP 🚧
 >
-> I expected this to be somewhat difficult. Getting the UX right is really important to me. Taking my time instead of 100% slopping something together and expecting it to feel as polished as Amp.
+> This project is in progress. Please take anything you read here with a grain of salt as it may be be (1) outdated, (2) agent hallucinated, and/or (3) scaffolding/not implemented yet.
 >
-> Currently, only @pi-ohm/subagents@dev and @pi-ohm/subagents@dev are working.
+> 🚧 WIP 🚧
 
-Monorepo for modular, [Amp Code](https://ampcode.com)-inspired Pi workflows. All extensions are packaged under `@pi-ohm/*`, plus the unscoped bundle package `pi-ohm`.
+---
 
-Current features include: modes, subagents (librarian, finder, oracle, painter), session search, handoff, memories. More on these in their respective package (see highlights below).
+<h3 align="left">Packages</h3>
 
-Docs coming soon at [ohm.moe](https://ohm.moe).
+<div align="left">
+  <h4><code>@pi-ohm/subagents</code></h4>
+  <a href="https://www.npmjs.com/package/pi-ohm">
+    <img src="https://img.shields.io/npm/v/@pi-ohm/subagents/dev?style=plastic&label=@pi-ohm/subagents%40dev" alt="npm version" />
+  </a>
 
-## Highlights
+Relies on <code>@pi-ohm/core/pip</code>, our "Pi-in-Pi" (PiP) runtime, to spawn child Pi SDK processes. Hopefully, this makes our implementation more resistant to future Pi updates. PiP also allows you to embed Pi into any application that uses NodeJS.
 
-Coming soon
-
-## Install options
-
-- Modular installs:
-  ```bash
-  pi install npm:@pi-ohm/modes
-  pi install npm:@pi-ohm/handoff
-  pi install npm:@pi-ohm/subagents
-  pi install npm:@pi-ohm/session-search
-  pi install npm:@pi-ohm/painter
-  pi install npm:@pi-ohm/memories
-  ```
-- Install full bundle (recommended):
-  ```bash
-  pi install npm:pi-ohm
-  ```
-
-## Commands (bundle)
-
-- `/ohm-features`
-- `/ohm-config`
-- `/ohm-missing`
-- `/ohm-modes`
-- `/ohm-mode <rush|smart|deep>`
-- `/ohm-handoff`
-- `/ohm-subagents`
-- `/ohm-subagent <id>`
-- `/ohm-session-search`
-- `/ohm-painter`
-
-## Development
-
-<details>
-  <summary>
-    <strong>Info (click to expand)</strong>
-    <p>pnpm workspaces, linting, formatting, etc.</p>
-  </summary>
-
-#### Package manager
-
-This repo uses pnpm workspaces.
-
-```bash
-corepack enable
-corepack prepare pnpm@10.25.0 --activate
-pnpm install
-pnpm build
-pnpm typecheck
-```
-
-#### Workspace layout
-
-```text
-pi-ohm/
-├── extensions/
-│   └── index.ts                    # local dev entrypoint (registers bundle package)
-├── packages/
-│   ├── core/                       # @pi-ohm/core (shared runtime primitives)
-│   ├── tui/                        # @pi-ohm/tui
-│   ├── modes/                      # @pi-ohm/modes
-│   ├── handoff/                    # @pi-ohm/handoff (includes visualizer)
-│   ├── subagents/                  # @pi-ohm/subagents
-│   ├── session-search/             # @pi-ohm/session-search
-│   ├── painter/                    # @pi-ohm/painter
-│   ├── memories/                   # @pi-ohm/memories
-│   └── extension/                  # pi-ohm (bundle package)
-├── scripts/
-│   └── publish-packages.ts
-└── .github/workflows/
-```
-
-</details>
-
-<details>
-  <summary>
-    <strong>Publishing (click to expand)</strong>
-    <p>Branch flow, release-please, npm channels, trusted publishing, manual publishing.</p>
-  </summary>
-
-#### Branch model
-
-- `dev` = default integration branch
-- `prod` = release branch
-
-Flow:
-
-1. Merge feature PRs into `dev`.
-2. release-please opens/updates a release PR on `dev`.
-3. Merge release PR on `dev` (versions/changelogs updated in `dev`).
-4. Open/merge `dev -> prod` promotion PR.
-5. Push to `prod` publishes stable npm `latest`.
-
-#### Release strategy (release-please)
-
-This repo uses **release-please** for versioning/changelogs.
-
-- Conventional commits drive version bumps (`feat:` => minor, `fix:` => patch, `feat!` / `BREAKING CHANGE` => major).
-- release-please opens/updates a release PR on `dev`.
-- Merging that release PR updates versions/changelogs and tags on `dev`.
-- Stable npm `latest` publish happens when those release commits are promoted to `prod`.
-- On `prod` publish, a single GitHub release (`pi-ohm-vX.Y.Z`) is upserted with aggregated notes from all package changelogs.
-- Package versions are kept in lockstep (`@pi-ohm/*` + `pi-ohm` all receive the same version per release).
-
-Config files:
-
-- `.release-please-config.json`
-- `.release-please-manifest.json`
-
-#### npm publishing channels
-
-##### Stable (`latest`)
-
-- Trigger: push to `prod`
-- Workflow: `.github/workflows/release.yml`
-- Publishes released versions to npm with `latest` tag
-
-##### Dev snapshots (`dev`)
-
-- Trigger: push to `dev`
-- Workflow: `.github/workflows/release.yml`
-- Publishes all packages as prerelease builds with `dev` tag (version suffix includes run/sha)
-- Auth: npm Trusted Publishing via GitHub Actions OIDC
-
-Install dev builds with `@dev`, for example:
-
-```bash
-npm i pi-ohm@dev
-npm i @pi-ohm/modes@dev
-npm i @pi-ohm/subagents@dev
-```
-
-#### Trusted publishing (npm)
-
-For each package (`pi-ohm`, `@pi-ohm/modes`, `@pi-ohm/*`), configure npm Trusted Publisher:
-
-- Provider: GitHub Actions
-- Repository: this repo
-- Workflow filename: `release.yml`
-- Allowed action: `npm publish`
-- Environment: blank unless the workflow adds a matching GitHub environment
-
-No long-lived `NPM_TOKEN` is required.
-
-#### Manual publishing
-
-Use `.github/workflows/release.yml` (`workflow_dispatch`) for manual publish to either `latest` or `dev` channel.
-
-</details>
-
-## Notes
-
-- `src_legacy` is intentionally preserved.
-- Handoff + visualizer stay bundled in `@pi-ohm/handoff`.
+</div>
