@@ -166,6 +166,9 @@ importers:
       tailwind-merge:
         specifier: 3.6.0
         version: 3.6.0
+      typebox:
+        specifier: ^1.0.68
+        version: 1.2.8
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.1.24
         version: '@voidzero-dev/vite-plus-core@0.1.24(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(typescript@6.0.3)(yaml@2.9.0)'
