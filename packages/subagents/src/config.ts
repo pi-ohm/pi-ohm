@@ -1,28 +1,58 @@
 import { Result } from "better-result";
-import { Type, type StaticDecode } from "typebox";
+import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import {
+  parseSubagentsExperimentalConfigPatch,
   parseSubagentAgentPatch,
+  SubagentsConfigSchema,
+  SubagentsExperimentalConfigPatchSchema,
   SubagentAgentPatchSchema,
   SubagentToolPermissionDecisionSchema,
   SubagentToolPermissionMapSchema,
+  SummarizeHistoryConfigPatchSchema,
+  SummarizeHistoryTypeSchema,
+  type SubagentsConfigPatch,
+  type SubagentsExperimentalConfigPatch,
   type SubagentAgentPatch,
+  type SummarizeHistoryConfigPatch,
+  type SummarizeHistoryType,
 } from "./schema";
 
-export const SubagentsConfigSchema = Type.Record(
+const SubagentRuntimeAgentsSchema = Type.Record(
   Type.String({ minLength: 1 }),
   SubagentAgentPatchSchema,
 );
+const SummarizeHistoryRuntimeConfigSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    type: Type.Union([Type.Literal("compact"), Type.Literal("summary")]),
+  },
+  { additionalProperties: false },
+);
+const SubagentsExperimentalRuntimeConfigSchema = Type.Object(
+  { summarize_history: SummarizeHistoryRuntimeConfigSchema },
+  { additionalProperties: false },
+);
 const SubagentRuntimeConfigSchema = Type.Object(
-  { agents: SubagentsConfigSchema },
+  {
+    agents: SubagentRuntimeAgentsSchema,
+    experimental: SubagentsExperimentalRuntimeConfigSchema,
+  },
   { additionalProperties: false },
 );
 
-type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
-
 export interface SubagentsConfig {
   readonly subagents: SubagentRuntimeConfig;
+}
+
+export interface SummarizeHistoryRuntimeConfig {
+  readonly enabled: boolean;
+  readonly type: SummarizeHistoryType;
+}
+
+export interface SubagentsExperimentalRuntimeConfig {
+  readonly summarize_history: SummarizeHistoryRuntimeConfig;
 }
 
 export interface SubagentAgentRuntimeConfig {
@@ -48,7 +78,8 @@ export interface ResolvedSubagentAgentRuntimeConfig {
 }
 
 export interface SubagentRuntimeConfig {
-  agents: Record<string, SubagentAgentRuntimeConfig>;
+  readonly agents: Record<string, SubagentAgentRuntimeConfig>;
+  readonly experimental: SubagentsExperimentalRuntimeConfig;
 }
 
 interface RuntimeConfigWithSubagents {
@@ -57,6 +88,12 @@ interface RuntimeConfigWithSubagents {
 
 export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
   agents: {},
+  experimental: {
+    summarize_history: {
+      enabled: false,
+      type: "summary",
+    },
+  },
 };
 
 export const subagentsConfigModule = registerConfig({
@@ -130,7 +167,7 @@ export function normalizeSubagentModelOverride(value: unknown): string | undefin
 }
 
 function mergeSubagentAgentConfig(
-  patch: SubagentAgentPatch,
+  patch: unknown,
   fallback: SubagentAgentRuntimeConfig | undefined,
 ): SubagentAgentRuntimeConfig | undefined {
   const parsedPatch = parseSubagentAgentPatch(patch);
@@ -181,6 +218,7 @@ function normalizeInlineSubagentAgents(
   for (const [rawKey, rawValue] of Object.entries(value)) {
     const key = rawKey.trim().toLowerCase();
     if (key.length === 0) continue;
+    if (key === "experimental") continue;
 
     const merged = mergeSubagentAgentConfig(rawValue, normalized[key]);
     if (!merged) continue;
@@ -190,16 +228,52 @@ function normalizeInlineSubagentAgents(
   return normalized;
 }
 
+function mergeSummarizeHistoryConfig(
+  patch: SummarizeHistoryConfigPatch | undefined,
+  fallback: SummarizeHistoryRuntimeConfig,
+): SummarizeHistoryRuntimeConfig {
+  return {
+    enabled: patch?.enabled ?? fallback.enabled,
+    type: patch?.type ?? fallback.type,
+  };
+}
+
+function mergeExperimentalConfig(
+  patch: SubagentsExperimentalConfigPatch | undefined,
+  fallback: SubagentsExperimentalRuntimeConfig,
+): SubagentsExperimentalRuntimeConfig {
+  const parsed = parseSubagentsExperimentalConfigPatch(patch);
+
+  return {
+    summarize_history: mergeSummarizeHistoryConfig(
+      parsed?.summarize_history,
+      fallback.summarize_history,
+    ),
+  };
+}
+
 export function mergeSubagentRuntimeConfig(input: {
   readonly current: SubagentRuntimeConfig | undefined;
   readonly patch: SubagentsConfigPatch | undefined;
 }): SubagentRuntimeConfig {
   const defaults = input.current ?? DEFAULT_SUBAGENT_RUNTIME_CONFIG;
   const agents = normalizeInlineSubagentAgents(input.patch, defaults.agents);
+  const experimental = mergeExperimentalConfig(input.patch?.experimental, defaults.experimental);
 
   return {
     agents,
+    experimental,
   };
+}
+
+export function getSummarizeHistoryConfig(
+  config: RuntimeConfigWithSubagents,
+): SummarizeHistoryRuntimeConfig {
+  return (
+    config.subagents?.experimental.summarize_history ?? {
+      ...DEFAULT_SUBAGENT_RUNTIME_CONFIG.experimental.summarize_history,
+    }
+  );
 }
 
 export function getSubagentConfiguredModel(
@@ -256,8 +330,17 @@ export function isSubagentRuntimeConfig(value: unknown): value is SubagentRuntim
 
 export {
   parseSubagentAgentPatch,
+  parseSubagentsExperimentalConfigPatch,
+  SubagentsConfigSchema,
+  SubagentsExperimentalConfigPatchSchema,
   SubagentAgentPatchSchema,
   SubagentToolPermissionDecisionSchema,
   SubagentToolPermissionMapSchema,
+  SummarizeHistoryConfigPatchSchema,
+  SummarizeHistoryTypeSchema,
+  type SubagentsConfigPatch,
+  type SubagentsExperimentalConfigPatch,
   type SubagentAgentPatch,
+  type SummarizeHistoryConfigPatch,
+  type SummarizeHistoryType,
 };

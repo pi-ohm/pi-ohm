@@ -18,6 +18,7 @@ jobs:
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
+          run-install: false
 
       - name: Validate commit messages
         shell: bash
@@ -58,6 +59,7 @@ jobs:
         with:
           node-version: 24
           cache: true
+          run-install: false
 
       - name: Install
         run: vp install --frozen-lockfile

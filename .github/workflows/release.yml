@@ -55,6 +55,7 @@ jobs:
         with:
           node-version: 24
           cache: true
+          run-install: false
 
       - name: Install
         run: vp install --frozen-lockfile
@@ -110,6 +111,7 @@ jobs:
         with:
           node-version: 24
           cache: true
+          run-install: false
 
       - name: Install
         run: vp install --frozen-lockfile
@@ -205,6 +207,7 @@ jobs:
         with:
           node-version: 24
           cache: true
+          run-install: false
 
       - name: Install
         run: vp install --frozen-lockfile

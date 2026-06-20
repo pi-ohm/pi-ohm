@@ -1,133 +1,122 @@
-const keys = ["subagents", "modes", "painter", "handoff", "session-search"] as const;
-type Key = (typeof keys)[number];
+import type { TSchema } from "typebox";
+import { GoalConfigSchema } from "../../../packages/goal/src/config";
+import { HandoffConfigSchema } from "../../../packages/handoff/src/config";
+import { ModesConfigSchema } from "../../../packages/modes/src/config";
+import { PainterConfigSchema } from "../../../packages/painter/src/config";
+import { ProfilerConfigSchema } from "../../../packages/profiler/src/config";
+import { ReferencesConfigSchema } from "../../../packages/references/src/config";
+import { SessionSearchConfigSchema } from "../../../packages/session-search/src/config";
+import { SubagentsConfigSchema } from "../../../packages/subagents/src/config";
 
-type SchemaDoc = {
-  $schema: "https://json-schema.org/draft/2020-12/schema";
-  $id: string;
-  title: string;
-  type: "object";
-  additionalProperties: boolean;
-  properties: Record<string, unknown>;
-  required?: string[];
-};
-
-const schemas: Record<Key, SchemaDoc> = {
-  subagents: {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/subagents.json",
-    title: "pi-ohm subagents config",
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      subagents: {
-        type: "object",
-        additionalProperties: {
-          type: "object",
-          properties: {
-            model: { type: "string" },
-          },
-        },
-      },
-    },
-  },
-  modes: {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/modes.json",
-    title: "pi-ohm modes config",
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      modes: {
-        type: "object",
-        properties: {
-          default: { enum: ["rush", "smart", "deep"] },
-        },
-      },
-    },
-  },
-  painter: {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/painter.json",
-    title: "pi-ohm painter config",
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      painter: {
-        type: "object",
-        properties: {
-          provider: { type: "string" },
-          model: { type: "string" },
-        },
-      },
-    },
-  },
-  handoff: {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/handoff.json",
-    title: "pi-ohm handoff config",
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      handoff: {
-        type: "object",
-        properties: {
-          enabled: { type: "boolean" },
-        },
-      },
-    },
-  },
-  "session-search": {
-    $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/session-search.json",
-    title: "pi-ohm session-search config",
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      sessionSearch: {
-        type: "object",
-        properties: {
-          enabled: { type: "boolean" },
-        },
-      },
-    },
-  },
-};
-
-function toKey(value: string): Key | undefined {
-  if (value === "subagents") return "subagents";
-  if (value === "modes") return "modes";
-  if (value === "painter") return "painter";
-  if (value === "handoff") return "handoff";
-  if (value === "session-search") return "session-search";
-  return undefined;
+interface SchemaSource {
+  readonly key: string;
+  readonly namespace: string;
+  readonly title: string;
+  readonly schema: TSchema;
 }
 
-function parseList(value: string): { keys: Key[] } | { error: string } {
+const sources = [
+  {
+    key: "subagents",
+    namespace: "subagents",
+    title: "pi-ohm subagents config",
+    schema: SubagentsConfigSchema,
+  },
+  {
+    key: "modes",
+    namespace: "modes",
+    title: "pi-ohm modes config",
+    schema: ModesConfigSchema,
+  },
+  {
+    key: "painter",
+    namespace: "painter",
+    title: "pi-ohm painter config",
+    schema: PainterConfigSchema,
+  },
+  {
+    key: "handoff",
+    namespace: "handoff",
+    title: "pi-ohm handoff config",
+    schema: HandoffConfigSchema,
+  },
+  {
+    key: "session-search",
+    namespace: "session-search",
+    title: "pi-ohm session-search config",
+    schema: SessionSearchConfigSchema,
+  },
+  {
+    key: "references",
+    namespace: "references",
+    title: "pi-ohm references config",
+    schema: ReferencesConfigSchema,
+  },
+  {
+    key: "profiler",
+    namespace: "profiler",
+    title: "pi-ohm profiler config",
+    schema: ProfilerConfigSchema,
+  },
+  {
+    key: "goal",
+    namespace: "goal",
+    title: "pi-ohm goal config",
+    schema: GoalConfigSchema,
+  },
+] as const satisfies readonly SchemaSource[];
+
+type Key = (typeof sources)[number]["key"];
+
+type SchemaDoc = {
+  readonly $schema: "https://json-schema.org/draft/2020-12/schema";
+  readonly $id: string;
+  readonly title: string;
+  readonly type: "object";
+  readonly additionalProperties: boolean;
+  readonly properties: Record<string, unknown>;
+};
+
+const schemaProperty = { type: "string" };
+const keys = sources.map((source) => source.key);
+
+function isKey(value: string): value is Key {
+  return sources.some((source) => source.key === value);
+}
+
+function sourceForKey(key: Key): SchemaSource {
+  const source = sources.find((candidate) => candidate.key === key);
+  if (source) return source;
+  throw new Error(`Unknown schema key '${key}'`);
+}
+
+function parseList(value: string): { readonly keys: readonly Key[] } | { readonly error: string } {
   const list = value
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter((item) => item.length > 0);
 
   if (list.length === 0) return { error: "empty schema selector" };
-  if (list.includes("all")) return { keys: [...keys] };
+  if (list.includes("all")) return { keys };
 
-  const values = list.reduce<Key[] | undefined>((acc, item) => {
+  const values = list.reduce<readonly Key[] | undefined>((acc, item) => {
     if (!acc) return undefined;
-    const key = toKey(item);
-    if (!key) return undefined;
-    if (acc.includes(key)) return acc;
-    return [...acc, key];
+    if (!isKey(item)) return undefined;
+    if (acc.includes(item)) return acc;
+    return [...acc, item];
   }, []);
 
   if (!values) return { error: "invalid schema selector value" };
   return { keys: values };
 }
 
-function parsePath(pathname: string): { keys: Key[] } | { error: string } {
+function parsePath(
+  pathname: string,
+): { readonly keys: readonly Key[] } | { readonly error: string } {
   const path = pathname.trim().toLowerCase();
 
   if (path === "/schema" || path === "/schema/" || path === "/schema.json") {
-    return { keys: [...keys] };
+    return { keys };
   }
 
   if (!path.startsWith("/schema/")) {
@@ -135,11 +124,11 @@ function parsePath(pathname: string): { keys: Key[] } | { error: string } {
   }
 
   const raw = path.slice("/schema/".length).trim();
-  if (raw.length === 0) return { keys: [...keys] };
+  if (raw.length === 0) return { keys };
 
   const value = raw.endsWith(".json") ? raw.slice(0, -".json".length) : raw;
   const decoded = value.replaceAll("%2c", ",");
-  if (decoded === "all") return { keys: [...keys] };
+  if (decoded === "all") return { keys };
 
   return parseList(decoded);
 }
@@ -166,22 +155,34 @@ function json(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-function build(keys: Key[]): SchemaDoc {
-  if (keys.length === 1) return schemas[keys[0]];
+function schemaId(keys: readonly Key[]): string {
+  if (keys.length === 1) return `https://ohm.moe/schema/${keys[0]}.json`;
+  return "https://ohm.moe/schema/all.json";
+}
 
-  const properties = keys.reduce<Record<string, unknown>>(
-    (acc, key) => ({ ...acc, [key]: schemas[key] }),
-    {},
+function schemaTitle(keys: readonly Key[]): string {
+  if (keys.length === 1) return sourceForKey(keys[0]).title;
+  return "pi-ohm combined config schema";
+}
+
+function schemaProperties(keys: readonly Key[]): Record<string, unknown> {
+  return keys.reduce<Record<string, unknown>>(
+    (properties, key) => {
+      const source = sourceForKey(key);
+      return { ...properties, [source.namespace]: source.schema };
+    },
+    { $schema: schemaProperty },
   );
+}
 
+function build(keys: readonly Key[]): SchemaDoc {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://ohm.moe/schemas/all.json",
-    title: "pi-ohm combined config schema",
+    $id: schemaId(keys),
+    title: schemaTitle(keys),
     type: "object",
     additionalProperties: false,
-    properties,
-    required: [...keys],
+    properties: schemaProperties(keys),
   };
 }
 
@@ -202,7 +203,7 @@ export default {
         {
           error: parsed.error,
           usage: "/schema/subagents,modes or /schema/all or /schema.json",
-          available: [...keys],
+          available: keys,
         },
         { status: 400 },
       );

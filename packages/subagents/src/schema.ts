@@ -28,9 +28,54 @@ export const SubagentAgentPatchSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const SummarizeHistoryTypeSchema = Type.Union([
+  Type.Literal("compact"),
+  Type.Literal("summary"),
+]);
+
+export const SummarizeHistoryConfigPatchSchema = Type.Object(
+  {
+    enabled: Type.Optional(Type.Boolean()),
+    type: Type.Optional(SummarizeHistoryTypeSchema),
+    model: Type.Optional(NonEmptyStringSchema),
+  },
+  { additionalProperties: false },
+);
+
+export const SubagentsExperimentalConfigPatchSchema = Type.Object(
+  {
+    summarize_history: Type.Optional(SummarizeHistoryConfigPatchSchema),
+  },
+  { additionalProperties: false },
+);
+
+export interface SummarizeHistoryConfigPatch {
+  readonly enabled?: boolean;
+  readonly type?: SummarizeHistoryType;
+  readonly model?: string;
+}
+
+export interface SubagentsExperimentalConfigPatch {
+  readonly summarize_history?: SummarizeHistoryConfigPatch;
+}
+
+export interface SubagentsConfigPatch {
+  readonly experimental?: SubagentsExperimentalConfigPatch;
+  readonly [agentId: string]: SubagentAgentPatch | SubagentsExperimentalConfigPatch | undefined;
+}
+
+export const SubagentsConfigSchema = Type.Unsafe<SubagentsConfigPatch>({
+  type: "object",
+  properties: {
+    experimental: SubagentsExperimentalConfigPatchSchema,
+  },
+  additionalProperties: SubagentAgentPatchSchema,
+});
+
 export type SubagentToolPermissionDecisionPatch = Static<
   typeof SubagentToolPermissionDecisionSchema
 >;
+export type SummarizeHistoryType = Static<typeof SummarizeHistoryTypeSchema>;
 export type SubagentAgentPatch = Static<typeof SubagentAgentPatchSchema>;
 
 function toTrimmedString(value: unknown): string | undefined {
@@ -58,6 +103,12 @@ function toPositiveInteger(value: unknown): number | undefined {
 
 function toBoolean(value: unknown): boolean | undefined {
   if (typeof value === "boolean") return value;
+  return undefined;
+}
+
+function toSummarizeHistoryType(value: unknown): SummarizeHistoryType | undefined {
+  const type = toTrimmedString(value)?.toLowerCase();
+  if (type === "compact" || type === "summary") return type;
   return undefined;
 }
 
@@ -114,4 +165,49 @@ export function parseSubagentAgentPatch(input: unknown): SubagentAgentPatch | un
   }
 
   return Value.Decode(SubagentAgentPatchSchema, normalized);
+}
+
+function normalizeSummarizeHistoryConfigPatchInput(input: unknown): unknown {
+  if (!Value.Check(UnknownRecordSchema, input)) return input;
+
+  const enabled = toBoolean(Reflect.get(input, "enabled"));
+  const type = toSummarizeHistoryType(Reflect.get(input, "type"));
+  const model = toTrimmedString(Reflect.get(input, "model"));
+
+  return {
+    ...(enabled !== undefined ? { enabled } : {}),
+    ...(type ? { type } : {}),
+    ...(model ? { model } : {}),
+  };
+}
+
+export function parseSummarizeHistoryConfigPatch(
+  input: unknown,
+): SummarizeHistoryConfigPatch | undefined {
+  const normalized = normalizeSummarizeHistoryConfigPatchInput(input);
+  if (!Value.Check(SummarizeHistoryConfigPatchSchema, normalized)) {
+    return undefined;
+  }
+
+  return Value.Decode(SummarizeHistoryConfigPatchSchema, normalized);
+}
+
+function normalizeSubagentsExperimentalConfigPatchInput(input: unknown): unknown {
+  if (!Value.Check(UnknownRecordSchema, input)) return input;
+
+  const summarize = parseSummarizeHistoryConfigPatch(Reflect.get(input, "summarize_history"));
+
+  if (!summarize) return {};
+  return { summarize_history: summarize };
+}
+
+export function parseSubagentsExperimentalConfigPatch(
+  input: unknown,
+): SubagentsExperimentalConfigPatch | undefined {
+  const normalized = normalizeSubagentsExperimentalConfigPatchInput(input);
+  if (!Value.Check(SubagentsExperimentalConfigPatchSchema, normalized)) {
+    return undefined;
+  }
+
+  return Value.Decode(SubagentsExperimentalConfigPatchSchema, normalized);
 }

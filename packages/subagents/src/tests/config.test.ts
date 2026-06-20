@@ -7,6 +7,7 @@ import { Result } from "better-result";
 import { Value } from "typebox/value";
 import { loadConfig, pickConfig } from "@pi-ohm/core/config";
 import {
+  getSummarizeHistoryConfig,
   getSubagentConfiguredModel,
   isSubagentRuntimeConfig,
   resolveSubagentAgentRuntimeConfig,
@@ -54,6 +55,13 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
           bash: "deny",
         },
       },
+      experimental: {
+        summarize_history: {
+          enabled: true,
+          type: "compact",
+          model: "openai-codex/gpt-5.4-mini:medium",
+        },
+      },
     }),
     true,
   );
@@ -72,6 +80,34 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
     Value.Check(SubagentsConfigSchema, { reviewer: { variants: { "*gpt*": {} } } }),
     false,
   );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarize_history: { enabled: "yes" } },
+    }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarizeHistory: { enabled: true } },
+    }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarize_history: { enabled: true, tools: [] } },
+    }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarize_history: { enabled: true, type: "silent" } },
+    }),
+    false,
+  );
+});
+
+void test("summarize history config defaults to disabled", () => {
+  assert.deepEqual(getSummarizeHistoryConfig({}), { enabled: false, type: "summary" });
 });
 
 void test("subagents config smoke resolves agent options from project ohm.json", async () => {
@@ -104,6 +140,13 @@ void test("subagents config smoke resolves agent options from project ohm.json",
               find: "deny",
             },
           },
+          experimental: {
+            summarize_history: {
+              enabled: true,
+              type: "compact",
+              model: "OpenAI-Codex/gpt-5.4-mini:medium",
+            },
+          },
         },
       }),
       "utf8",
@@ -125,6 +168,11 @@ void test("subagents config smoke resolves agent options from project ohm.json",
       getSubagentConfiguredModel({ subagents: config.value }, "reviewer"),
       "openai-codex/gpt-5.4-mini:medium",
     );
+    assert.equal(config.value.agents.experimental, undefined);
+    assert.deepEqual(getSummarizeHistoryConfig({ subagents: config.value }), {
+      enabled: true,
+      type: "compact",
+    });
 
     const reviewer = resolveSubagentAgentRuntimeConfig({
       config: { subagents: config.value },
