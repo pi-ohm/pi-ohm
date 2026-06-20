@@ -40,6 +40,12 @@
       "branch": "main",
       "description": "The sandbox agent framework.",
       "hidden": false
+    },
+    "howaboua-pi-stuff": {
+      "repository": "https://github.com/IgorWarzocha/howaboua-pi-stuff",
+      "branch": "main",
+      "description": "Monorepo of pi extensions and skills. Most important one is ./packages/pi-codex-conversion.",
+      "hidden": false
     }
   }
 }
