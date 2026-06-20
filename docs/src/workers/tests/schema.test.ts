@@ -23,8 +23,8 @@ void test("schema worker publishes subagents config from package schema", async 
   const text = JSON.stringify(body);
 
   assert.match(text, /summarize_history/);
+  assert.match(text, /branch/);
   assert.match(text, /compact/);
-  assert.match(text, /summary/);
   assert.match(text, /permissions/);
 
   const properties = child(body, "properties");

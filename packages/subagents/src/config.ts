@@ -26,7 +26,7 @@ const SubagentRuntimeAgentsSchema = Type.Record(
 const SummarizeHistoryRuntimeConfigSchema = Type.Object(
   {
     enabled: Type.Boolean(),
-    type: Type.Union([Type.Literal("compact"), Type.Literal("summary")]),
+    type: Type.Union([Type.Literal("branch"), Type.Literal("compact")]),
   },
   { additionalProperties: false },
 );
@@ -91,7 +91,7 @@ export const DEFAULT_SUBAGENT_RUNTIME_CONFIG: SubagentRuntimeConfig = {
   experimental: {
     summarize_history: {
       enabled: false,
-      type: "summary",
+      type: "branch",
     },
   },
 };

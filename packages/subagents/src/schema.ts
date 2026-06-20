@@ -29,8 +29,8 @@ export const SubagentAgentPatchSchema = Type.Object(
 );
 
 export const SummarizeHistoryTypeSchema = Type.Union([
+  Type.Literal("branch"),
   Type.Literal("compact"),
-  Type.Literal("summary"),
 ]);
 
 export const SummarizeHistoryConfigPatchSchema = Type.Object(
@@ -108,7 +108,7 @@ function toBoolean(value: unknown): boolean | undefined {
 
 function toSummarizeHistoryType(value: unknown): SummarizeHistoryType | undefined {
   const type = toTrimmedString(value)?.toLowerCase();
-  if (type === "compact" || type === "summary") return type;
+  if (type === "branch" || type === "compact") return type;
   return undefined;
 }
 

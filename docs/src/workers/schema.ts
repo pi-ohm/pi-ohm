@@ -78,7 +78,7 @@ type SchemaDoc = {
 };
 
 const schemaProperty = { type: "string" };
-const keys = sources.map((source) => source.key);
+export const schemaKeys = sources.map((source) => source.key);
 
 function isKey(value: string): value is Key {
   return sources.some((source) => source.key === value);
@@ -97,7 +97,7 @@ function parseList(value: string): { readonly keys: readonly Key[] } | { readonl
     .filter((item) => item.length > 0);
 
   if (list.length === 0) return { error: "empty schema selector" };
-  if (list.includes("all")) return { keys };
+  if (list.includes("all")) return { keys: schemaKeys };
 
   const values = list.reduce<readonly Key[] | undefined>((acc, item) => {
     if (!acc) return undefined;
@@ -116,7 +116,7 @@ function parsePath(
   const path = pathname.trim().toLowerCase();
 
   if (path === "/schema" || path === "/schema/" || path === "/schema.json") {
-    return { keys };
+    return { keys: schemaKeys };
   }
 
   if (!path.startsWith("/schema/")) {
@@ -124,11 +124,11 @@ function parsePath(
   }
 
   const raw = path.slice("/schema/".length).trim();
-  if (raw.length === 0) return { keys };
+  if (raw.length === 0) return { keys: schemaKeys };
 
   const value = raw.endsWith(".json") ? raw.slice(0, -".json".length) : raw;
   const decoded = value.replaceAll("%2c", ",");
-  if (decoded === "all") return { keys };
+  if (decoded === "all") return { keys: schemaKeys };
 
   return parseList(decoded);
 }
@@ -175,7 +175,7 @@ function schemaProperties(keys: readonly Key[]): Record<string, unknown> {
   );
 }
 
-function build(keys: readonly Key[]): SchemaDoc {
+export function buildSchema(keys: readonly Key[]): SchemaDoc {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
     $id: schemaId(keys),
@@ -203,12 +203,12 @@ export default {
         {
           error: parsed.error,
           usage: "/schema/subagents,modes or /schema/all or /schema.json",
-          available: keys,
+          available: schemaKeys,
         },
         { status: 400 },
       );
     }
 
-    return json(build(parsed.keys));
+    return json(buildSchema(parsed.keys));
   },
 };

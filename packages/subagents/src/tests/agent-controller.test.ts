@@ -8,6 +8,8 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import { Value } from "typebox/value";
 import {
+  createBranchSummaryForkEntries,
+  createCompactionForkEntries,
   createSubagentToolRuntime,
   createSubagentTools,
   resolveAvailableAgents,
@@ -159,6 +161,70 @@ void test("sliceForkEntries drops startup prefix when requested turns exceed his
 
 void test("sliceForkEntries returns no context when there are no user turns", () => {
   assert.deepEqual(sliceForkEntries([customEntry("startup", null)], 1), []);
+});
+
+void test("createBranchSummaryForkEntries creates branch summary bootstrap context", () => {
+  const entries = [userEntry("u1", null, "one"), customEntry("tool1", "u1")];
+  const source = createBranchSummaryForkEntries({
+    entries,
+    summary: "branch summary",
+    readFiles: ["packages/subagents/src/agent-controller.ts"],
+    modifiedFiles: ["packages/subagents/src/schema.ts"],
+    id: "summary1",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  assert.deepEqual(source, [
+    {
+      type: "branch_summary",
+      id: "summary1",
+      parentId: null,
+      timestamp: "2026-01-01T00:00:00.000Z",
+      fromId: "tool1",
+      summary: "branch summary",
+      details: {
+        readFiles: ["packages/subagents/src/agent-controller.ts"],
+        modifiedFiles: ["packages/subagents/src/schema.ts"],
+      },
+    },
+  ]);
+});
+
+void test("createCompactionForkEntries roots compaction and keeps retained suffix", () => {
+  const entries = [
+    userEntry("u1", null, "one"),
+    customEntry("tool1", "u1"),
+    userEntry("u2", "tool1", "two"),
+    customEntry("tool2", "u2"),
+  ];
+  const source = createCompactionForkEntries({
+    entries,
+    summary: "compact summary",
+    firstKeptEntryId: "u2",
+    tokensBefore: 123,
+    details: { readFiles: ["README.md"], modifiedFiles: [] },
+    id: "compact1",
+    timestamp: "2026-01-01T00:00:00.000Z",
+  });
+
+  assert.deepEqual(
+    source.map((entry) => entry.id),
+    ["compact1", "u2", "tool2"],
+  );
+  assert.deepEqual(
+    source.map((entry) => entry.parentId),
+    [null, "compact1", "u2"],
+  );
+  assert.deepEqual(source[0], {
+    type: "compaction",
+    id: "compact1",
+    parentId: null,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    summary: "compact summary",
+    firstKeptEntryId: "u2",
+    tokensBefore: 123,
+    details: { readFiles: ["README.md"], modifiedFiles: [] },
+  });
 });
 
 function userEntry(id: string, parentId: string | null, content: string): SessionEntry {

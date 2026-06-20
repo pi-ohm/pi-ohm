@@ -3,5 +3,6 @@ node_modules/
 .pnp.*
 .DS_Store
 *.log
+.schema/
 packages/*/dist/
 **/src_legacy/

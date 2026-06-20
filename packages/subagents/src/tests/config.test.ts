@@ -58,7 +58,7 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
       experimental: {
         summarize_history: {
           enabled: true,
-          type: "compact",
+          type: "branch",
           model: "openai-codex/gpt-5.4-mini:medium",
         },
       },
@@ -104,10 +104,22 @@ void test("SubagentsConfigSchema accepts only public agent config shape", () => 
     }),
     false,
   );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarize_history: { enabled: true, type: "summary" } },
+    }),
+    false,
+  );
+  assert.equal(
+    Value.Check(SubagentsConfigSchema, {
+      experimental: { summarize_history: { enabled: true, type: "compact" } },
+    }),
+    true,
+  );
 });
 
 void test("summarize history config defaults to disabled", () => {
-  assert.deepEqual(getSummarizeHistoryConfig({}), { enabled: false, type: "summary" });
+  assert.deepEqual(getSummarizeHistoryConfig({}), { enabled: false, type: "branch" });
 });
 
 void test("subagents config smoke resolves agent options from project ohm.json", async () => {
@@ -143,7 +155,7 @@ void test("subagents config smoke resolves agent options from project ohm.json",
           experimental: {
             summarize_history: {
               enabled: true,
-              type: "compact",
+              type: "branch",
               model: "OpenAI-Codex/gpt-5.4-mini:medium",
             },
           },
@@ -171,7 +183,7 @@ void test("subagents config smoke resolves agent options from project ohm.json",
     assert.equal(config.value.agents.experimental, undefined);
     assert.deepEqual(getSummarizeHistoryConfig({ subagents: config.value }), {
       enabled: true,
-      type: "compact",
+      type: "branch",
     });
 
     const reviewer = resolveSubagentAgentRuntimeConfig({

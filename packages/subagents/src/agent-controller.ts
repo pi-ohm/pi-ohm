@@ -2,8 +2,14 @@ import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  buildSessionContext,
   CURRENT_SESSION_VERSION,
+  DEFAULT_COMPACTION_SETTINGS,
   defineTool,
+  estimateTokens,
+  findCutPoint,
+  generateBranchSummary,
+  generateSummary,
   type AgentToolResult,
   type ExtensionAPI,
   type SessionEntry,
@@ -17,8 +23,10 @@ import { loadConfig, pickConfig } from "@pi-ohm/core/config";
 import { resolveOhmAgentDataHome } from "@pi-ohm/core/paths";
 import {
   isSubagentRuntimeConfig,
+  getSummarizeHistoryConfig,
   resolveSubagentAgentRuntimeConfig,
   subagentsConfigModule,
+  type SummarizeHistoryRuntimeConfig,
 } from "./config";
 import { INTEGRATED_SUBAGENTS } from "./catalog";
 import { DEFAULT_AGENT_TYPE, resolveSpawnConfig, type ResolvedSpawnConfig } from "./spawn-config";
@@ -129,6 +137,11 @@ type ResolvedTarget =
   | { readonly kind: "root"; readonly taskPath: typeof ROOT_AGENT_PATH }
   | { readonly kind: "agent"; readonly agent: AgentRecord };
 
+interface SummaryAuth {
+  readonly apiKey: string;
+  readonly headers?: Record<string, string>;
+}
+
 const state: RuntimeState = {
   records: new Map(),
   rootIdsBySessionId: new Map(),
@@ -156,7 +169,7 @@ export function createSubagentToolRuntime(
   const ownedPipIds = new Set<string>();
 
   return {
-    async spawn(params, ctx) {
+    async spawn(params, ctx, signal) {
       const taskName = normalizeTaskName(params.task_name);
       if (Result.isError(taskName)) return toolError(taskName.error.message);
 
@@ -189,6 +202,9 @@ export function createSubagentToolRuntime(
       });
       if (Result.isError(config)) return toolError(config.error.message);
 
+      const summarize = await resolveSummarizeHistoryConfig(ctx.cwd);
+      if (Result.isError(summarize)) return toolError(summarize.error.message);
+
       const key = controllerKey(config.value);
       const currentController = record.controllers.get(key);
       const created = currentController
@@ -203,6 +219,11 @@ export function createSubagentToolRuntime(
         fork: fork.value,
         sessionManager: ctx.sessionManager,
         cwd: ctx.cwd,
+        summarize: summarize.value,
+        model: ctx.model,
+        modelRegistry: ctx.modelRegistry,
+        thinking: pi.getThinkingLevel(),
+        signal,
       });
       if (Result.isError(parentSessionFile)) return toolError(parentSessionFile.error.message);
 
@@ -423,7 +444,11 @@ export async function resolveAvailableAgents(input: {
 }
 
 export interface SubagentToolRuntime {
-  spawn(params: SpawnAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
+  spawn(
+    params: SpawnAgentArgs,
+    ctx: ToolContext,
+    signal: AbortSignal | undefined,
+  ): Promise<AgentToolResult<unknown>>;
   sendMessage(params: SendMessageArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
   followupTask(params: FollowupTaskArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
   wait(params: WaitAgentArgs, ctx: ToolContext): Promise<AgentToolResult<unknown>>;
@@ -442,7 +467,8 @@ export function createSubagentTools(runtime: SubagentToolRuntime): readonly Tool
       description:
         "Spawns an agent to work on a concrete bounded task. The spawned agent inherits the parent model unless explicit overrides are supplied.",
       parameters: SpawnAgentArgsSchema,
-      execute: async (_toolCallId, params, _signal, _onUpdate, ctx) => runtime.spawn(params, ctx),
+      execute: async (_toolCallId, params, signal, _onUpdate, ctx) =>
+        runtime.spawn(params, ctx, signal),
     }),
     defineTool({
       name: "send_message",
@@ -565,10 +591,31 @@ export function resolveForkMode(forkTurns: string | undefined): BetterResult<Spa
   return Result.err(new Error('fork_turns must be "none", "all", or a positive integer string'));
 }
 
+async function resolveSummarizeHistoryConfig(
+  cwd: string,
+): Promise<BetterResult<SummarizeHistoryRuntimeConfig, Error>> {
+  const loaded = await loadConfig({ cwd, modules: [subagentsConfigModule] });
+  if (Result.isError(loaded)) return Result.err(loaded.error);
+
+  const subagents = pickConfig({
+    loaded: loaded.value,
+    module: subagentsConfigModule,
+    is: isSubagentRuntimeConfig,
+  });
+  if (Result.isError(subagents)) return Result.err(subagents.error);
+
+  return Result.ok(getSummarizeHistoryConfig({ subagents: subagents.value }));
+}
+
 async function resolveForkSourceFile(input: {
   readonly fork: SpawnForkMode;
   readonly sessionManager: ToolContext["sessionManager"];
   readonly cwd: string;
+  readonly summarize: SummarizeHistoryRuntimeConfig;
+  readonly model: ToolContext["model"];
+  readonly modelRegistry: ToolContext["modelRegistry"];
+  readonly thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
+  readonly signal: AbortSignal | undefined;
 }): Promise<BetterResult<string | undefined, Error>> {
   if (input.fork.kind === "none") return Result.ok(undefined);
 
@@ -577,9 +624,128 @@ async function resolveForkSourceFile(input: {
       ? reparentEntries(input.sessionManager.getBranch())
       : sliceForkEntries(input.sessionManager.getBranch(), input.fork.turns);
 
+  const entries = input.summarize.enabled
+    ? await summarizeForkEntries({
+        entries: source,
+        summarize: input.summarize,
+        model: input.model,
+        modelRegistry: input.modelRegistry,
+        thinking: input.thinking,
+        signal: input.signal,
+      })
+    : Result.ok(source);
+  if (Result.isError(entries)) return Result.err(entries.error);
+
   return writeForkSourceFile({
     header: forkSourceHeader({ sessionManager: input.sessionManager, cwd: input.cwd }),
-    entries: source,
+    entries: entries.value,
+  });
+}
+
+async function summarizeForkEntries(input: {
+  readonly entries: readonly SessionEntry[];
+  readonly summarize: SummarizeHistoryRuntimeConfig;
+  readonly model: ToolContext["model"];
+  readonly modelRegistry: ToolContext["modelRegistry"];
+  readonly thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
+  readonly signal: AbortSignal | undefined;
+}): Promise<BetterResult<readonly SessionEntry[], Error>> {
+  if (input.entries.length === 0) return Result.ok([]);
+  const model = input.model;
+  if (!model) return Result.err(new Error("No active model available to summarize fork history"));
+
+  const auth = await resolveSummaryAuth({ model, modelRegistry: input.modelRegistry });
+  if (Result.isError(auth)) return Result.err(auth.error);
+
+  if (input.summarize.type === "branch") {
+    const summarized = await Result.tryPromise({
+      try: () =>
+        generateBranchSummary([...input.entries], {
+          model,
+          apiKey: auth.value.apiKey,
+          headers: auth.value.headers,
+          signal: input.signal ?? new AbortController().signal,
+        }),
+      catch: (cause) => new Error(`Failed to summarize fork history: ${messageFromCause(cause)}`),
+    });
+    if (Result.isError(summarized)) return Result.err(summarized.error);
+    if (summarized.value.aborted)
+      return Result.err(new Error("Fork history summarization aborted"));
+    if (summarized.value.error) {
+      return Result.err(new Error(`Failed to summarize fork history: ${summarized.value.error}`));
+    }
+    const summary = summarized.value.summary ?? "No summary generated";
+
+    return Result.ok(
+      createBranchSummaryForkEntries({
+        entries: input.entries,
+        summary,
+        readFiles: summarized.value.readFiles ?? [],
+        modifiedFiles: summarized.value.modifiedFiles ?? [],
+        id: randomUUID(),
+        timestamp: new Date().toISOString(),
+      }),
+    );
+  }
+
+  const cut = findCutPoint(
+    [...input.entries],
+    0,
+    input.entries.length,
+    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
+  );
+  const firstKeptEntry = input.entries[cut.firstKeptEntryIndex];
+  if (!firstKeptEntry) return Result.ok(input.entries);
+
+  const historyEnd =
+    cut.isSplitTurn && cut.turnStartIndex >= 0 ? cut.turnStartIndex : cut.firstKeptEntryIndex;
+  const messages = buildSessionContext(input.entries.slice(0, historyEnd)).messages;
+  if (messages.length === 0) return Result.ok(input.entries);
+  const tokensBefore = buildSessionContext([...input.entries]).messages.reduce(
+    (total, message) => total + estimateTokens(message),
+    0,
+  );
+
+  const compacted = await Result.tryPromise({
+    try: () =>
+      generateSummary(
+        messages,
+        model,
+        DEFAULT_COMPACTION_SETTINGS.reserveTokens,
+        auth.value.apiKey,
+        auth.value.headers,
+        input.signal,
+        undefined,
+        undefined,
+        input.thinking,
+      ),
+    catch: (cause) => new Error(`Failed to compact fork history: ${messageFromCause(cause)}`),
+  });
+  if (Result.isError(compacted)) return Result.err(compacted.error);
+
+  return Result.ok(
+    createCompactionForkEntries({
+      entries: input.entries,
+      summary: compacted.value,
+      firstKeptEntryId: firstKeptEntry.id,
+      tokensBefore,
+      id: randomUUID(),
+      timestamp: new Date().toISOString(),
+    }),
+  );
+}
+
+async function resolveSummaryAuth(input: {
+  readonly model: NonNullable<ToolContext["model"]>;
+  readonly modelRegistry: ToolContext["modelRegistry"];
+}): Promise<BetterResult<SummaryAuth, Error>> {
+  const auth = await input.modelRegistry.getApiKeyAndHeaders(input.model);
+  if (!auth.ok) return Result.err(new Error(auth.error));
+  if (!auth.apiKey) return Result.err(new Error(`No API key found for "${input.model.provider}"`));
+
+  return Result.ok({
+    apiKey: auth.apiKey,
+    ...(auth.headers ? { headers: auth.headers } : {}),
   });
 }
 
@@ -630,6 +796,57 @@ async function writeForkSourceFile(input: {
   return Result.ok(written.value);
 }
 
+export function createBranchSummaryForkEntries(input: {
+  readonly entries: readonly SessionEntry[];
+  readonly summary: string;
+  readonly readFiles: readonly string[];
+  readonly modifiedFiles: readonly string[];
+  readonly id: string;
+  readonly timestamp: string;
+}): readonly SessionEntry[] {
+  const fromId = input.entries[input.entries.length - 1]?.id ?? "root";
+
+  return [
+    {
+      type: "branch_summary",
+      id: input.id,
+      parentId: null,
+      timestamp: input.timestamp,
+      fromId,
+      summary: input.summary,
+      details: {
+        readFiles: [...input.readFiles],
+        modifiedFiles: [...input.modifiedFiles],
+      },
+    } satisfies SessionEntry,
+  ];
+}
+
+export function createCompactionForkEntries(input: {
+  readonly entries: readonly SessionEntry[];
+  readonly summary: string;
+  readonly firstKeptEntryId: string;
+  readonly tokensBefore: number;
+  readonly details?: unknown;
+  readonly id: string;
+  readonly timestamp: string;
+}): readonly SessionEntry[] {
+  const compaction = {
+    type: "compaction",
+    id: input.id,
+    parentId: null,
+    timestamp: input.timestamp,
+    summary: input.summary,
+    firstKeptEntryId: input.firstKeptEntryId,
+    tokensBefore: input.tokensBefore,
+    details: input.details,
+  } satisfies SessionEntry;
+  const firstKeptIndex = input.entries.findIndex((entry) => entry.id === input.firstKeptEntryId);
+  const suffix = firstKeptIndex >= 0 ? input.entries.slice(firstKeptIndex) : [];
+
+  return [compaction, ...reparentEntries(suffix, compaction.id)];
+}
+
 export function sliceForkEntries(
   entries: readonly SessionEntry[],
   turns: number,
@@ -652,8 +869,11 @@ interface ReparentState {
   readonly parentId: string | null;
 }
 
-function reparentEntries(entries: readonly SessionEntry[]): readonly SessionEntry[] {
-  const initial: ReparentState = { entries: [], parentId: null };
+function reparentEntries(
+  entries: readonly SessionEntry[],
+  parentId: string | null = null,
+): readonly SessionEntry[] {
+  const initial: ReparentState = { entries: [], parentId };
   return entries.reduce<ReparentState>((state, entry) => {
     state.entries.push(reparentEntry(entry, state.parentId));
     return { entries: state.entries, parentId: entry.id };

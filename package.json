@@ -28,7 +28,8 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter './packages/*' --if-present run build",
+    "build": "pnpm --filter './packages/*' --if-present run build && pnpm run build:schema",
+    "build:schema": "tsx scripts/build-schemas.ts",
     "build:docs": "pnpm --filter docs run build",
     "dev:docs": "pnpm --filter docs run dev",
     "build:watch": "pnpm --parallel --filter './packages/*' --if-present run build -- --watch",
