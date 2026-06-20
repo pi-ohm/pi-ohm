@@ -112,6 +112,14 @@ void test("resolveForkMode accepts last-N fork_turns", () => {
   assert.equal(Result.isError(invalid), true);
 });
 
+void test("resolveForkMode defaults omitted fork_turns to a fresh session", () => {
+  const fork = resolveForkMode(undefined);
+
+  assert.equal(Result.isOk(fork), true);
+  if (Result.isError(fork)) assert.fail(fork.error.message);
+  assert.deepEqual(fork.value, { kind: "none" });
+});
+
 void test("sliceForkEntries keeps the last N user turns and rechains the suffix", () => {
   const entries = [
     customEntry("startup", null),

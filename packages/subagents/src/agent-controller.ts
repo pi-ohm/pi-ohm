@@ -553,7 +553,7 @@ function normalizeTaskName(taskName: string): BetterResult<string, Error> {
 }
 
 export function resolveForkMode(forkTurns: string | undefined): BetterResult<SpawnForkMode, Error> {
-  const value = forkTurns?.trim() || "all";
+  const value = forkTurns?.trim() || "none";
   if (value === "none") return Result.ok({ kind: "none" });
   if (value === "all") return Result.ok({ kind: "all" });
 
