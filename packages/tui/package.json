@@ -37,6 +37,9 @@
     "@pi-ohm/core": "workspace:*",
     "better-result": "catalog:"
   },
+  "devDependencies": {
+    "typebox": "^1.0.68"
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "0.79.4",
     "@earendil-works/pi-tui": "0.79.4"

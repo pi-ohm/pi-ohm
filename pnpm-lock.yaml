@@ -476,6 +476,10 @@ importers:
       better-result:
         specifier: 'catalog:'
         version: 2.9.2
+    devDependencies:
+      typebox:
+        specifier: ^1.0.68
+        version: 1.2.8
 
 packages:
 
