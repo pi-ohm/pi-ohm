@@ -81,11 +81,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel dev)
-          if [[ -z "${NPM_TOKEN:-}" ]]; then
-            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
-            cmd+=(--exclude pi-ohm)
-          fi
+          echo "::warning title=Skipping pi-ohm::Auto publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Configure https://www.npmjs.com/package/pi-ohm/access"
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --exclude pi-ohm)
 
           "${cmd[@]}"
 
@@ -148,11 +145,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel latest)
-          if [[ -z "${NPM_TOKEN:-}" ]]; then
-            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
-            cmd+=(--exclude pi-ohm)
-          fi
+          echo "::warning title=Skipping pi-ohm::Auto publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Configure https://www.npmjs.com/package/pi-ohm/access"
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel latest --exclude pi-ohm)
 
           "${cmd[@]}"
 
@@ -307,8 +301,8 @@ jobs:
           cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
-          elif [[ -z "${NPM_TOKEN:-}" ]]; then
-            echo "::warning title=Skipping pi-ohm::Unscoped pi-ohm needs package-owner npm auth or trusted publishing. Configure https://www.npmjs.com/package/pi-ohm/access"
+          else
+            echo "::warning title=Skipping pi-ohm::Manual all publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Use package=pi-ohm after configuring https://www.npmjs.com/package/pi-ohm/access"
             cmd+=(--exclude pi-ohm)
           fi
 
