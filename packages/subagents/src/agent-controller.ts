@@ -1,26 +1,21 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import {
-  buildSessionContext,
-  CURRENT_SESSION_VERSION,
-  DEFAULT_COMPACTION_SETTINGS,
   defineTool,
-  estimateTokens,
-  findCutPoint,
-  generateBranchSummary,
-  generateSummary,
   type AgentToolResult,
   type ExtensionAPI,
-  type SessionEntry,
   type SessionHeader,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Api, type Model, type Static } from "@earendil-works/pi-ai";
 import { Result, type Result as BetterResult } from "better-result";
-import { createSdkPipRunner, PipController, type PipStatus } from "@pi-ohm/core/pip";
+import {
+  Forker,
+  createPiCompact,
+  createSdkPipRunner,
+  PipController,
+  type ForkerResult,
+  type PipStatus,
+} from "@pi-ohm/core/pip";
 import { loadConfig, pickConfig } from "@pi-ohm/core/config";
-import { resolveOhmAgentDataHome } from "@pi-ohm/core/paths";
 import {
   isSubagentRuntimeConfig,
   getSummarizeHistoryConfig,
@@ -33,6 +28,11 @@ import { DEFAULT_AGENT_TYPE, resolveSpawnConfig, type ResolvedSpawnConfig } from
 
 export { resolveSpawnConfig } from "./spawn-config";
 export type { ResolvedSpawnConfig } from "./spawn-config";
+export {
+  createBranchSummaryForkEntries,
+  createCompactionForkEntries,
+  sliceForkEntries,
+} from "@pi-ohm/core/pip";
 
 const ROOT_AGENT_PATH = "/root";
 const MAILBOX_MESSAGE_TYPE = "pi-ohm.subagents.mailbox";
@@ -137,11 +137,6 @@ type ResolvedTarget =
   | { readonly kind: "root"; readonly taskPath: typeof ROOT_AGENT_PATH }
   | { readonly kind: "agent"; readonly agent: AgentRecord };
 
-interface SummaryAuth {
-  readonly apiKey: string;
-  readonly headers?: Record<string, string>;
-}
-
 const state: RuntimeState = {
   records: new Map(),
   rootIdsBySessionId: new Map(),
@@ -215,7 +210,7 @@ export function createSubagentToolRuntime(
       if (!currentController) record.controllers.set(key, controller);
 
       if (ctx.hasUI) ctx.ui.notify(`subagent spawned: ${taskPath}`, "info");
-      const parentSessionFile = await resolveForkSourceFile({
+      const forkSource = await resolveForkSource({
         fork: fork.value,
         sessionManager: ctx.sessionManager,
         cwd: ctx.cwd,
@@ -225,7 +220,8 @@ export function createSubagentToolRuntime(
         thinking: pi.getThinkingLevel(),
         signal,
       });
-      if (Result.isError(parentSessionFile)) return toolError(parentSessionFile.error.message);
+      if (Result.isError(forkSource)) return toolError(forkSource.error.message);
+      recordBootstrap({ pi, ctx, taskPath, summarize: summarize.value, result: forkSource.value });
 
       const spawned = await controller.spawn({
         ownerPackage: "@pi-ohm/subagents",
@@ -234,7 +230,7 @@ export function createSubagentToolRuntime(
         cwd: ctx.cwd,
         prompt: childPrompt({ taskPath, message: config.value.prompt }),
         runInBackground: true,
-        parentSessionFile: parentSessionFile.value,
+        parentSessionFile: forkSource.value.sourceFile,
       });
       if (Result.isError(spawned)) return toolError(spawned.error.message);
 
@@ -607,7 +603,7 @@ async function resolveSummarizeHistoryConfig(
   return Result.ok(getSummarizeHistoryConfig({ subagents: subagents.value }));
 }
 
-async function resolveForkSourceFile(input: {
+async function resolveForkSource(input: {
   readonly fork: SpawnForkMode;
   readonly sessionManager: ToolContext["sessionManager"];
   readonly cwd: string;
@@ -616,136 +612,22 @@ async function resolveForkSourceFile(input: {
   readonly modelRegistry: ToolContext["modelRegistry"];
   readonly thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
   readonly signal: AbortSignal | undefined;
-}): Promise<BetterResult<string | undefined, Error>> {
-  if (input.fork.kind === "none") return Result.ok(undefined);
-
-  const source =
-    input.fork.kind === "all"
-      ? reparentEntries(input.sessionManager.getBranch())
-      : sliceForkEntries(input.sessionManager.getBranch(), input.fork.turns);
-
-  const entries = input.summarize.enabled
-    ? await summarizeForkEntries({
-        entries: source,
-        summarize: input.summarize,
-        model: input.model,
-        modelRegistry: input.modelRegistry,
-        thinking: input.thinking,
-        signal: input.signal,
-      })
-    : Result.ok(source);
-  if (Result.isError(entries)) return Result.err(entries.error);
-
-  return writeForkSourceFile({
-    header: forkSourceHeader({ sessionManager: input.sessionManager, cwd: input.cwd }),
-    entries: entries.value,
-  });
-}
-
-async function summarizeForkEntries(input: {
-  readonly entries: readonly SessionEntry[];
-  readonly summarize: SummarizeHistoryRuntimeConfig;
-  readonly model: ToolContext["model"];
-  readonly modelRegistry: ToolContext["modelRegistry"];
-  readonly thinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
-  readonly signal: AbortSignal | undefined;
-}): Promise<BetterResult<readonly SessionEntry[], Error>> {
-  if (input.entries.length === 0) return Result.ok([]);
-  const model = input.model;
-  if (!model) return Result.err(new Error("No active model available to summarize fork history"));
-
-  const auth = await resolveSummaryAuth({ model, modelRegistry: input.modelRegistry });
-  if (Result.isError(auth)) return Result.err(auth.error);
-
-  if (input.summarize.type === "branch") {
-    const summarized = await Result.tryPromise({
-      try: () =>
-        generateBranchSummary([...input.entries], {
-          model,
-          apiKey: auth.value.apiKey,
-          headers: auth.value.headers,
-          signal: input.signal ?? new AbortController().signal,
-        }),
-      catch: (cause) => new Error(`Failed to summarize fork history: ${messageFromCause(cause)}`),
-    });
-    if (Result.isError(summarized)) return Result.err(summarized.error);
-    if (summarized.value.aborted)
-      return Result.err(new Error("Fork history summarization aborted"));
-    if (summarized.value.error) {
-      return Result.err(new Error(`Failed to summarize fork history: ${summarized.value.error}`));
-    }
-    const summary = summarized.value.summary ?? "No summary generated";
-
-    return Result.ok(
-      createBranchSummaryForkEntries({
-        entries: input.entries,
-        summary,
-        readFiles: summarized.value.readFiles ?? [],
-        modifiedFiles: summarized.value.modifiedFiles ?? [],
-        id: randomUUID(),
-        timestamp: new Date().toISOString(),
-      }),
-    );
-  }
-
-  const cut = findCutPoint(
-    [...input.entries],
-    0,
-    input.entries.length,
-    DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
-  );
-  const firstKeptEntry = input.entries[cut.firstKeptEntryIndex];
-  if (!firstKeptEntry) return Result.ok(input.entries);
-
-  const historyEnd =
-    cut.isSplitTurn && cut.turnStartIndex >= 0 ? cut.turnStartIndex : cut.firstKeptEntryIndex;
-  const messages = buildSessionContext(input.entries.slice(0, historyEnd)).messages;
-  if (messages.length === 0) return Result.ok(input.entries);
-  const tokensBefore = buildSessionContext([...input.entries]).messages.reduce(
-    (total, message) => total + estimateTokens(message),
-    0,
-  );
-
-  const compacted = await Result.tryPromise({
-    try: () =>
-      generateSummary(
-        messages,
-        model,
-        DEFAULT_COMPACTION_SETTINGS.reserveTokens,
-        auth.value.apiKey,
-        auth.value.headers,
-        input.signal,
-        undefined,
-        undefined,
-        input.thinking,
-      ),
-    catch: (cause) => new Error(`Failed to compact fork history: ${messageFromCause(cause)}`),
-  });
-  if (Result.isError(compacted)) return Result.err(compacted.error);
-
-  return Result.ok(
-    createCompactionForkEntries({
-      entries: input.entries,
-      summary: compacted.value,
-      firstKeptEntryId: firstKeptEntry.id,
-      tokensBefore,
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
-    }),
-  );
-}
-
-async function resolveSummaryAuth(input: {
-  readonly model: NonNullable<ToolContext["model"]>;
-  readonly modelRegistry: ToolContext["modelRegistry"];
-}): Promise<BetterResult<SummaryAuth, Error>> {
-  const auth = await input.modelRegistry.getApiKeyAndHeaders(input.model);
-  if (!auth.ok) return Result.err(new Error(auth.error));
-  if (!auth.apiKey) return Result.err(new Error(`No API key found for "${input.model.provider}"`));
-
-  return Result.ok({
-    apiKey: auth.apiKey,
-    ...(auth.headers ? { headers: auth.headers } : {}),
+}): Promise<BetterResult<ForkerResult, Error>> {
+  const strategy = input.summarize.enabled ? input.summarize.type : "raw";
+  const forker = new Forker({ compact: createPiCompact() });
+  return forker.create({
+    cwd: input.cwd,
+    fork: input.fork,
+    strategy,
+    source: {
+      header: forkSourceHeader({ sessionManager: input.sessionManager, cwd: input.cwd }),
+      entries: input.sessionManager.getBranch(),
+    },
+    model: input.model,
+    modelRegistry: input.modelRegistry,
+    piModelRegistry: input.modelRegistry,
+    thinking: input.thinking,
+    signal: input.signal,
   });
 }
 
@@ -754,147 +636,42 @@ function forkSourceHeader(input: {
   readonly cwd: string;
 }): SessionHeader {
   const header = input.sessionManager.getHeader();
-  if (header) {
-    return {
-      ...header,
-      version: header.version ?? CURRENT_SESSION_VERSION,
-      cwd: input.cwd,
-    };
-  }
+  if (header) return { ...header, cwd: input.cwd };
 
   return {
     type: "session",
-    version: CURRENT_SESSION_VERSION,
     id: input.sessionManager.getSessionId(),
     timestamp: new Date().toISOString(),
     cwd: input.cwd,
   };
 }
 
-async function writeForkSourceFile(input: {
-  readonly header: SessionHeader;
-  readonly entries: readonly SessionEntry[];
-}): Promise<BetterResult<string, Error>> {
-  const written = await Result.tryPromise({
-    try: async () => {
-      const dir = join(resolveOhmAgentDataHome(), "subagents", "fork-slices");
-      await mkdir(dir, { recursive: true });
-      const file = join(
-        dir,
-        `${new Date().toISOString().replace(/[:.]/g, "-")}_${randomUUID()}.jsonl`,
-      );
-      const content = [input.header, ...input.entries]
-        .map((entry) => JSON.stringify(entry))
-        .join("\n");
-      await writeFile(file, `${content}\n`, { flag: "wx" });
-      return file;
+function recordBootstrap(input: {
+  readonly pi: Pick<ExtensionAPI, "appendEntry">;
+  readonly ctx: ToolContext;
+  readonly taskPath: string;
+  readonly summarize: SummarizeHistoryRuntimeConfig;
+  readonly result: ForkerResult;
+}): void {
+  input.pi.appendEntry("pi-ohm.subagents.bootstrap", {
+    kind: "bootstrap",
+    taskPath: input.taskPath,
+    mode: input.result.mode,
+    fork: input.result.fork,
+    strategy: input.result.strategy,
+    sourceFile: input.result.sourceFile,
+    summarizeHistory: {
+      enabled: input.summarize.enabled,
+      type: input.summarize.type,
     },
-    catch: (cause) => new Error(`Failed to create fork source session: ${messageFromCause(cause)}`),
+    warning: input.result.warning,
   });
 
-  if (Result.isError(written)) return Result.err(written.error);
-  return Result.ok(written.value);
-}
+  const warning = input.result.warning;
+  if (!warning) return;
 
-export function createBranchSummaryForkEntries(input: {
-  readonly entries: readonly SessionEntry[];
-  readonly summary: string;
-  readonly readFiles: readonly string[];
-  readonly modifiedFiles: readonly string[];
-  readonly id: string;
-  readonly timestamp: string;
-}): readonly SessionEntry[] {
-  const fromId = input.entries[input.entries.length - 1]?.id ?? "root";
-
-  return [
-    {
-      type: "branch_summary",
-      id: input.id,
-      parentId: null,
-      timestamp: input.timestamp,
-      fromId,
-      summary: input.summary,
-      details: {
-        readFiles: [...input.readFiles],
-        modifiedFiles: [...input.modifiedFiles],
-      },
-    } satisfies SessionEntry,
-  ];
-}
-
-export function createCompactionForkEntries(input: {
-  readonly entries: readonly SessionEntry[];
-  readonly summary: string;
-  readonly firstKeptEntryId: string;
-  readonly tokensBefore: number;
-  readonly details?: unknown;
-  readonly id: string;
-  readonly timestamp: string;
-}): readonly SessionEntry[] {
-  const compaction = {
-    type: "compaction",
-    id: input.id,
-    parentId: null,
-    timestamp: input.timestamp,
-    summary: input.summary,
-    firstKeptEntryId: input.firstKeptEntryId,
-    tokensBefore: input.tokensBefore,
-    details: input.details,
-  } satisfies SessionEntry;
-  const firstKeptIndex = input.entries.findIndex((entry) => entry.id === input.firstKeptEntryId);
-  const suffix = firstKeptIndex >= 0 ? input.entries.slice(firstKeptIndex) : [];
-
-  return [compaction, ...reparentEntries(suffix, compaction.id)];
-}
-
-export function sliceForkEntries(
-  entries: readonly SessionEntry[],
-  turns: number,
-): readonly SessionEntry[] {
-  const positions = entries.flatMap((entry, index) => (isForkTurnBoundary(entry) ? [index] : []));
-  const start =
-    positions.length > turns
-      ? positions[positions.length - turns]
-      : (positions[0] ?? entries.length);
-
-  return reparentEntries(entries.slice(start));
-}
-
-function isForkTurnBoundary(entry: SessionEntry): boolean {
-  return entry.type === "message" && entry.message.role === "user";
-}
-
-interface ReparentState {
-  readonly entries: SessionEntry[];
-  readonly parentId: string | null;
-}
-
-function reparentEntries(
-  entries: readonly SessionEntry[],
-  parentId: string | null = null,
-): readonly SessionEntry[] {
-  const initial: ReparentState = { entries: [], parentId };
-  return entries.reduce<ReparentState>((state, entry) => {
-    state.entries.push(reparentEntry(entry, state.parentId));
-    return { entries: state.entries, parentId: entry.id };
-  }, initial).entries;
-}
-
-function reparentEntry(entry: SessionEntry, parentId: string | null): SessionEntry {
-  if (entry.type === "message") return { ...entry, parentId };
-  if (entry.type === "thinking_level_change") return { ...entry, parentId };
-  if (entry.type === "model_change") return { ...entry, parentId };
-  if (entry.type === "compaction") return { ...entry, parentId };
-  if (entry.type === "branch_summary") return { ...entry, parentId };
-  if (entry.type === "custom") return { ...entry, parentId };
-  if (entry.type === "custom_message") return { ...entry, parentId };
-  if (entry.type === "label") return { ...entry, parentId };
-  if (entry.type === "session_info") return { ...entry, parentId };
-  return unreachable(entry);
-}
-
-function unreachable(value: never): never {
-  return value;
+  const message = `Subagent ${input.taskPath} ${warning.strategy} fork failed; using raw fork. ${warning.message}`;
+  if (input.ctx.hasUI) input.ctx.ui.notify(message, "warning");
 }
 
 function fullForkOverrideError(params: SpawnAgentArgs, fork: SpawnForkMode): string | undefined {
@@ -1105,11 +882,6 @@ function updateAgent(
 
 function statusKey(status: PipStatus): string {
   return JSON.stringify(status);
-}
-
-function messageFromCause(cause: unknown): string {
-  if (cause instanceof Error) return cause.message;
-  return String(cause);
 }
 
 function bump(record: ControllerRecord): void {

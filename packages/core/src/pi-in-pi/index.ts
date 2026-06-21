@@ -16,6 +16,7 @@ import type { ExtensionDb, ExtensionDbModule } from "../db";
 import { resolveOhmAgentDataHome } from "../paths";
 
 export * from "./spawn-config";
+export * from "./forker";
 
 export type PipId = string;
 

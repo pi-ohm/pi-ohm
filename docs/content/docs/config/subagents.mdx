@@ -72,6 +72,33 @@ Model precedence:
 3. current main session model and thinking, when no agent model is configured
 4. fallback default only when Pi has no active model
 
+## Fork history
+
+`spawn_agent.fork_turns` controls parent context inheritance:
+
+- omitted or `"none"` starts a fresh child session
+- `"all"` forks the current parent branch
+- a positive integer string, like `"2"`, forks the last N user turns
+
+Optional summarization only applies to explicit forks:
+
+```json title="ohm.json"
+{
+  "subagents": {
+    "experimental": {
+      "summarize_history": {
+        "enabled": true,
+        "type": "branch"
+      }
+    }
+  }
+}
+```
+
+`type` is `"branch"` or `"compact"`; omitted defaults to `"branch"`. `"summary"` is not valid. `branch` creates a single Pi `branch_summary` bootstrap entry. `compact` uses Pi's compaction path with Pi defaults, yielding a standard `compaction` entry plus retained suffix. If summarization or compaction fails, `spawn_agent` falls back to raw fork context and records a user-only bootstrap warning in the parent session.
+
+`summarize_history.model` is accepted for config compatibility, but runtime ignores it. Fork summarization uses the active main session model and auth.
+
 ## Markdown
 
 Markdown agent files are the intended authoring shape for richer agents. They should live in one of these locations:
