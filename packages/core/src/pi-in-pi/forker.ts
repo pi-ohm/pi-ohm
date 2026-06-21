@@ -658,7 +658,6 @@ export function createPiCompact(input: ForkerPiCompactInput = {}): ForkerCompact
             model: compactInput.model,
             modelRegistry: compactInput.modelRegistry,
             thinkingLevel: compactInput.thinking,
-            noTools: "all",
           });
           await created.session.bindExtensions({});
 
