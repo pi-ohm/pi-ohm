@@ -660,6 +660,7 @@ export function createPiCompact(input: ForkerPiCompactInput = {}): ForkerCompact
             thinkingLevel: compactInput.thinking,
             noTools: "all",
           });
+          await created.session.bindExtensions({});
 
           try {
             const result = await created.session.compact(compactInput.customInstructions);
