@@ -17,6 +17,7 @@ import {
   SessionManager,
   SettingsManager,
   type CompactionResult,
+  type ExtensionFactory,
   type FileOperations,
   type ModelRegistry,
   type SessionEntry,
@@ -155,6 +156,7 @@ export type ForkerCompact = (
 export interface ForkerPiCompactInput {
   readonly dataHome?: string;
   readonly agentDir?: string;
+  readonly extensionFactories?: ExtensionFactory[];
   readonly noExtensions?: boolean;
 }
 
@@ -646,6 +648,7 @@ export function createPiCompact(input: ForkerPiCompactInput = {}): ForkerCompact
             cwd: compactInput.cwd,
             agentDir,
             settingsManager: settings,
+            extensionFactories: input.extensionFactories,
             noExtensions,
           });
           await loader.reload();

@@ -4,12 +4,19 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { SessionEntry, SessionHeader } from "@earendil-works/pi-coding-agent";
+import {
+  AuthStorage,
+  ModelRegistry,
+  type ExtensionFactory,
+  type SessionEntry,
+  type SessionHeader,
+} from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
 import {
   Forker,
   createBranchSummaryForkEntries,
   createCompactionForkEntries,
+  createPiCompact,
   sliceForkEntries,
   type ForkerAuthResult,
   type ForkerBeforeCompactInput,
@@ -423,6 +430,114 @@ void test("Forker compact hook cancel falls back to raw with warning", async () 
     assert.equal(result.value.warning?.strategy, "compact");
     assert.match(result.value.warning?.message ?? "", /hook cancelled/);
   });
+});
+
+void test("createPiCompact invokes a real Pi session_before_compact extension hook", async () => {
+  const dataHome = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-forker-pi-data-"));
+  const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-ohm-forker-pi-agent-"));
+  const observed: string[] = [];
+  const hookBranchIds: string[] = [];
+  const extension: ExtensionFactory = (pi) => {
+    pi.on("session_start", () => {
+      observed.push("session_start");
+    });
+    pi.on("session_before_compact", (event, ctx) => {
+      observed.push("session_before_compact");
+      hookBranchIds.push(...ctx.sessionManager.getBranch().map((entry) => entry.id));
+      return {
+        compaction: {
+          summary: "real extension compact",
+          firstKeptEntryId: event.preparation.firstKeptEntryId,
+          tokensBefore: event.preparation.tokensBefore,
+          details: { marker: "real-pi-hook" },
+        },
+      };
+    });
+    pi.on("session_compact", (event) => {
+      observed.push(event.fromExtension ? "session_compact_hook" : "session_compact_pi");
+    });
+  };
+
+  try {
+    const hookModel = {
+      id: "gpt-4.1",
+      name: "GPT 4.1",
+      api: "openai",
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      reasoning: false,
+      input: ["text"],
+      cost: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+      },
+      contextWindow: 200000,
+      maxTokens: 20000,
+    } satisfies Model<Api>;
+    const registry = ModelRegistry.inMemory(
+      AuthStorage.inMemory({ openai: { type: "api_key", key: "test-key" } }),
+    );
+    const ids = ["compact-entry", "fork-session"];
+    const forker = new Forker({
+      dataHome,
+      now: () => timestamp,
+      createId: () => ids.shift() ?? "fallback-id",
+      compact: createPiCompact({
+        dataHome,
+        agentDir,
+        noExtensions: true,
+        extensionFactories: [extension],
+      }),
+    });
+    const entries = [
+      userEntry("u1", null, "one"),
+      assistantEntry("a1", "u1", "answer"),
+      userEntry("u2", "a1", "two"),
+      assistantEntry("a2", "u2", "answer two"),
+    ];
+    const result = await forker.create({
+      cwd: dataHome,
+      fork: { kind: "all" },
+      strategy: "compact",
+      source: { header: { ...parentHeader, cwd: dataHome }, entries },
+      model: hookModel,
+      modelRegistry: registry,
+      piModelRegistry: registry,
+    });
+
+    assert.equal(Result.isOk(result), true);
+    if (Result.isError(result)) assert.fail(result.error.message);
+    if (result.value.mode !== "compact") {
+      assert.fail(
+        `${result.value.warning?.message ?? "Expected compact mode"}; observed=${observed.join(",")}`,
+      );
+    }
+    assert.equal(result.value.mode, "compact");
+    assert.deepEqual(observed, ["session_start", "session_before_compact", "session_compact_hook"]);
+    assert.equal(hookBranchIds.includes("u1"), true);
+    assert.equal(hookBranchIds.includes("a1"), true);
+    assert.equal(hookBranchIds.includes("u2"), true);
+    assert.equal(hookBranchIds.includes("a2"), true);
+    assert.equal(typeof result.value.sourceFile, "string");
+    if (!result.value.sourceFile) assert.fail("Expected source file");
+
+    const file = await readJsonl(result.value.sourceFile);
+    const compaction = file.entries[0];
+    if (compaction?.type !== "compaction") assert.fail("Expected compaction entry");
+    assert.equal(compaction.id, "compact-entry");
+    assert.equal(compaction.parentId, null);
+    assert.equal(compaction.timestamp, timestamp);
+    assert.equal(compaction.summary, "real extension compact");
+    assert.equal(compaction.firstKeptEntryId, "u1");
+    assert.equal(typeof compaction.tokensBefore, "number");
+    assert.deepEqual(compaction.details, { marker: "real-pi-hook" });
+    assert.equal(compaction.fromHook, true);
+  } finally {
+    await fs.rm(dataHome, { recursive: true, force: true });
+    await fs.rm(agentDir, { recursive: true, force: true });
+  }
 });
 
 interface ForkerTestDeps {
