@@ -41,8 +41,9 @@
     "test:subagents:golden": "pnpm --filter @pi-ohm/subagents exec tsx --test src/runtime/backend/tests/system-prompt-harness.test.ts",
     "test:subagents:golden:update": "UPDATE_PROMPTS=1 pnpm test:subagents:golden",
     "test": "vp test",
+    "lint:ast-grep": "ast-grep --config sgconfig.yml scan . --globs '!**/dist/**' --globs '!**/src_legacy/**' --globs '!docs/.output/**' --report-style short",
     "oxlint": "vp lint . --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\" --ignore-pattern \"**/src_legacy/**\"",
-    "lint": "vp lint . --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\" --ignore-pattern \"**/src_legacy/**\"",
+    "lint": "vp lint . --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\" --ignore-pattern \"**/src_legacy/**\" && ast-grep --config sgconfig.yml scan . --globs '!**/dist/**' --globs '!**/src_legacy/**' --globs '!docs/.output/**' --report-style short",
     "lint:fix": "vp lint . --tsconfig tsconfig.json --type-aware --ignore-pattern \"**/dist/**\" --ignore-pattern \"**/src_legacy/**\" --fix",
     "oxfmt": "vp fmt . --write",
     "format": "vp fmt . --write",
@@ -55,6 +56,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@ast-grep/cli": "^0.44.0",
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
@@ -67,6 +69,7 @@
   "packageManager": "pnpm@10.25.0",
   "pnpm": {
     "onlyBuiltDependencies": [
+      "@ast-grep/cli",
       "@google/genai",
       "esbuild",
       "koffi",
