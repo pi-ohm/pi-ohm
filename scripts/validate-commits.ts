@@ -54,6 +54,7 @@ const ALLOWED_SCOPES = new Set([
   "references",
   "ref",
   "goal",
+  "goals",
   "perf",
   "profiler",
 ]);

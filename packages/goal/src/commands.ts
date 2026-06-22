@@ -185,6 +185,7 @@ export async function runOhmGoalCommand(
     `enabled: ${config.value.config.enabled ? "yes" : "no"}`,
     `autoContinue: ${config.value.config.autoContinue ? "yes" : "no"}`,
     `defaultTokenBudget: ${config.value.config.defaultTokenBudget ?? "none"}`,
+    `experimental.managed.enabled: ${config.value.config.experimental.managed.enabled ? "yes" : "no"}`,
     `loadedFrom: ${config.value.loaded.loadedFrom.length > 0 ? config.value.loaded.loadedFrom.join(", ") : "defaults"}`,
   ].join("\n");
 

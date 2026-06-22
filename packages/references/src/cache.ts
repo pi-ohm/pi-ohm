@@ -9,6 +9,7 @@ import {
   repositoryCachePath,
   sameRepositoryReference,
   validateBranch,
+  type RepositoryReference,
   type RemoteRepositoryReference,
 } from "./repository";
 
@@ -35,6 +36,8 @@ export interface EnsureRepositoryInput {
 
 const GIT_TIMEOUT_MS = 120_000;
 const GIT_REMOTE_CHECK_TIMEOUT_MS = 15_000;
+const CACHE_LOCK_TIMEOUT_MS = 120_000;
+const CACHE_LOCK_POLL_MS = 100;
 
 export function defaultReferencesCacheRoot(): string {
   return path.join(resolveOhmAgentDataHome(), "references", "repos");
@@ -44,6 +47,13 @@ function causeMessage(cause: unknown): string {
   if (cause instanceof Error && cause.message.trim().length > 0) return cause.message;
   if (typeof cause === "string" && cause.trim().length > 0) return cause;
   return String(cause);
+}
+
+function causeCode(cause: unknown): string | undefined {
+  if (!(cause instanceof Error)) return undefined;
+  const code = Reflect.get(cause, "code");
+  if (typeof code !== "string") return undefined;
+  return code;
 }
 
 function cacheError(input: {
@@ -63,6 +73,12 @@ async function exists(target: string): Promise<boolean> {
   );
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 async function cacheOperation<T>(input: {
   readonly stage: string;
   readonly target: string;
@@ -78,6 +94,98 @@ async function cacheOperation<T>(input: {
         cause,
       }),
   });
+}
+
+interface RepositoryCacheLock {
+  readonly path: string;
+}
+
+function lockPath(target: string): string {
+  return `${target}.lock`;
+}
+
+function abortedLockError(target: string): ReferencesError {
+  return cacheError({
+    code: "cache_operation_failed",
+    path: target,
+    message: `Repository cache lock wait aborted for ${target}`,
+  });
+}
+
+async function acquireRepositoryLock(input: {
+  readonly target: string;
+  readonly signal?: AbortSignal;
+  readonly deadline: number;
+}): Promise<Result<RepositoryCacheLock, ReferencesError>> {
+  if (input.signal?.aborted) return Result.err(abortedLockError(input.target));
+
+  const created = await Result.tryPromise({
+    try: () => fs.mkdir(input.target),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(created)) return Result.ok({ path: input.target });
+  if (causeCode(created.error) !== "EEXIST") {
+    return Result.err(
+      cacheError({
+        code: "cache_operation_failed",
+        path: input.target,
+        message: `Acquire repository cache lock failed for ${input.target}: ${causeMessage(created.error)}`,
+        cause: created.error,
+      }),
+    );
+  }
+  if (Date.now() >= input.deadline) {
+    return Result.err(
+      cacheError({
+        code: "cache_operation_failed",
+        path: input.target,
+        message: `Timed out waiting for repository cache lock: ${input.target}`,
+        cause: created.error,
+      }),
+    );
+  }
+
+  await wait(CACHE_LOCK_POLL_MS);
+  return acquireRepositoryLock(input);
+}
+
+async function releaseRepositoryLock(
+  lock: RepositoryCacheLock,
+): Promise<Result<void, ReferencesError>> {
+  return cacheOperation({
+    stage: "release repository cache lock",
+    target: lock.path,
+    run: () => fs.rm(lock.path, { recursive: true, force: true }),
+  });
+}
+
+async function withRepositoryLock<T>(input: {
+  readonly target: string;
+  readonly signal?: AbortSignal;
+  readonly run: () => Promise<Result<T, ReferencesError>>;
+}): Promise<Result<T, ReferencesError>> {
+  const lock = await acquireRepositoryLock({
+    target: lockPath(input.target),
+    ...(input.signal ? { signal: input.signal } : {}),
+    deadline: Date.now() + CACHE_LOCK_TIMEOUT_MS,
+  });
+  if (Result.isError(lock)) return Result.err(lock.error);
+
+  const result = await Result.tryPromise({
+    try: input.run,
+    catch: (cause) =>
+      cacheError({
+        code: "cache_operation_failed",
+        path: input.target,
+        message: `Repository cache operation failed for ${input.target}: ${causeMessage(cause)}`,
+        cause,
+      }),
+  });
+  const released = await releaseRepositoryLock(lock.value);
+  if (Result.isError(result)) return Result.err(result.error);
+  if (Result.isError(result.value)) return Result.err(result.value.error);
+  if (Result.isError(released)) return Result.err(released.error);
+  return Result.ok(result.value.value);
 }
 
 async function git(input: {
@@ -209,6 +317,173 @@ async function resetTarget(input: {
   return "HEAD";
 }
 
+async function ensureRepositoryCache(input: {
+  readonly pi: Pick<ExtensionAPI, "exec">;
+  readonly reference: RemoteRepositoryReference;
+  readonly cloneTarget: RepositoryReference;
+  readonly repository: string;
+  readonly localPath: string;
+  readonly branch?: string;
+  readonly refresh?: boolean;
+  readonly signal?: AbortSignal;
+}): Promise<Result<RepositoryCacheResult, ReferencesError>> {
+  const pathExists = await exists(input.localPath);
+  const hasGitDir = await exists(path.join(input.localPath, ".git"));
+  const origin = hasGitDir
+    ? await gitOptional({
+        pi: input.pi,
+        cwd: input.localPath,
+        args: ["config", "--get", "remote.origin.url"],
+        signal: input.signal,
+      })
+    : undefined;
+  const originReference = origin ? parseRepositoryReference(origin) : undefined;
+  const reuse =
+    hasGitDir &&
+    originReference !== undefined &&
+    Result.isOk(originReference) &&
+    sameRepositoryReference(originReference.value, input.cloneTarget);
+
+  if (pathExists && !reuse) {
+    const removed = await cacheOperation({
+      stage: "remove stale repository cache",
+      target: input.localPath,
+      run: () => fs.rm(input.localPath, { recursive: true, force: true }),
+    });
+    if (Result.isError(removed)) return Result.err(removed.error);
+  }
+
+  const currentBranch = reuse
+    ? await gitOptional({
+        pi: input.pi,
+        cwd: input.localPath,
+        args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
+        signal: input.signal,
+      })
+    : undefined;
+  const currentHead = reuse
+    ? await gitOptional({
+        pi: input.pi,
+        cwd: input.localPath,
+        args: ["rev-parse", "HEAD"],
+        signal: input.signal,
+      })
+    : undefined;
+  const checkedRemoteHead =
+    reuse && input.refresh
+      ? await remoteHead({
+          pi: input.pi,
+          cwd: input.localPath,
+          remote: input.reference.remote,
+          branch: input.branch,
+          ...(input.signal ? { signal: input.signal } : {}),
+        })
+      : undefined;
+  const status = statusForRepository({
+    reuse,
+    head: currentHead,
+    remoteHead: checkedRemoteHead,
+    ...(input.branch ? { branchMatches: currentBranch === input.branch } : {}),
+  });
+
+  if (status === "cloned") {
+    const cloned = await git({
+      pi: input.pi,
+      cwd: path.dirname(input.localPath),
+      args: [
+        "clone",
+        "--depth",
+        "100",
+        ...(input.branch ? ["--branch", input.branch] : []),
+        "--",
+        input.reference.remote,
+        input.localPath,
+      ],
+      repository: input.repository,
+      signal: input.signal,
+    });
+    if (Result.isError(cloned)) return Result.err(cloned.error);
+  }
+
+  if (status === "refreshed") {
+    const fetched = await git({
+      pi: input.pi,
+      cwd: input.localPath,
+      args: ["fetch", "--all", "--prune"],
+      repository: input.repository,
+      signal: input.signal,
+    });
+    if (Result.isError(fetched)) return Result.err(fetched.error);
+
+    if (input.branch) {
+      const branchFetched = await git({
+        pi: input.pi,
+        cwd: input.localPath,
+        args: [
+          "fetch",
+          "origin",
+          `+refs/heads/${input.branch}:refs/remotes/origin/${input.branch}`,
+        ],
+        repository: input.repository,
+        signal: input.signal,
+      });
+      if (Result.isError(branchFetched)) return Result.err(branchFetched.error);
+
+      const checkedOut = await git({
+        pi: input.pi,
+        cwd: input.localPath,
+        args: ["checkout", "-B", input.branch, `origin/${input.branch}`],
+        repository: input.repository,
+        signal: input.signal,
+      });
+      if (Result.isError(checkedOut)) return Result.err(checkedOut.error);
+    }
+
+    const reset = await git({
+      pi: input.pi,
+      cwd: input.localPath,
+      args: [
+        "reset",
+        "--hard",
+        await resetTarget({
+          pi: input.pi,
+          cwd: input.localPath,
+          branch: input.branch,
+          ...(input.signal ? { signal: input.signal } : {}),
+        }),
+      ],
+      repository: input.repository,
+      signal: input.signal,
+    });
+    if (Result.isError(reset)) return Result.err(reset.error);
+  }
+
+  const head = await gitOptional({
+    pi: input.pi,
+    cwd: input.localPath,
+    args: ["rev-parse", "HEAD"],
+    signal: input.signal,
+  });
+  const branch = await gitOptional({
+    pi: input.pi,
+    cwd: input.localPath,
+    args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
+    signal: input.signal,
+  });
+
+  return Result.ok({
+    repository: input.repository,
+    host: input.reference.host,
+    remote: input.reference.remote,
+    localPath: input.localPath,
+    status,
+    freshness: head && checkedRemoteHead && head === checkedRemoteHead ? "fresh" : "unknown",
+    ...(head ? { head } : {}),
+    ...(checkedRemoteHead ? { remoteHead: checkedRemoteHead } : {}),
+    ...(branch ? { branch } : {}),
+  });
+}
+
 export async function ensureRepository(
   input: EnsureRepositoryInput,
 ): Promise<Result<RepositoryCacheResult, ReferencesError>> {
@@ -230,159 +505,19 @@ export async function ensureRepository(
   });
   if (Result.isError(ensured)) return Result.err(ensured.error);
 
-  const pathExists = await exists(localPath);
-  const hasGitDir = await exists(path.join(localPath, ".git"));
-  const origin = hasGitDir
-    ? await gitOptional({
+  return withRepositoryLock({
+    target: localPath,
+    ...(input.signal ? { signal: input.signal } : {}),
+    run: () =>
+      ensureRepositoryCache({
         pi: input.pi,
-        cwd: localPath,
-        args: ["config", "--get", "remote.origin.url"],
-        signal: input.signal,
-      })
-    : undefined;
-  const originReference = origin ? parseRepositoryReference(origin) : undefined;
-  const reuse =
-    hasGitDir &&
-    originReference !== undefined &&
-    Result.isOk(originReference) &&
-    sameRepositoryReference(originReference.value, cloneTarget);
-
-  if (pathExists && !reuse) {
-    const removed = await cacheOperation({
-      stage: "remove stale repository cache",
-      target: localPath,
-      run: () => fs.rm(localPath, { recursive: true, force: true }),
-    });
-    if (Result.isError(removed)) return Result.err(removed.error);
-  }
-
-  const currentBranch = reuse
-    ? await gitOptional({
-        pi: input.pi,
-        cwd: localPath,
-        args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
-        signal: input.signal,
-      })
-    : undefined;
-  const currentHead = reuse
-    ? await gitOptional({
-        pi: input.pi,
-        cwd: localPath,
-        args: ["rev-parse", "HEAD"],
-        signal: input.signal,
-      })
-    : undefined;
-  const checkedRemoteHead =
-    reuse && input.refresh
-      ? await remoteHead({
-          pi: input.pi,
-          cwd: localPath,
-          remote: input.reference.remote,
-          branch: input.branch,
-          ...(input.signal ? { signal: input.signal } : {}),
-        })
-      : undefined;
-  const status = statusForRepository({
-    reuse,
-    head: currentHead,
-    remoteHead: checkedRemoteHead,
-    ...(input.branch ? { branchMatches: currentBranch === input.branch } : {}),
-  });
-
-  if (status === "cloned") {
-    const cloned = await git({
-      pi: input.pi,
-      cwd: path.dirname(localPath),
-      args: [
-        "clone",
-        "--depth",
-        "100",
-        ...(input.branch ? ["--branch", input.branch] : []),
-        "--",
-        input.reference.remote,
+        reference: input.reference,
+        cloneTarget,
+        repository,
         localPath,
-      ],
-      repository,
-      signal: input.signal,
-    });
-    if (Result.isError(cloned)) return Result.err(cloned.error);
-  }
-
-  if (status === "refreshed") {
-    const fetched = await git({
-      pi: input.pi,
-      cwd: localPath,
-      args: ["fetch", "--all", "--prune"],
-      repository,
-      signal: input.signal,
-    });
-    if (Result.isError(fetched)) return Result.err(fetched.error);
-
-    if (input.branch) {
-      const branchFetched = await git({
-        pi: input.pi,
-        cwd: localPath,
-        args: [
-          "fetch",
-          "origin",
-          `+refs/heads/${input.branch}:refs/remotes/origin/${input.branch}`,
-        ],
-        repository,
-        signal: input.signal,
-      });
-      if (Result.isError(branchFetched)) return Result.err(branchFetched.error);
-
-      const checkedOut = await git({
-        pi: input.pi,
-        cwd: localPath,
-        args: ["checkout", "-B", input.branch, `origin/${input.branch}`],
-        repository,
-        signal: input.signal,
-      });
-      if (Result.isError(checkedOut)) return Result.err(checkedOut.error);
-    }
-
-    const reset = await git({
-      pi: input.pi,
-      cwd: localPath,
-      args: [
-        "reset",
-        "--hard",
-        await resetTarget({
-          pi: input.pi,
-          cwd: localPath,
-          branch: input.branch,
-          ...(input.signal ? { signal: input.signal } : {}),
-        }),
-      ],
-      repository,
-      signal: input.signal,
-    });
-    if (Result.isError(reset)) return Result.err(reset.error);
-  }
-
-  const head = await gitOptional({
-    pi: input.pi,
-    cwd: localPath,
-    args: ["rev-parse", "HEAD"],
-    signal: input.signal,
-  });
-  const branch = await gitOptional({
-    pi: input.pi,
-    cwd: localPath,
-    args: ["symbolic-ref", "--quiet", "--short", "HEAD"],
-    signal: input.signal,
-  });
-
-  return Result.ok({
-    repository,
-    host: input.reference.host,
-    remote: input.reference.remote,
-    localPath,
-    status,
-    freshness: head && checkedRemoteHead && head === checkedRemoteHead ? "fresh" : "unknown",
-    ...(head ? { head } : {}),
-    ...(checkedRemoteHead ? { remoteHead: checkedRemoteHead } : {}),
-    ...(branch ? { branch } : {}),
+        ...(input.branch ? { branch: input.branch } : {}),
+        ...(input.refresh ? { refresh: input.refresh } : {}),
+        ...(input.signal ? { signal: input.signal } : {}),
+      }),
   });
 }

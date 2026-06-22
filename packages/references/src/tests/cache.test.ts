@@ -14,6 +14,12 @@ function ok(stdout: string): ExecResult {
   return { stdout, stderr: "", code: 0, killed: false };
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 void test("cached git references skip fetch when remote head matches", async (context) => {
   const root = await mkdtemp(path.join(tmpdir(), "pi-ohm-ref-cache-"));
   context.after(() => {
@@ -59,4 +65,48 @@ void test("cached git references skip fetch when remote head matches", async (co
     calls.some((args) => args[0] === "fetch"),
     false,
   );
+});
+
+void test("concurrent git materialization for one cache path clones once", async (context) => {
+  const root = await mkdtemp(path.join(tmpdir(), "pi-ohm-ref-cache-"));
+  context.after(() => {
+    void rm(root, { recursive: true, force: true });
+  });
+
+  const reference = parseRemoteRepositoryReference("owner/repo");
+  assert.equal(Result.isOk(reference), true);
+  if (Result.isError(reference)) assert.fail(reference.error.message);
+
+  const localPath = repositoryCachePath(root, reference.value);
+  const calls: string[][] = [];
+  const pi: Pick<ExtensionAPI, "exec"> = {
+    async exec(_command, args): Promise<ExecResult> {
+      calls.push([...args]);
+      if (args[0] === "clone") {
+        await wait(25);
+        await mkdir(path.join(localPath, ".git"), { recursive: true });
+        return ok("");
+      }
+      if (args.join(" ") === "config --get remote.origin.url") {
+        return ok("https://github.com/owner/repo.git\n");
+      }
+      if (args.join(" ") === "symbolic-ref --quiet --short HEAD") return ok("main\n");
+      if (args.join(" ") === "rev-parse HEAD") return ok(`${sha}\n`);
+      return { stdout: "", stderr: `unexpected git ${args.join(" ")}`, code: 2, killed: false };
+    },
+  };
+
+  const results = await Promise.all([
+    ensureRepository({ pi, reference: reference.value, root }),
+    ensureRepository({ pi, reference: reference.value, root }),
+  ]);
+
+  assert.equal(results.every(Result.isOk), true);
+  const statuses = results.map((result) => {
+    if (Result.isError(result)) assert.fail(result.error.message);
+    return result.value.status;
+  });
+
+  assert.deepEqual(statuses.sort(), ["cached", "cloned"]);
+  assert.equal(calls.filter((args) => args[0] === "clone").length, 1);
 });

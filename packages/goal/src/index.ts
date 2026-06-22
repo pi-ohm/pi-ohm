@@ -14,6 +14,8 @@ export {
   isGoalConfig,
   loadGoalConfig,
   type GoalConfig,
+  type GoalExperimentalConfig,
+  type GoalManagedConfig,
 } from "./config";
 export { goalDbModule } from "./db";
 export {
