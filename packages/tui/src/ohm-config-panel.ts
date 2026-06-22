@@ -1,17 +1,5 @@
 import { Text, type Component } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
-import { Value } from "typebox/value";
 import type { LoadedExtensionConfig, RegisteredConfigModule } from "@pi-ohm/core/config";
-
-const ConfigWithExperimentalSchema = Type.Object(
-  { experimental: Type.Unknown() },
-  { additionalProperties: true },
-);
-const ExperimentalContainerSchema = Type.Unsafe<Readonly<Record<string, unknown>>>({
-  type: "object",
-  additionalProperties: true,
-});
-const EnabledFlagSchema = Type.Object({ enabled: Type.Boolean() }, { additionalProperties: true });
 
 export interface OhmConfigPanelInput {
   readonly loaded: LoadedExtensionConfig;
@@ -22,21 +10,25 @@ function configuredNamespaces(loaded: LoadedExtensionConfig): ReadonlySet<string
   return new Set(Object.keys(loaded.config));
 }
 
+function readField(value: unknown, field: string): unknown {
+  if (value === null || value === undefined) return undefined;
+  const boxed = Object(value);
+  if (!(field in boxed)) return undefined;
+  return Reflect.get(boxed, field);
+}
+
 function flagEnabled(input: {
   readonly loaded: LoadedExtensionConfig;
   readonly namespace: string;
   readonly key: string;
 }): boolean | undefined {
   const config = input.loaded.config[input.namespace];
-  if (!Value.Check(ConfigWithExperimentalSchema, config)) return undefined;
+  const experimental = readField(config, "experimental");
+  const flag = readField(experimental, input.key);
+  const enabled = readField(flag, "enabled");
 
-  const experimental = Reflect.get(config, "experimental");
-  if (!Value.Check(ExperimentalContainerSchema, experimental)) return undefined;
-
-  const flag = Reflect.get(experimental, input.key);
-  if (!Value.Check(EnabledFlagSchema, flag)) return undefined;
-
-  return flag.enabled;
+  if (typeof enabled !== "boolean") return undefined;
+  return enabled;
 }
 
 function formatEnabled(value: boolean | undefined): string {

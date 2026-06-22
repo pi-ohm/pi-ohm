@@ -58,8 +58,15 @@ jobs:
 
           if [[ "${STAGE}" == "dev" ]] && grep -Fq "[CloudflareStateStore] The token is invalid" "${log}"; then
             echo "::warning title=Alchemy state token drift::Retrying dev docs deploy with forceUpdate=true."
-            ALCHEMY_STATE_FORCE_UPDATE=1 vp run docs#deploy
-            exit 0
+            for attempt in 1 2 3; do
+              if [[ "${attempt}" -gt 1 ]]; then
+                sleep 20
+              fi
+
+              if ALCHEMY_STATE_FORCE_UPDATE=1 vp run docs#deploy; then
+                exit 0
+              fi
+            done
           fi
 
           exit "${status}"
