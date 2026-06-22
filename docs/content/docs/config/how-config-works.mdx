@@ -175,4 +175,37 @@ Feature packages own:
 - domain-specific normalization
 - enablement flags
 
+## Experimental flags
+
+Experimental flags stay inside the package namespace:
+
+```json title=".pi/ohm.json"
+{
+  "goal": {
+    "experimental": {
+      "managed": {
+        "enabled": true
+      }
+    }
+  }
+}
+```
+
+Packages should use `defineExperimentalFlags()` from `@pi-ohm/core/config` for simple boolean experiments. The helper requires every flag to declare a default enabled value and a description, then provides the strict TypeBox schema, runtime defaults, merge helper, runtime guard, and `/ohm` metadata.
+
+```ts
+export const goalExperimentalFlags = defineExperimentalFlags("goal", {
+  managed: {
+    defaultEnabled: false,
+    description: "Enable the managed goal runtime.",
+  },
+});
+```
+
+Non-boolean experimental options remain package-owned. For example, an experimental feature can use the helper for `enabled` while keeping fields like `type`, `model`, or limits in its package schema.
+
+## Schema metadata
+
+Every config field should include a human-readable `description`. If the runtime has a default value for that field, the TypeBox schema should also expose the same `default`. This keeps generated `$schema` output useful for editor completions.
+
 This keeps config extensible without centralizing every package's domain model in `@pi-ohm/core/config`.

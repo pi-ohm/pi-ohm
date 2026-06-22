@@ -1,52 +1,101 @@
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
-const NonEmptyStringSchema = Type.String({ minLength: 1 });
-const NonEmptyStringArraySchema = Type.Array(NonEmptyStringSchema, { minItems: 1 });
 const UnknownRecordSchema = Type.Record(Type.String(), Type.Unknown());
 
-export const SubagentToolPermissionDecisionSchema = Type.Union([
-  Type.Literal("allow"),
-  Type.Literal("deny"),
-]);
+export const SubagentToolPermissionDecisionSchema = Type.Union(
+  [Type.Literal("allow"), Type.Literal("deny")],
+  { description: "Tool permission decision for a subagent." },
+);
 
 export const SubagentToolPermissionMapSchema = Type.Record(
-  NonEmptyStringSchema,
+  Type.String({ description: "Tool name.", minLength: 1 }),
   SubagentToolPermissionDecisionSchema,
+  { description: "Per-tool subagent permission overrides." },
 );
 
 export const SubagentAgentPatchSchema = Type.Object(
   {
-    disabled: Type.Optional(Type.Boolean()),
-    model: Type.Optional(NonEmptyStringSchema),
-    tools: Type.Optional(NonEmptyStringArraySchema),
-    maxTurns: Type.Optional(Type.Integer({ minimum: 1 })),
-    prompt: Type.Optional(NonEmptyStringSchema),
-    description: Type.Optional(NonEmptyStringSchema),
+    disabled: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description: "Hide this subagent from model-facing availability.",
+      }),
+    ),
+    model: Type.Optional(
+      Type.String({
+        description: "Subagent model override as provider/model with optional thinking suffix.",
+        minLength: 1,
+      }),
+    ),
+    tools: Type.Optional(
+      Type.Array(Type.String({ description: "Allowed tool name.", minLength: 1 }), {
+        description: "Allowed tool names for this subagent.",
+        minItems: 1,
+      }),
+    ),
+    maxTurns: Type.Optional(
+      Type.Integer({
+        description: "Maximum model turns the subagent may take.",
+        minimum: 1,
+      }),
+    ),
+    prompt: Type.Optional(
+      Type.String({ description: "System prompt used by this subagent.", minLength: 1 }),
+    ),
+    description: Type.Optional(
+      Type.String({
+        description: "Model-facing guidance for when to use this subagent.",
+        minLength: 1,
+      }),
+    ),
     permissions: Type.Optional(SubagentToolPermissionMapSchema),
   },
-  { additionalProperties: false },
+  {
+    additionalProperties: false,
+    description: "Inline subagent config.",
+  },
 );
 
-export const SummarizeHistoryTypeSchema = Type.Union([
-  Type.Literal("branch"),
-  Type.Literal("compact"),
-]);
+export const SummarizeHistoryTypeSchema = Type.Union(
+  [Type.Literal("branch"), Type.Literal("compact")],
+  {
+    default: "branch",
+    description: "Strategy used to summarize forked parent history.",
+  },
+);
 
 export const SummarizeHistoryConfigPatchSchema = Type.Object(
   {
-    enabled: Type.Optional(Type.Boolean()),
+    enabled: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description:
+          "Summarize inherited parent history when spawning subagents with forked context.",
+      }),
+    ),
     type: Type.Optional(SummarizeHistoryTypeSchema),
-    model: Type.Optional(NonEmptyStringSchema),
+    model: Type.Optional(
+      Type.String({
+        description: "Accepted for compatibility; runtime uses the active main session model.",
+        minLength: 1,
+      }),
+    ),
   },
-  { additionalProperties: false },
+  {
+    additionalProperties: false,
+    description: "Experimental subagent fork-history summarization config.",
+  },
 );
 
 export const SubagentsExperimentalConfigPatchSchema = Type.Object(
   {
     summarize_history: Type.Optional(SummarizeHistoryConfigPatchSchema),
   },
-  { additionalProperties: false },
+  {
+    additionalProperties: false,
+    description: "Experimental subagents config.",
+  },
 );
 
 export interface SummarizeHistoryConfigPatch {
@@ -70,6 +119,7 @@ export const SubagentsConfigSchema = Type.Unsafe<SubagentsConfigPatch>({
     experimental: SubagentsExperimentalConfigPatchSchema,
   },
   additionalProperties: SubagentAgentPatchSchema,
+  description: "Pi-ohm subagents config keyed by subagent name.",
 });
 
 export type SubagentToolPermissionDecisionPatch = Static<

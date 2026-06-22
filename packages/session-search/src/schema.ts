@@ -2,7 +2,15 @@ import { Type } from "typebox";
 
 export const SessionSearchConfigSchema = Type.Object(
   {
-    enabled: Type.Optional(Type.Boolean()),
+    enabled: Type.Optional(
+      Type.Boolean({
+        default: true,
+        description: "Enable session search commands and tools.",
+      }),
+    ),
   },
-  { additionalProperties: false },
+  {
+    additionalProperties: false,
+    description: "Pi-ohm session search extension config.",
+  },
 );

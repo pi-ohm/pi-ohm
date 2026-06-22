@@ -5,6 +5,7 @@ import { Result, TaggedError, type Result as BetterResult } from "better-result"
 import chokidar, { type FSWatcher } from "chokidar";
 import { Type, type StaticDecode, type TSchema } from "typebox";
 import { Value } from "typebox/value";
+import type { ExperimentalFlagsDefinition } from "./experimental";
 
 export interface ExtensionConfigPaths {
   configDir: string;
@@ -68,6 +69,7 @@ export interface ExtensionConfigModule<
   readonly namespace: string;
   readonly schema: Schema;
   readonly defaults: Config;
+  readonly experimental?: ExperimentalFlagsDefinition;
   readonly merge: (
     base: Config,
     patch: StaticDecode<Schema>,
@@ -78,6 +80,7 @@ export interface RegisterConfigInput<Config, Schema extends TSchema> {
   readonly namespace: string;
   readonly schema: Schema;
   readonly defaults: Config;
+  readonly experimental?: ExperimentalFlagsDefinition;
   readonly merge: (
     base: Config,
     patch: StaticDecode<Schema>,
@@ -121,6 +124,7 @@ export interface RegisteredConfigModule {
   readonly namespace: string;
   readonly schema: TSchema;
   readonly defaults: unknown;
+  readonly experimental?: ExperimentalFlagsDefinition;
   readonly load: (files: readonly ReadConfigFileResult[]) => Promise<ModuleLoadedConfig>;
 }
 
@@ -247,6 +251,7 @@ export function registerConfig<Config, Schema extends TSchema>(
     namespace: input.namespace,
     schema: input.schema,
     defaults: input.defaults,
+    experimental: input.experimental,
     merge: input.merge,
     load: async (files) => {
       const loaded = await applyConfigFiles({ input, files });
@@ -293,6 +298,17 @@ export function getGlobalConfigModules(): readonly RegisteredConfigModule[] {
 export function clearGlobalConfigModulesForTesting(): void {
   GLOBAL_CONFIG_MODULES.clear();
 }
+
+export {
+  defineExperimentalFlags,
+  type ExperimentalFlagConfig,
+  type ExperimentalFlagInput,
+  type ExperimentalFlagMetadata,
+  type ExperimentalFlagPatch,
+  type ExperimentalFlagsConfig,
+  type ExperimentalFlagsDefinition,
+  type ExperimentalFlagsPatch,
+} from "./experimental";
 
 class WatchedExtensionConfig implements WatchedConfig {
   readonly #input: WatchConfigInput;

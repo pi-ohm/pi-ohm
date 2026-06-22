@@ -10,6 +10,50 @@ function configuredNamespaces(loaded: LoadedExtensionConfig): ReadonlySet<string
   return new Set(Object.keys(loaded.config));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function flagEnabled(input: {
+  readonly loaded: LoadedExtensionConfig;
+  readonly namespace: string;
+  readonly key: string;
+}): boolean | undefined {
+  const config = input.loaded.config[input.namespace];
+  if (!isRecord(config)) return undefined;
+
+  const experimental = Reflect.get(config, "experimental");
+  if (!isRecord(experimental)) return undefined;
+
+  const flag = Reflect.get(experimental, input.key);
+  if (!isRecord(flag)) return undefined;
+
+  const enabled = Reflect.get(flag, "enabled");
+  if (typeof enabled !== "boolean") return undefined;
+
+  return enabled;
+}
+
+function formatEnabled(value: boolean | undefined): string {
+  if (value === true) return "enabled";
+  if (value === false) return "disabled";
+  return "missing";
+}
+
+function renderExperimentalFlags(input: OhmConfigPanelInput): readonly string[] {
+  const flags = input.modules.flatMap((module) => module.experimental?.flags ?? []);
+  if (flags.length === 0) return ["- none"];
+
+  return flags.map((flag) => {
+    const enabled = flagEnabled({
+      loaded: input.loaded,
+      namespace: flag.namespace,
+      key: flag.key,
+    });
+    return `- ${flag.namespace}.${flag.key}: ${formatEnabled(enabled)} (default ${formatEnabled(flag.defaultEnabled)}) - ${flag.description}`;
+  });
+}
+
 function renderValue(value: unknown): readonly string[] {
   return JSON.stringify(value, null, 2).split("\n");
 }
@@ -45,6 +89,9 @@ export function renderOhmConfigPanelLines(input: OhmConfigPanelInput): readonly 
             `- ${module.namespace}: ${configured.has(module.namespace) ? "loaded" : "missing"}`,
         )
       : ["- none registered"]),
+    "",
+    "Experimental flags",
+    ...renderExperimentalFlags(input),
     "",
     "Effective config",
     ...renderValue(input.loaded.config),

@@ -1,17 +1,18 @@
 import { Result } from "better-result";
 import { type StaticDecode } from "typebox";
-import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
-import { GoalConfigSchema } from "./schema";
+import {
+  loadConfig,
+  pickConfig,
+  registerConfig,
+  type ExperimentalFlagConfig,
+  type ExperimentalFlagsConfig,
+} from "@pi-ohm/core/config";
+import { GoalConfigSchema, goalExperimentalFlags } from "./schema";
 
-export { GoalConfigSchema } from "./schema";
+export { GoalConfigSchema, goalExperimentalFlags } from "./schema";
 
-export interface GoalManagedConfig {
-  readonly enabled: boolean;
-}
-
-export interface GoalExperimentalConfig {
-  readonly managed: GoalManagedConfig;
-}
+export type GoalManagedConfig = ExperimentalFlagConfig;
+export type GoalExperimentalConfig = ExperimentalFlagsConfig;
 
 export interface GoalConfig {
   readonly enabled: boolean;
@@ -23,50 +24,27 @@ export interface GoalConfig {
 export const DEFAULT_GOAL_CONFIG: GoalConfig = {
   enabled: true,
   autoContinue: true,
-  experimental: {
-    managed: {
-      enabled: false,
-    },
-  },
+  experimental: goalExperimentalFlags.defaults,
 };
 
 type GoalConfigPatch = StaticDecode<typeof GoalConfigSchema>;
-type GoalExperimentalConfigPatch = NonNullable<GoalConfigPatch["experimental"]>;
-type GoalManagedConfigPatch = NonNullable<GoalExperimentalConfigPatch["managed"]>;
 
 function normalizeTokenBudget(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
   return value;
 }
 
-function mergeManagedConfig(
-  patch: GoalManagedConfigPatch | undefined,
-  base: GoalManagedConfig,
-): GoalManagedConfig {
-  return {
-    enabled: patch?.enabled ?? base.enabled,
-  };
-}
-
-function mergeExperimentalConfig(
-  patch: GoalExperimentalConfigPatch | undefined,
-  base: GoalExperimentalConfig,
-): GoalExperimentalConfig {
-  return {
-    managed: mergeManagedConfig(patch?.managed, base.managed),
-  };
-}
-
 export const goalConfigModule = registerConfig({
   namespace: "goal",
   schema: GoalConfigSchema,
   defaults: DEFAULT_GOAL_CONFIG,
+  experimental: goalExperimentalFlags,
   merge(base: GoalConfig, patch: GoalConfigPatch) {
     return Result.ok({
       enabled: patch.enabled ?? base.enabled,
       autoContinue: patch.autoContinue ?? base.autoContinue,
       defaultTokenBudget: normalizeTokenBudget(patch.defaultTokenBudget ?? base.defaultTokenBudget),
-      experimental: mergeExperimentalConfig(patch.experimental, base.experimental),
+      experimental: goalExperimentalFlags.merge(base.experimental, patch.experimental),
     });
   },
 });
@@ -75,14 +53,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isManagedConfig(value: unknown): value is GoalManagedConfig {
-  if (!isRecord(value)) return false;
-  return typeof Reflect.get(value, "enabled") === "boolean";
-}
-
 function isExperimentalConfig(value: unknown): value is GoalExperimentalConfig {
-  if (!isRecord(value)) return false;
-  return isManagedConfig(Reflect.get(value, "managed"));
+  return goalExperimentalFlags.is(value);
 }
 
 export function isGoalConfig(value: unknown): value is GoalConfig {

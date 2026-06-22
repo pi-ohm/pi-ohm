@@ -41,6 +41,16 @@ async function withConfig<T>(run: (input: { readonly cwd: string }) => Promise<T
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function child(value: unknown, key: string): unknown {
+  assert.equal(isRecord(value), true);
+  if (!isRecord(value)) assert.fail(`Expected object before reading '${key}'`);
+  return value[key];
+}
+
 void test("GoalConfigSchema accepts experimental managed config only", () => {
   assert.equal(
     Value.Check(GoalConfigSchema, {
@@ -67,6 +77,27 @@ void test("GoalConfigSchema accepts experimental managed config only", () => {
     }),
     false,
   );
+});
+
+void test("GoalConfigSchema exposes descriptions and defaults for editor completions", () => {
+  const properties = child(GoalConfigSchema, "properties");
+  const enabled = child(properties, "enabled");
+  const autoContinue = child(properties, "autoContinue");
+  const experimental = child(properties, "experimental");
+  const experimentalProperties = child(experimental, "properties");
+  const managed = child(experimentalProperties, "managed");
+  const managedProperties = child(managed, "properties");
+  const managedEnabled = child(managedProperties, "enabled");
+
+  assert.equal(child(enabled, "default"), true);
+  assert.equal(
+    child(enabled, "description"),
+    "Enable goal tracking commands, tools, UI, and runtime hooks.",
+  );
+  assert.equal(child(autoContinue, "default"), true);
+  assert.equal(child(managed, "description"), "Enable the managed goal runtime.");
+  assert.equal(child(managedEnabled, "default"), false);
+  assert.equal(child(managedEnabled, "description"), "Enable the managed goal runtime.");
 });
 
 void test("loadGoalConfig resolves experimental managed defaults and project overrides", async () => {

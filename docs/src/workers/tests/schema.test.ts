@@ -69,3 +69,24 @@ void test("schema worker exposes every generated config schema in all schema", a
     assert.equal(child(properties, key) !== undefined, true);
   }
 });
+
+void test("schema worker preserves config descriptions and defaults", async () => {
+  const body = await get("/schema/goal.json");
+  const properties = child(body, "properties");
+  const goal = child(properties, "goal");
+  const goalProperties = child(goal, "properties");
+  const enabled = child(goalProperties, "enabled");
+  const experimental = child(goalProperties, "experimental");
+  const experimentalProperties = child(experimental, "properties");
+  const managed = child(experimentalProperties, "managed");
+  const managedProperties = child(managed, "properties");
+  const managedEnabled = child(managedProperties, "enabled");
+
+  assert.equal(child(enabled, "default"), true);
+  assert.equal(
+    child(enabled, "description"),
+    "Enable goal tracking commands, tools, UI, and runtime hooks.",
+  );
+  assert.equal(child(managedEnabled, "default"), false);
+  assert.equal(child(managedEnabled, "description"), "Enable the managed goal runtime.");
+});

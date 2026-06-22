@@ -11,6 +11,7 @@ export {
   DEFAULT_GOAL_CONFIG,
   GoalConfigSchema,
   goalConfigModule,
+  goalExperimentalFlags,
   isGoalConfig,
   loadGoalConfig,
   type GoalConfig,
