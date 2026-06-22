@@ -1,4 +1,10 @@
 import { Type, type TSchema, type TUnsafe } from "typebox";
+import { Value } from "typebox/value";
+
+const UnknownObjectSchema = Type.Unsafe<Readonly<Record<string, unknown>>>({
+  type: "object",
+  additionalProperties: true,
+});
 
 export interface ExperimentalFlagInput {
   readonly defaultEnabled: boolean;
@@ -39,10 +45,6 @@ export interface ExperimentalFlagsDefinition {
     base: ExperimentalFlagsConfig,
     patch: ExperimentalFlagsPatch | undefined,
   ): ExperimentalFlagsConfig;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function requiredText(value: string, label: string): string {
@@ -107,7 +109,7 @@ function createDefaults(flags: readonly ExperimentalFlagMetadata[]): Experimenta
 }
 
 function isFlagConfig(value: unknown): value is ExperimentalFlagConfig {
-  if (!isRecord(value)) return false;
+  if (!Value.Check(UnknownObjectSchema, value)) return false;
   return typeof Reflect.get(value, "enabled") === "boolean";
 }
 
@@ -129,7 +131,7 @@ export function defineExperimentalFlags(
       return config[key]?.enabled;
     },
     is(value: unknown): value is ExperimentalFlagsConfig {
-      if (!isRecord(value)) return false;
+      if (!Value.Check(UnknownObjectSchema, value)) return false;
       for (const key of Object.keys(value)) {
         if (!keys.has(key)) return false;
       }

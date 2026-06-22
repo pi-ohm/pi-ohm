@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { resolveExtensionConfigDir } from "@pi-ohm/core/config";
 import { parseReportJson, type ProfileReport } from "./report";
 
@@ -11,13 +13,14 @@ export class ProfilerStoreError extends TaggedError("ProfilerStoreError")<{
   readonly cause?: unknown;
 }>() {}
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const NodeErrorLikeSchema = Type.Object(
+  { code: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+);
 
 function isNodeErrorCode(value: unknown, code: string): boolean {
-  if (!isRecord(value)) return false;
-  return Reflect.get(value, "code") === code;
+  if (!Value.Check(NodeErrorLikeSchema, value)) return false;
+  return value.code === code;
 }
 
 export function profilerReportPath(agentDir = resolveExtensionConfigDir()): string {

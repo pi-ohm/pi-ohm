@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Result } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { ExtensionDb } from "../../db";
 import {
   createInMemoryPipGraphStore,
@@ -14,6 +16,16 @@ import {
   type PipRunner,
 } from "../index";
 import { setPrompt } from "../experimental";
+
+const PipEntryKindSchema = Type.Object(
+  { kind: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+);
+
+function entryKind(entry: unknown): unknown {
+  if (!Value.Check(PipEntryKindSchema, entry)) return null;
+  return entry.kind;
+}
 
 function createFakeRunner(): PipRunner {
   return {
@@ -139,9 +151,7 @@ void test("PipController spawns through runner and writes hidden lifecycle entri
   assert.equal(stored.value?.role, "reviewer");
   assert.equal(entries.length, 2);
   assert.deepEqual(
-    entries.map((entry) =>
-      typeof entry === "object" && entry ? Reflect.get(entry, "kind") : null,
-    ),
+    entries.map((entry) => entryKind(entry)),
     ["pip_spawn_requested", "pip_spawned"],
   );
 });
@@ -288,12 +298,7 @@ void test("PipController aborts through runner and records interrupted status", 
   if (Result.isError(stored)) assert.fail(stored.error.message);
   assert.deepEqual(stored.value?.status, { state: "interrupted" });
   assert.equal(
-    entries.some(
-      (entry) =>
-        typeof entry === "object" &&
-        entry !== null &&
-        Reflect.get(entry, "kind") === "pip_status_changed",
-    ),
+    entries.some((entry) => entryKind(entry) === "pip_status_changed"),
     true,
   );
 });

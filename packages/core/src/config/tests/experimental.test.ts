@@ -5,13 +5,14 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { defineExperimentalFlags, registerConfig } from "../index";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const SchemaNode = Type.Unsafe<Readonly<Record<string, unknown>>>({
+  type: "object",
+  additionalProperties: true,
+});
 
 function child(value: unknown, key: string): unknown {
-  assert.equal(isRecord(value), true);
-  if (!isRecord(value)) assert.fail(`Expected object before reading '${key}'`);
+  assert.equal(Value.Check(SchemaNode, value), true);
+  if (!Value.Check(SchemaNode, value)) assert.fail(`Expected schema node before reading '${key}'`);
   return value[key];
 }
 

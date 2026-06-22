@@ -1,6 +1,8 @@
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import {
@@ -1225,7 +1227,7 @@ function invalidEntry(message: string, pipId?: string): PipResult<never> {
 }
 
 function readField(value: unknown, field: string): unknown {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (!Value.Check(Type.Object({}, { additionalProperties: true }), value)) return undefined;
   return Reflect.get(value, field);
 }
 

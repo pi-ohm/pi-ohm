@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { CODEX_AD_HOC_INSTRUCTIONS } from "./codex-prompts";
 import type { Stage1Output } from "./db";
 import type { MemoryPaths } from "./paths";
@@ -10,6 +12,11 @@ export class MemoryLayoutError extends TaggedError("MemoryLayoutError")<{
   readonly message: string;
   readonly cause?: unknown;
 }>() {}
+
+const NodeErrorLikeSchema = Type.Object(
+  { code: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+);
 
 export type MemoryLayoutResult<T> = BetterResult<T, MemoryLayoutError>;
 
@@ -61,8 +68,7 @@ export async function readSummary(
 }
 
 function errorCode(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (!("code" in value)) return undefined;
+  if (!Value.Check(NodeErrorLikeSchema, value)) return undefined;
   return typeof value.code === "string" ? value.code : undefined;
 }
 

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { loadConfig, pickConfig, registerConfig } from "@pi-ohm/core/config";
 import { ProfilerConfigSchema } from "./schema";
 
@@ -26,6 +27,18 @@ export const DEFAULT_PROFILER_CONFIG: ProfilerConfig = {
 };
 
 type ProfilerConfigPatch = StaticDecode<typeof ProfilerConfigSchema>;
+const ProfilerRuntimeConfigSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    autoProfile: Type.Boolean(),
+    includeLifecycle: Type.Boolean(),
+    staleAfterMs: Type.Number(),
+    slowThresholdMs: Type.Number(),
+    maxRows: Type.Number(),
+    timeoutMs: Type.Number(),
+  },
+  { additionalProperties: false },
+);
 
 export const profilerConfigModule = registerConfig({
   namespace: "profiler",
@@ -45,17 +58,7 @@ export const profilerConfigModule = registerConfig({
 });
 
 export function isProfilerConfig(value: unknown): value is ProfilerConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-
-  return (
-    typeof Reflect.get(value, "enabled") === "boolean" &&
-    typeof Reflect.get(value, "autoProfile") === "boolean" &&
-    typeof Reflect.get(value, "includeLifecycle") === "boolean" &&
-    typeof Reflect.get(value, "staleAfterMs") === "number" &&
-    typeof Reflect.get(value, "slowThresholdMs") === "number" &&
-    typeof Reflect.get(value, "maxRows") === "number" &&
-    typeof Reflect.get(value, "timeoutMs") === "number"
-  );
+  return Value.Check(ProfilerRuntimeConfigSchema, value);
 }
 
 export async function loadProfilerConfig(cwd: string) {

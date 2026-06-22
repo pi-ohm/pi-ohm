@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import { SessionSearchConfigSchema } from "./schema";
 
@@ -14,6 +15,10 @@ export const DEFAULT_SESSION_SEARCH_CONFIG: SessionSearchConfig = {
 };
 
 type SessionSearchConfigPatch = StaticDecode<typeof SessionSearchConfigSchema>;
+const SessionSearchRuntimeConfigSchema = Type.Object(
+  { enabled: Type.Boolean() },
+  { additionalProperties: false },
+);
 
 export const sessionSearchConfigModule = registerConfig({
   namespace: "session-search",
@@ -27,6 +32,5 @@ export const sessionSearchConfigModule = registerConfig({
 });
 
 export function isSessionSearchConfig(value: unknown): value is SessionSearchConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return typeof Reflect.get(value, "enabled") === "boolean";
+  return Value.Check(SessionSearchRuntimeConfigSchema, value);
 }

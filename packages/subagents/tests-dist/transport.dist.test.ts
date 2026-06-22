@@ -7,8 +7,6 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-const UnknownRecordSchema = Type.Record(Type.String(), Type.Unknown());
-
 interface ToolLike {
   readonly name: string;
   readonly description: string;
@@ -16,13 +14,23 @@ interface ToolLike {
 
 type UnknownFunction = (...args: readonly unknown[]) => unknown;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Value.Check(UnknownRecordSchema, value);
-}
+const ToolLikeSchema = Type.Object(
+  {
+    name: Type.String(),
+    description: Type.String(),
+  },
+  { additionalProperties: true },
+);
+const DistModuleSchema = Type.Object(
+  {
+    createSubagentToolRuntime: Type.Optional(Type.Unknown()),
+    createSubagentTools: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
 
 function isToolLike(value: unknown): value is ToolLike {
-  if (!isRecord(value)) return false;
-  return typeof value.name === "string" && typeof value.description === "string";
+  return Value.Check(ToolLikeSchema, value);
 }
 
 function isUnknownFunction(value: unknown): value is UnknownFunction {
@@ -30,7 +38,7 @@ function isUnknownFunction(value: unknown): value is UnknownFunction {
 }
 
 function resolveFunction(value: unknown, name: string): UnknownFunction {
-  if (!isRecord(value)) throw new Error("Invalid dist module export shape");
+  if (!Value.Check(DistModuleSchema, value)) throw new Error("Invalid dist module export shape");
   const candidate = Reflect.get(value, name);
   if (!isUnknownFunction(candidate)) throw new Error(`${name} export missing from dist bundle`);
   return candidate;

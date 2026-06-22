@@ -1,4 +1,6 @@
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 export const REPORT_MARKER = "PI_OHM_PROFILER_REPORT:";
 
@@ -52,21 +54,46 @@ export interface RenderStartupOptions extends RenderReportOptions {
   readonly currentMs?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function stringField(value: Record<string, unknown>, key: string): string | undefined {
-  const field = Reflect.get(value, key);
-  if (typeof field !== "string") return undefined;
-  return field;
-}
-
-function numberField(value: Record<string, unknown>, key: string): number | undefined {
-  const field = Reflect.get(value, key);
-  if (typeof field !== "number" || Number.isNaN(field)) return undefined;
-  return field;
-}
+const ProfileRecordCandidateSchema = Type.Object(
+  {
+    phase: Type.Unknown(),
+    path: Type.String(),
+    label: Type.String(),
+    ms: Type.Number(),
+    status: Type.Unknown(),
+    handlers: Type.Optional(Type.Unknown()),
+    error: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
+const ProfileErrorCandidateSchema = Type.Object(
+  {
+    phase: Type.Unknown(),
+    path: Type.String(),
+    message: Type.String(),
+  },
+  { additionalProperties: true },
+);
+const ProfileTotalsCandidateSchema = Type.Object(
+  {
+    extensions: Type.Number(),
+    loadMs: Type.Number(),
+    lifecycleMs: Type.Number(),
+    totalMs: Type.Number(),
+  },
+  { additionalProperties: true },
+);
+const ProfileReportCandidateSchema = Type.Object(
+  {
+    version: Type.Literal(1),
+    generatedAt: Type.String(),
+    cwd: Type.String(),
+    records: Type.Array(Type.Unknown()),
+    errors: Type.Array(Type.Unknown()),
+    totals: Type.Unknown(),
+  },
+  { additionalProperties: true },
+);
 
 function isProfilePhase(value: unknown): value is ProfilePhase {
   return (
@@ -82,59 +109,39 @@ function isProfileStatus(value: unknown): value is ProfileStatus {
 }
 
 function isProfileRecord(value: unknown): value is ProfileRecord {
-  if (!isRecord(value)) return false;
-
-  const phase = Reflect.get(value, "phase");
-  const status = Reflect.get(value, "status");
-  const handlers = Reflect.get(value, "handlers");
-  const error = Reflect.get(value, "error");
+  if (!Value.Check(ProfileRecordCandidateSchema, value)) return false;
 
   return (
-    isProfilePhase(phase) &&
-    isProfileStatus(status) &&
-    stringField(value, "path") !== undefined &&
-    stringField(value, "label") !== undefined &&
-    numberField(value, "ms") !== undefined &&
-    (handlers === undefined || typeof handlers === "number") &&
-    (error === undefined || typeof error === "string")
+    isProfilePhase(value.phase) &&
+    isProfileStatus(value.status) &&
+    !Number.isNaN(value.ms) &&
+    (value.handlers === undefined || typeof value.handlers === "number") &&
+    (value.error === undefined || typeof value.error === "string")
   );
 }
 
 function isProfileError(value: unknown): value is ProfileError {
-  if (!isRecord(value)) return false;
-  return (
-    isProfilePhase(Reflect.get(value, "phase")) &&
-    stringField(value, "path") !== undefined &&
-    stringField(value, "message") !== undefined
-  );
+  if (!Value.Check(ProfileErrorCandidateSchema, value)) return false;
+  return isProfilePhase(value.phase);
 }
 
 function isProfileTotals(value: unknown): value is ProfileTotals {
-  if (!isRecord(value)) return false;
+  if (!Value.Check(ProfileTotalsCandidateSchema, value)) return false;
   return (
-    numberField(value, "extensions") !== undefined &&
-    numberField(value, "loadMs") !== undefined &&
-    numberField(value, "lifecycleMs") !== undefined &&
-    numberField(value, "totalMs") !== undefined
+    !Number.isNaN(value.extensions) &&
+    !Number.isNaN(value.loadMs) &&
+    !Number.isNaN(value.lifecycleMs) &&
+    !Number.isNaN(value.totalMs)
   );
 }
 
 export function isProfileReport(value: unknown): value is ProfileReport {
-  if (!isRecord(value)) return false;
-  const version = Reflect.get(value, "version");
-  const records = Reflect.get(value, "records");
-  const errors = Reflect.get(value, "errors");
-  const totals = Reflect.get(value, "totals");
+  if (!Value.Check(ProfileReportCandidateSchema, value)) return false;
 
   return (
-    version === 1 &&
-    stringField(value, "generatedAt") !== undefined &&
-    stringField(value, "cwd") !== undefined &&
-    Array.isArray(records) &&
-    records.every(isProfileRecord) &&
-    Array.isArray(errors) &&
-    errors.every(isProfileError) &&
-    isProfileTotals(totals)
+    value.records.every(isProfileRecord) &&
+    value.errors.every(isProfileError) &&
+    isProfileTotals(value.totals)
   );
 }
 

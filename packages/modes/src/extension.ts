@@ -1,5 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Result } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { loadConfig, pickConfig, registerGlobalConfigModule } from "@pi-ohm/core/config";
 import { setOhmInputStatus } from "@pi-ohm/tui";
 import registerOhmConfigExtension from "@pi-ohm/tui/ohm-config";
@@ -20,6 +22,13 @@ async function loadModesConfig(cwd: string) {
 }
 
 const MODES: readonly Mode[] = ["rush", "smart", "deep"] as const;
+const ModeArgsObjectSchema = Type.Object(
+  {
+    args: Type.Optional(Type.Unknown()),
+    raw: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
 
 function parseRequestedMode(args: unknown): Mode | null {
   if (typeof args === "string") {
@@ -42,14 +51,15 @@ function parseRequestedMode(args: unknown): Mode | null {
     return null;
   }
 
-  if (args && typeof args === "object") {
-    const asRecord = args as { args?: unknown; raw?: unknown };
-    if (Array.isArray(asRecord.args)) {
-      return parseRequestedMode(asRecord.args);
+  if (Value.Check(ModeArgsObjectSchema, args)) {
+    const nestedArgs = Reflect.get(args, "args");
+    if (Array.isArray(nestedArgs)) {
+      return parseRequestedMode(nestedArgs);
     }
 
-    if (typeof asRecord.raw === "string") {
-      return parseRequestedMode(asRecord.raw);
+    const raw = Reflect.get(args, "raw");
+    if (typeof raw === "string") {
+      return parseRequestedMode(raw);
     }
   }
 

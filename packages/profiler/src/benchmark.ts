@@ -18,6 +18,8 @@ import {
   type LoadExtensionsResult,
 } from "@earendil-works/pi-coding-agent";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { resolveExtensionConfigDir } from "@pi-ohm/core/config";
 import {
   createProfileReport,
@@ -66,9 +68,10 @@ const defaultClock: ProfilerClock = {
   now: () => performance.now(),
   date: () => new Date(),
 };
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const ExtensionLoaderModuleSchema = Type.Object(
+  { loadExtensions: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+);
 
 function isLoadExtensionsFn(value: unknown): value is LoadExtensionsFn {
   return typeof value === "function";
@@ -83,8 +86,8 @@ async function resolveLoadExtensions(): Promise<BetterResult<LoadExtensionsFn, P
         path.join(path.dirname(index), "core", "extensions", "index.js"),
       );
       const module: unknown = await import(moduleUrl.href);
-      if (!isRecord(module)) return undefined;
-      const candidate = Reflect.get(module, "loadExtensions");
+      if (!Value.Check(ExtensionLoaderModuleSchema, module)) return undefined;
+      const candidate = module.loadExtensions;
       if (!isLoadExtensionsFn(candidate)) return undefined;
       return candidate;
     },

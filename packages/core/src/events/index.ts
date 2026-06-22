@@ -1,4 +1,6 @@
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { createDebug, debugResult, type Debug } from "../logging";
 
 export interface PiEventBus {
@@ -15,6 +17,18 @@ export interface PiEventApi {
 }
 
 export type PiEventCleanup = () => void;
+
+const PiEventBusCandidateSchema = Type.Object(
+  {
+    emit: Type.Unknown(),
+    on: Type.Unknown(),
+  },
+  { additionalProperties: true },
+);
+const PiRpcRequestCandidateSchema = Type.Object(
+  { requestId: Type.Unknown() },
+  { additionalProperties: true },
+);
 
 export interface PiRpcRequest {
   readonly requestId: string;
@@ -389,10 +403,8 @@ export class PiEventRegistry {
 }
 
 function isPiEventBus(value: unknown): value is PiEventBus {
-  if (typeof value !== "object" || value === null) return false;
-  const emit = Reflect.get(value, "emit");
-  const on = Reflect.get(value, "on");
-  return typeof emit === "function" && typeof on === "function";
+  if (!Value.Check(PiEventBusCandidateSchema, value)) return false;
+  return typeof value.emit === "function" && typeof value.on === "function";
 }
 
 function validateName(name: string, label: string): OhmPiEventResult<string> {
@@ -476,7 +488,7 @@ export function invalidPiEventRequest(input: {
 }
 
 export function parsePiRpcRequest(data: unknown, channel: string): OhmPiEventResult<PiRpcRequest> {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+  if (!Value.Check(PiRpcRequestCandidateSchema, data)) {
     return invalidPiEventRequest({
       code: "rpc_request_not_object",
       channel,

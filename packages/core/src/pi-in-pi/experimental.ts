@@ -1,3 +1,6 @@
+import { Type } from "typebox";
+import { Value } from "typebox/value";
+
 export type PromptValue = string | number | boolean | bigint | PipPrompt | readonly PromptValue[];
 
 export type PromptVars = Record<string, PromptValue>;
@@ -10,6 +13,8 @@ export interface PipPrompt {
   readonly text: string;
   toString(): string;
 }
+
+const PipPromptSchema = Type.Object({ text: Type.String() }, { additionalProperties: true });
 
 export function setPrompt(input: PromptOptions = {}) {
   return (strings: TemplateStringsArray, ...values: readonly PromptValue[]): PipPrompt =>
@@ -74,9 +79,7 @@ function renderValue(value: PromptValue): string {
 }
 
 function isPrompt(value: unknown): value is PipPrompt {
-  if (typeof value !== "object" || value === null) return false;
-  if (Array.isArray(value)) return false;
-  return typeof Reflect.get(value, "text") === "string";
+  return Value.Check(PipPromptSchema, value);
 }
 
 function lastContentIndex(lines: readonly string[]): number {

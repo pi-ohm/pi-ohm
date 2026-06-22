@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import { ModesConfigSchema, type Mode } from "./schema";
 
@@ -15,6 +16,12 @@ export const DEFAULT_MODES_CONFIG: ModesConfig = {
 };
 
 type ModesConfigPatch = StaticDecode<typeof ModesConfigSchema>;
+const ModesRuntimeConfigSchema = Type.Object(
+  {
+    defaultMode: Type.Union([Type.Literal("rush"), Type.Literal("smart"), Type.Literal("deep")]),
+  },
+  { additionalProperties: false },
+);
 
 export const modesConfigModule = registerConfig({
   namespace: "modes",
@@ -28,7 +35,5 @@ export const modesConfigModule = registerConfig({
 });
 
 export function isModesConfig(value: unknown): value is ModesConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const mode = Reflect.get(value, "defaultMode");
-  return mode === "rush" || mode === "smart" || mode === "deep";
+  return Value.Check(ModesRuntimeConfigSchema, value);
 }

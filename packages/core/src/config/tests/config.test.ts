@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import { Result } from "better-result";
 import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import {
   ConfigRegistry,
   clearGlobalConfigModulesForTesting,
@@ -35,13 +36,17 @@ interface DemoConfig {
   readonly label: string;
 }
 
+const DemoRuntimeSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    count: Type.Number(),
+    label: Type.String(),
+  },
+  { additionalProperties: false },
+);
+
 function isDemoConfig(value: unknown): value is DemoConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return (
-    typeof Reflect.get(value, "enabled") === "boolean" &&
-    typeof Reflect.get(value, "count") === "number" &&
-    typeof Reflect.get(value, "label") === "string"
-  );
+  return Value.Check(DemoRuntimeSchema, value);
 }
 
 function readDemoConfig(loaded: LoadedExtensionConfig): DemoConfig {

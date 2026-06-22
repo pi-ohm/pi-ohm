@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import {
   loadConfig,
   pickConfig,
@@ -28,6 +29,15 @@ export const DEFAULT_GOAL_CONFIG: GoalConfig = {
 };
 
 type GoalConfigPatch = StaticDecode<typeof GoalConfigSchema>;
+const GoalRuntimeConfigShapeSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    autoContinue: Type.Boolean(),
+    defaultTokenBudget: Type.Optional(Type.Integer({ minimum: 1 })),
+    experimental: Type.Unknown(),
+  },
+  { additionalProperties: false },
+);
 
 function normalizeTokenBudget(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
@@ -49,29 +59,15 @@ export const goalConfigModule = registerConfig({
   },
 });
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function isExperimentalConfig(value: unknown): value is GoalExperimentalConfig {
   return goalExperimentalFlags.is(value);
 }
 
 export function isGoalConfig(value: unknown): value is GoalConfig {
-  if (!isRecord(value)) return false;
-  const enabled = Reflect.get(value, "enabled");
-  const autoContinue = Reflect.get(value, "autoContinue");
-  const defaultTokenBudget = Reflect.get(value, "defaultTokenBudget");
+  if (!Value.Check(GoalRuntimeConfigShapeSchema, value)) return false;
   const experimental = Reflect.get(value, "experimental");
-  if (typeof enabled !== "boolean") return false;
-  if (typeof autoContinue !== "boolean") return false;
   if (!isExperimentalConfig(experimental)) return false;
-  if (defaultTokenBudget === undefined) return true;
-  return (
-    typeof defaultTokenBudget === "number" &&
-    Number.isInteger(defaultTokenBudget) &&
-    defaultTokenBudget > 0
-  );
+  return true;
 }
 
 export async function loadGoalConfig(cwd: string) {

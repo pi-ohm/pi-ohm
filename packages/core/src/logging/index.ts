@@ -1,4 +1,6 @@
 import { Result, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 export interface DebugEvent {
   readonly package: string;
@@ -15,6 +17,8 @@ export interface DebugError {
 export type DebugFields = Readonly<Record<string, unknown>>;
 
 export type Debug = (event: string, fields?: DebugFields) => void;
+
+const DebugObjectSchema = Type.Object({}, { additionalProperties: true });
 
 export interface CreateDebugInput {
   readonly packageName: string;
@@ -98,7 +102,7 @@ function writeRecord(write: (line: string) => void, record: DebugEvent): void {
 }
 
 function readStringField(value: unknown, field: string): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (!Value.Check(DebugObjectSchema, value)) return undefined;
   const fieldValue = Reflect.get(value, field);
   if (typeof fieldValue !== "string") return undefined;
   const trimmed = fieldValue.trim();

@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Result, TaggedError, type Result as BetterResult } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 export class MemoryConfigError extends TaggedError("MemoryConfigError")<{
   readonly code: "config_read_failed" | "config_parse_failed";
@@ -54,16 +56,19 @@ interface ConfigPaths {
   readonly projectSettings: string;
 }
 
-type Json = Record<string, unknown>;
+type Json = Readonly<Record<string, unknown>>;
+const JsonObjectSchema = Type.Unsafe<Json>({
+  type: "object",
+  additionalProperties: true,
+});
+const NodeErrorLikeSchema = Type.Object(
+  { code: Type.Optional(Type.Unknown()) },
+  { additionalProperties: true },
+);
 
 function errorCode(value: unknown): string | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  if (!("code" in value)) return undefined;
+  if (!Value.Check(NodeErrorLikeSchema, value)) return undefined;
   return typeof value.code === "string" ? value.code : undefined;
-}
-
-function isJson(value: unknown): value is Json {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function expandHome(value: string): string {
@@ -116,7 +121,7 @@ async function readConfigJson(file: string): Promise<MemoryConfigResult<Json | u
       }),
   });
   if (Result.isError(parsed)) return parsed;
-  if (!isJson(parsed.value)) {
+  if (!Value.Check(JsonObjectSchema, parsed.value)) {
     return Result.err(
       new MemoryConfigError({
         code: "config_parse_failed",
@@ -125,7 +130,7 @@ async function readConfigJson(file: string): Promise<MemoryConfigResult<Json | u
       }),
     );
   }
-  return Result.ok(parsed.value);
+  return Result.ok(Value.Decode(JsonObjectSchema, parsed.value));
 }
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -152,7 +157,7 @@ function str(value: unknown, fallback: string): string {
 }
 
 export function mergeMemoriesConfig(base: MemoriesConfig, patch: unknown): MemoriesConfig {
-  const source = isJson(patch) ? patch : {};
+  const source = Value.Check(JsonObjectSchema, patch) ? patch : {};
   const disable = source.disableOnExternalContext ?? source.noMemoriesIfMcpOrWebSearch;
 
   return {

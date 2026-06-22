@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { setImmediate } from "node:timers/promises";
 import test from "node:test";
 import { Result } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import {
   invalidPiEventRequest,
   parsePiRpcRequest,
@@ -62,8 +64,20 @@ interface DemoSpawnRequest extends PiRpcRequest {
   readonly prompt: string;
 }
 
+const DemoStartedPayloadSchema = Type.Object(
+  { id: Type.Unknown() },
+  { additionalProperties: true },
+);
+const DemoSpawnPayloadSchema = Type.Object(
+  {
+    type: Type.Unknown(),
+    prompt: Type.Unknown(),
+  },
+  { additionalProperties: true },
+);
+
 function parseStartedEvent(payload: unknown): OhmPiEventResult<DemoStartedEvent> {
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+  if (!Value.Check(DemoStartedPayloadSchema, payload)) {
     return invalidPiEventRequest({
       code: "started_not_object",
       channel: "demo:started",
@@ -87,7 +101,7 @@ function parseDemoSpawnRequest(payload: unknown): OhmPiEventResult<DemoSpawnRequ
   const channel = "demo:rpc:spawn";
   const request = parsePiRpcRequest(payload, channel);
   if (Result.isError(request)) return Result.err(request.error);
-  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+  if (!Value.Check(DemoSpawnPayloadSchema, payload)) {
     return invalidPiEventRequest({
       code: "spawn_not_object",
       channel,

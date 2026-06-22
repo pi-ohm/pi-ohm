@@ -5,6 +5,8 @@ import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 type PublishChannel = "latest" | "dev";
 
@@ -18,8 +20,12 @@ interface CliArgs {
 interface LoadedPackage {
   relDir: string;
   absDir: string;
-  pkg: Record<string, unknown> & { name: string; version: string };
+  pkg: PackageMetadata;
 }
+
+type JsonObject = Record<string, unknown>;
+type PackageMetadata = JsonObject & { name: string; version: string };
+type TempPackageMetadata = JsonObject & { name: string; version?: string };
 
 interface CatalogConfig {
   defaultCatalog: ReadonlyMap<string, string>;
@@ -47,12 +53,43 @@ function isLocalPackageFilePath(value: string): boolean {
   return true;
 }
 
+const JsonObjectSchema = Type.Unsafe<JsonObject>({
+  type: "object",
+  additionalProperties: true,
+});
+const PackageMetadataSchema = Type.Unsafe<PackageMetadata>({
+  type: "object",
+  required: ["name", "version"],
+  properties: {
+    name: { type: "string" },
+    version: { type: "string" },
+  },
+  additionalProperties: true,
+});
+const TempPackageMetadataSchema = Type.Unsafe<TempPackageMetadata>({
+  type: "object",
+  required: ["name"],
+  properties: {
+    name: { type: "string" },
+    version: { type: "string" },
+  },
+  additionalProperties: true,
+});
+const PackagePiFieldSchema = Type.Object(
+  { extensions: Type.Optional(Type.Array(Type.Unknown())) },
+  { additionalProperties: true },
+);
+const NpmVersionsPayloadSchema = Type.Object(
+  { versions: Type.Optional(JsonObjectSchema) },
+  { additionalProperties: true },
+);
+
 function collectExportPaths(value: unknown): string[] {
   if (typeof value === "string") return [value];
   if (Array.isArray(value)) {
     return value.flatMap((item) => collectExportPaths(item));
   }
-  if (!isRecord(value)) return [];
+  if (!Value.Check(JsonObjectSchema, value)) return [];
 
   const output: string[] = [];
   for (const nested of Object.values(value)) {
@@ -84,7 +121,7 @@ async function ensurePublishArtifacts(
   }
 
   const piField = pkg.pi;
-  if (isRecord(piField)) {
+  if (Value.Check(PackagePiFieldSchema, piField)) {
     const extensions = piField.extensions;
     if (Array.isArray(extensions)) {
       for (const extensionPath of extensions) {
@@ -209,12 +246,10 @@ function parseList(value: string): string[] {
     .filter(Boolean);
 }
 
-async function readJson(filePath: string): Promise<Record<string, unknown>> {
-  return JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+async function readJson(filePath: string): Promise<JsonObject> {
+  const parsed: unknown = JSON.parse(await readFile(filePath, "utf8"));
+  if (Value.Check(JsonObjectSchema, parsed)) return Value.Decode(JsonObjectSchema, parsed);
+  throw new Error(`Expected JSON object in ${filePath}`);
 }
 
 function run(command: string, args: string[], options: { cwd?: string } = {}): void {
@@ -269,7 +304,7 @@ function parseCatalogEntry(line: string, indent: number): [string, string] | nul
 }
 
 function toStringMap(source: unknown, label: string): Map<string, string> {
-  if (!isRecord(source)) {
+  if (!Value.Check(JsonObjectSchema, source)) {
     throw new Error(`Expected '${label}' to be an object in pnpm workspace config.`);
   }
 
@@ -411,11 +446,9 @@ function rewriteInternalDependencies(
 
   for (const field of dependencyFields) {
     const section = pkg[field];
-    if (!section || typeof section !== "object") continue;
+    if (!Value.Check(JsonObjectSchema, section)) continue;
 
-    const dependencySection = section as Record<string, unknown>;
-
-    for (const [depName, depRange] of Object.entries(dependencySection)) {
+    for (const [depName, depRange] of Object.entries(section)) {
       if (typeof depRange !== "string") continue;
 
       if (depRange.startsWith("workspace:")) {
@@ -426,13 +459,13 @@ function rewriteInternalDependencies(
           );
         }
 
-        dependencySection[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+        section[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
         continue;
       }
 
       const catalogRange = resolveCatalogRange(depName, depRange, catalogs, pkg.name);
       if (catalogRange !== null) {
-        dependencySection[depName] = catalogRange;
+        section[depName] = catalogRange;
       }
     }
   }
@@ -459,9 +492,11 @@ async function versionExistsOnNpm(name: string, version: string): Promise<boolea
     }
 
     if (response.ok) {
-      const payload = (await response.json()) as { versions?: Record<string, unknown> };
+      const payload: unknown = await response.json();
       return Boolean(
-        payload.versions && Object.prototype.hasOwnProperty.call(payload.versions, version),
+        Value.Check(NpmVersionsPayloadSchema, payload) &&
+        payload.versions &&
+        Object.prototype.hasOwnProperty.call(payload.versions, version),
       );
     }
   } catch {
@@ -486,11 +521,11 @@ async function main(): Promise<void> {
     const pkgPath = path.join(absDir, "package.json");
     const rawPkg = await readJson(pkgPath);
 
-    if (typeof rawPkg.name !== "string" || typeof rawPkg.version !== "string") {
+    if (!Value.Check(PackageMetadataSchema, rawPkg)) {
       throw new Error(`Invalid package.json in ${relDir}`);
     }
 
-    packages.push({ relDir, absDir, pkg: rawPkg as LoadedPackage["pkg"] });
+    packages.push({ relDir, absDir, pkg: Value.Decode(PackageMetadataSchema, rawPkg) });
   }
 
   const included = args.only
@@ -540,11 +575,11 @@ async function main(): Promise<void> {
 
       const tempPkgPath = path.join(tempPkgDir, "package.json");
       const rawTempPkg = await readJson(tempPkgPath);
-      if (typeof rawTempPkg.name !== "string") {
+      if (!Value.Check(TempPackageMetadataSchema, rawTempPkg)) {
         throw new Error(`Invalid temp package.json for ${item.relDir}`);
       }
 
-      const tempPkg = rawTempPkg as Record<string, unknown> & { name: string; version?: string };
+      const tempPkg = Value.Decode(TempPackageMetadataSchema, rawTempPkg);
       tempPkg.version = targetVersion;
       rewriteInternalDependencies(tempPkg, versionByName, args.channel, catalogs);
 

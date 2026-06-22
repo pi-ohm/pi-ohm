@@ -1,7 +1,10 @@
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 
-const UnknownRecordSchema = Type.Record(Type.String(), Type.Unknown());
+const UnknownObjectSchema = Type.Unsafe<Readonly<Record<string, unknown>>>({
+  type: "object",
+  additionalProperties: true,
+});
 
 export const SubagentToolPermissionDecisionSchema = Type.Union(
   [Type.Literal("allow"), Type.Literal("deny")],
@@ -165,7 +168,7 @@ function toSummarizeHistoryType(value: unknown): SummarizeHistoryType | undefine
 function normalizeSubagentPermissionMapInput(
   value: unknown,
 ): Static<typeof SubagentToolPermissionMapSchema> | undefined {
-  if (!Value.Check(UnknownRecordSchema, value)) return undefined;
+  if (!Value.Check(UnknownObjectSchema, value)) return undefined;
 
   const normalized: Record<string, SubagentToolPermissionDecisionPatch> = {};
   for (const [rawToolName, rawDecision] of Object.entries(value)) {
@@ -187,7 +190,7 @@ function normalizeSubagentPermissionMapInput(
 }
 
 function normalizeSubagentAgentPatchInput(input: unknown): unknown {
-  if (!Value.Check(UnknownRecordSchema, input)) return input;
+  if (!Value.Check(UnknownObjectSchema, input)) return input;
 
   const model = toTrimmedString(Reflect.get(input, "model"));
   const disabled = toBoolean(Reflect.get(input, "disabled"));
@@ -218,7 +221,7 @@ export function parseSubagentAgentPatch(input: unknown): SubagentAgentPatch | un
 }
 
 function normalizeSummarizeHistoryConfigPatchInput(input: unknown): unknown {
-  if (!Value.Check(UnknownRecordSchema, input)) return input;
+  if (!Value.Check(UnknownObjectSchema, input)) return input;
 
   const enabled = toBoolean(Reflect.get(input, "enabled"));
   const type = toSummarizeHistoryType(Reflect.get(input, "type"));
@@ -243,7 +246,7 @@ export function parseSummarizeHistoryConfigPatch(
 }
 
 function normalizeSubagentsExperimentalConfigPatchInput(input: unknown): unknown {
-  if (!Value.Check(UnknownRecordSchema, input)) return input;
+  if (!Value.Check(UnknownObjectSchema, input)) return input;
 
   const summarize = parseSummarizeHistoryConfigPatch(Reflect.get(input, "summarize_history"));
 

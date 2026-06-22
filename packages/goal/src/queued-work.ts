@@ -1,3 +1,5 @@
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import type { Goal, GoalStatus } from "./model";
 import {
   continuationGoalIdFromPrompt,
@@ -44,19 +46,36 @@ export interface GoalContextRewriteResult<TMessage extends GoalContextMessage> {
   readonly changed: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const TextPartSchema = Type.Object(
+  {
+    type: Type.Literal("text"),
+    text: Type.String(),
+  },
+  { additionalProperties: true },
+);
+const GoalQueuedWorkDetailsSchema = Type.Object(
+  {
+    kind: Type.Union([
+      Type.Literal("command_edit"),
+      Type.Literal("command_resume"),
+      Type.Literal("command_start"),
+      Type.Literal("continuation"),
+    ]),
+    goalId: Type.String({ minLength: 1 }),
+  },
+  { additionalProperties: true },
+);
+const SupersededDetailsSchema = Type.Object(
+  { kind: Type.Literal("superseded_continuation") },
+  { additionalProperties: true },
+);
 
 function textFromContent(content: unknown): string | undefined {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return undefined;
 
   const parts = content.flatMap((part) => {
-    if (!isRecord(part)) return [];
-    const type = Reflect.get(part, "type");
-    const text = Reflect.get(part, "text");
-    if (type === "text" && typeof text === "string") return [text];
+    if (Value.Check(TextPartSchema, part)) return [part.text];
     return [];
   });
 
@@ -65,21 +84,12 @@ function textFromContent(content: unknown): string | undefined {
 }
 
 export function isGoalQueuedWorkDetails(value: unknown): value is GoalQueuedWorkDetails {
-  if (!isRecord(value)) return false;
-  const kind = Reflect.get(value, "kind");
-  const goalId = Reflect.get(value, "goalId");
-  return (
-    (kind === "command_edit" ||
-      kind === "command_resume" ||
-      kind === "command_start" ||
-      kind === "continuation") &&
-    typeof goalId === "string" &&
-    goalId.trim().length > 0
-  );
+  if (!Value.Check(GoalQueuedWorkDetailsSchema, value)) return false;
+  return value.goalId.trim().length > 0;
 }
 
 function isSupersededDetails(value: unknown): boolean {
-  return isRecord(value) && Reflect.get(value, "kind") === "superseded_continuation";
+  return Value.Check(SupersededDetailsSchema, value);
 }
 
 export function queuedGoalWorkMessageId(message: GoalContextMessage): string | undefined {

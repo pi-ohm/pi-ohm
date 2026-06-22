@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import { PainterConfigSchema } from "./schema";
 
@@ -42,6 +43,30 @@ export const DEFAULT_PAINTER_CONFIG: PainterConfig = {
 };
 
 type PainterConfigPatch = StaticDecode<typeof PainterConfigSchema>;
+const ProviderRuntimeConfigSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    model: Type.String(),
+  },
+  { additionalProperties: false },
+);
+const PainterRuntimeConfigSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    googleNanoBanana: ProviderRuntimeConfigSchema,
+    openai: ProviderRuntimeConfigSchema,
+    azureOpenai: Type.Object(
+      {
+        enabled: Type.Boolean(),
+        deployment: Type.String(),
+        endpoint: Type.String(),
+        apiVersion: Type.String(),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  { additionalProperties: false },
+);
 
 function mergeProvider(
   base: PainterConfig["openai"],
@@ -72,26 +97,6 @@ export const painterConfigModule = registerConfig({
   },
 });
 
-function isProviderConfig(value: unknown): value is PainterConfig["openai"] {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return (
-    typeof Reflect.get(value, "enabled") === "boolean" &&
-    typeof Reflect.get(value, "model") === "string"
-  );
-}
-
 export function isPainterConfig(value: unknown): value is PainterConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  const azure = Reflect.get(value, "azureOpenai");
-  if (typeof azure !== "object" || azure === null || Array.isArray(azure)) return false;
-
-  return (
-    typeof Reflect.get(value, "enabled") === "boolean" &&
-    isProviderConfig(Reflect.get(value, "googleNanoBanana")) &&
-    isProviderConfig(Reflect.get(value, "openai")) &&
-    typeof Reflect.get(azure, "enabled") === "boolean" &&
-    typeof Reflect.get(azure, "deployment") === "string" &&
-    typeof Reflect.get(azure, "endpoint") === "string" &&
-    typeof Reflect.get(azure, "apiVersion") === "string"
-  );
+  return Value.Check(PainterRuntimeConfigSchema, value);
 }

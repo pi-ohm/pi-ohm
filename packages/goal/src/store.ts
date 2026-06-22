@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Result } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import type { ExtensionDb } from "@pi-ohm/core/db";
 import {
   createGoalError,
@@ -76,12 +78,13 @@ export interface GoalStore {
   listEvents(sessionId: string, limit?: number): Promise<GoalResult<readonly GoalEvent[]>>;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const GoalRowSchema = Type.Unsafe<Readonly<Record<string, unknown>>>({
+  type: "object",
+  additionalProperties: true,
+});
 
 function readString(row: unknown, field: string): GoalResult<string> {
-  if (!isRecord(row)) {
+  if (!Value.Check(GoalRowSchema, row)) {
     return Result.err(
       createGoalError({
         code: "goal_parse_failed",
@@ -103,7 +106,7 @@ function readString(row: unknown, field: string): GoalResult<string> {
 }
 
 function readNumber(row: unknown, field: string): GoalResult<number> {
-  if (!isRecord(row)) {
+  if (!Value.Check(GoalRowSchema, row)) {
     return Result.err(
       createGoalError({
         code: "goal_parse_failed",
@@ -125,7 +128,7 @@ function readNumber(row: unknown, field: string): GoalResult<number> {
 }
 
 function readOptionalNumber(row: unknown, field: string): GoalResult<number | undefined> {
-  if (!isRecord(row)) {
+  if (!Value.Check(GoalRowSchema, row)) {
     return Result.err(
       createGoalError({
         code: "goal_parse_failed",
@@ -224,7 +227,7 @@ function parseEvent(row: unknown): GoalResult<GoalEvent> {
 }
 
 function readOptionalString(row: unknown, field: string): GoalResult<string | undefined> {
-  if (!isRecord(row)) {
+  if (!Value.Check(GoalRowSchema, row)) {
     return Result.err(
       createGoalError({
         code: "goal_parse_failed",

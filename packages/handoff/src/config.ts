@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { type StaticDecode } from "typebox";
+import { Type, type StaticDecode } from "typebox";
+import { Value } from "typebox/value";
 import { registerConfig } from "@pi-ohm/core/config";
 import { HandoffConfigSchema } from "./schema";
 
@@ -16,6 +17,13 @@ export const DEFAULT_HANDOFF_CONFIG: HandoffConfig = {
 };
 
 type HandoffConfigPatch = StaticDecode<typeof HandoffConfigSchema>;
+const HandoffRuntimeConfigSchema = Type.Object(
+  {
+    enabled: Type.Boolean(),
+    visualizer: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
 
 export const handoffConfigModule = registerConfig({
   namespace: "handoff",
@@ -30,9 +38,5 @@ export const handoffConfigModule = registerConfig({
 });
 
 export function isHandoffConfig(value: unknown): value is HandoffConfig {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  return (
-    typeof Reflect.get(value, "enabled") === "boolean" &&
-    typeof Reflect.get(value, "visualizer") === "boolean"
-  );
+  return Value.Check(HandoffRuntimeConfigSchema, value);
 }

@@ -1,4 +1,6 @@
 import { Result } from "better-result";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import type { ExtensionAPI, TurnEndEvent, TurnStartEvent } from "@earendil-works/pi-coding-agent";
 import type { OhmInputStatusContext } from "@pi-ohm/tui";
 import { ExtensionDb } from "@pi-ohm/core/db";
@@ -178,9 +180,21 @@ interface GoalRuntimeOptions {
   readonly createGoalId?: () => string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const AssistantMessageLikeSchema = Type.Object(
+  {
+    role: Type.String(),
+    usage: Type.Optional(Type.Unknown()),
+    stopReason: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
+const AssistantUsageLikeSchema = Type.Object(
+  {
+    input: Type.Optional(Type.Unknown()),
+    output: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: true },
+);
 
 function nonNegativeInteger(value: unknown): number {
   if (typeof value !== "number") return 0;
@@ -190,14 +204,14 @@ function nonNegativeInteger(value: unknown): number {
 }
 
 export function tokenDeltaFromAssistantMessage(message: unknown): number {
-  if (!isRecord(message)) return 0;
-  if (Reflect.get(message, "role") !== "assistant") return 0;
+  if (!Value.Check(AssistantMessageLikeSchema, message)) return 0;
+  if (message.role !== "assistant") return 0;
 
-  const usage = Reflect.get(message, "usage");
-  if (!isRecord(usage)) return 0;
+  const usage = message.usage;
+  if (!Value.Check(AssistantUsageLikeSchema, usage)) return 0;
 
-  const input = nonNegativeInteger(Reflect.get(usage, "input"));
-  const output = nonNegativeInteger(Reflect.get(usage, "output"));
+  const input = nonNegativeInteger(usage.input);
+  const output = nonNegativeInteger(usage.output);
   return input + output;
 }
 
@@ -209,10 +223,8 @@ function tokenDeltaFromMessages(messages: readonly unknown[]): number {
 }
 
 function messageWasAborted(message: unknown): boolean {
-  if (!isRecord(message)) return false;
-  return (
-    Reflect.get(message, "role") === "assistant" && Reflect.get(message, "stopReason") === "aborted"
-  );
+  if (!Value.Check(AssistantMessageLikeSchema, message)) return false;
+  return message.role === "assistant" && message.stopReason === "aborted";
 }
 
 function agentEndWasAborted(event: GoalAgentEndEvent): boolean {

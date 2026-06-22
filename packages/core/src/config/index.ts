@@ -198,8 +198,11 @@ export class ConfigRegistry {
   }
 }
 
-const JsonMapSchema = Type.Record(Type.String(), Type.Unknown());
-type JsonMap = StaticDecode<typeof JsonMapSchema>;
+type JsonMap = Readonly<Record<string, unknown>>;
+const ConfigObjectSchema = Type.Unsafe<JsonMap>({
+  type: "object",
+  additionalProperties: true,
+});
 
 interface ReadConfigFileResult {
   readonly path: string;
@@ -208,7 +211,7 @@ interface ReadConfigFileResult {
 }
 
 function isNodeErrorCode(value: unknown, code: string): boolean {
-  if (!Value.Check(JsonMapSchema, value)) return false;
+  if (!Value.Check(ConfigObjectSchema, value)) return false;
   return Reflect.get(value, "code") === code;
 }
 
@@ -516,7 +519,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
     };
   }
 
-  if (!Value.Check(JsonMapSchema, parsed.value)) {
+  if (!Value.Check(ConfigObjectSchema, parsed.value)) {
     return {
       path: file,
       value: undefined,
@@ -528,7 +531,7 @@ async function readConfigFile(file: string): Promise<ReadConfigFileResult> {
     };
   }
 
-  return { path: file, value: Value.Decode(JsonMapSchema, parsed.value) };
+  return { path: file, value: Value.Decode(ConfigObjectSchema, parsed.value) };
 }
 
 function schemaErrors(schema: TSchema, value: unknown): readonly string[] {

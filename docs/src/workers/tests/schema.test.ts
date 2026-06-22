@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import schema from "../schema";
+
+const SchemaNode = Type.Unsafe<Readonly<Record<string, unknown>>>({
+  type: "object",
+  additionalProperties: true,
+});
 
 async function get(path: string): Promise<unknown> {
   const response = schema.fetch(new Request(`https://ohm.moe${path}`));
@@ -8,13 +15,9 @@ async function get(path: string): Promise<unknown> {
   return response.json();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function child(value: unknown, key: string): unknown {
-  assert.equal(isRecord(value), true);
-  if (!isRecord(value)) assert.fail(`Expected record before reading '${key}'`);
+  assert.equal(Value.Check(SchemaNode, value), true);
+  if (!Value.Check(SchemaNode, value)) assert.fail(`Expected schema node before reading '${key}'`);
   return value[key];
 }
 

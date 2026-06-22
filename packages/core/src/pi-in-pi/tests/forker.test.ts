@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import {
   AuthStorage,
   ModelRegistry,
@@ -26,6 +28,20 @@ import {
 } from "../forker";
 
 const timestamp = "2026-01-01T00:00:00.000Z";
+const SessionHeaderCandidateSchema = Type.Object(
+  {
+    type: Type.Literal("session"),
+    id: Type.String(),
+  },
+  { additionalProperties: true },
+);
+const SessionEntryCandidateSchema = Type.Object(
+  {
+    id: Type.String(),
+    type: Type.String(),
+  },
+  { additionalProperties: true },
+);
 const parentHeader = {
   type: "session",
   version: 3,
@@ -589,17 +605,11 @@ async function readJsonl(
 }
 
 function isSessionHeader(value: unknown): value is SessionHeader {
-  if (!isRecord(value)) return false;
-  return value.type === "session" && typeof value.id === "string";
+  return Value.Check(SessionHeaderCandidateSchema, value);
 }
 
 function isSessionEntry(value: unknown): value is SessionEntry {
-  if (!isRecord(value)) return false;
-  return typeof value.id === "string" && typeof value.type === "string";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return Value.Check(SessionEntryCandidateSchema, value);
 }
 
 function userEntry(id: string, parentId: string | null, content: string): SessionEntry {
