@@ -66,6 +66,9 @@ jobs:
       - name: Build distributables
         run: vp run build
 
+      - name: Publish preflight
+        run: node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --exclude pi-ohm --dry-run
+
       - name: Configure npm token auth
         run: |
           if [[ -n "${NPM_TOKEN:-}" ]]; then
@@ -129,6 +132,9 @@ jobs:
 
       - name: Build distributables
         run: vp run build
+
+      - name: Publish preflight
+        run: node --experimental-strip-types ./scripts/publish-packages.ts --channel latest --exclude pi-ohm --dry-run
 
       - name: Configure npm token auth
         run: |
@@ -305,6 +311,10 @@ jobs:
             echo "::warning title=Skipping pi-ohm::Manual all publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Use package=pi-ohm after configuring https://www.npmjs.com/package/pi-ohm/access"
             cmd+=(--exclude pi-ohm)
           fi
+
+          preflight=("${cmd[@]}" --dry-run)
+          echo "Preflight: ${preflight[*]}"
+          "${preflight[@]}"
 
           echo "Running: ${cmd[*]}"
           "${cmd[@]}"

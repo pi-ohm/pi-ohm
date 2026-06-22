@@ -42,7 +42,27 @@ jobs:
         run: vp install --frozen-lockfile
 
       - name: Deploy docs with Alchemy
-        run: vp run docs#deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          log="$(mktemp)"
+          set +e
+          vp run docs#deploy 2>&1 | tee "${log}"
+          status="${PIPESTATUS[0]}"
+          set -e
+
+          if [[ "${status}" -eq 0 ]]; then
+            exit 0
+          fi
+
+          if [[ "${STAGE}" == "dev" ]] && grep -Fq "[CloudflareStateStore] The token is invalid" "${log}"; then
+            echo "::warning title=Alchemy state token drift::Retrying dev docs deploy with forceUpdate=true."
+            ALCHEMY_STATE_FORCE_UPDATE=1 vp run docs#deploy
+            exit 0
+          fi
+
+          exit "${status}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

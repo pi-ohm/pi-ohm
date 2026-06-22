@@ -62,6 +62,7 @@
     "lefthook": "^2.1.1",
     "tsx": "^4.20.0",
     "tuistory": "^0.10.0",
+    "typebox": "^1.2.8",
     "typescript": "^5.9.3",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

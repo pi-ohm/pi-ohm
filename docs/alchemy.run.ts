@@ -23,14 +23,20 @@ function resolveDomain(stage: string): string | undefined {
   return undefined;
 }
 
+function readBooleanEnv(name: string): boolean {
+  const value = readNonEmptyEnv(name)?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
 const stage = resolveStage();
 const domain = resolveDomain(stage);
 const schemaRoute = domain ? `${domain}/schema*` : undefined;
+const forceStateUpdate = readBooleanEnv("ALCHEMY_STATE_FORCE_UPDATE");
 
 const app = await alchemy("pi-ohm-docs", {
   stage,
   adopt: true,
-  stateStore: (scope) => new CloudflareStateStore(scope),
+  stateStore: (scope) => new CloudflareStateStore(scope, { forceUpdate: forceStateUpdate }),
 });
 
 export const schema = await Worker("schema", {

@@ -15,6 +15,7 @@ interface CliArgs {
   only: string[] | null;
   exclude: string[] | null;
   provenance: boolean | null;
+  dryRun: boolean;
 }
 
 interface LoadedPackage {
@@ -172,7 +173,13 @@ const PACKAGE_DIRS = [
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { channel: "latest", only: null, exclude: null, provenance: null };
+  const args: CliArgs = {
+    channel: "latest",
+    only: null,
+    exclude: null,
+    provenance: null,
+    dryRun: false,
+  };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -223,6 +230,11 @@ function parseArgs(argv: string[]): CliArgs {
 
     if (arg === "--no-provenance") {
       args.provenance = false;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      args.dryRun = true;
       continue;
     }
 
@@ -562,7 +574,7 @@ async function main(): Promise<void> {
       throw new Error(`Missing target version for ${name}`);
     }
 
-    if (await versionExistsOnNpm(name, targetVersion)) {
+    if (!args.dryRun && (await versionExistsOnNpm(name, targetVersion))) {
       console.log(`Skipping ${name}@${targetVersion} (already published)`);
       continue;
     }
@@ -585,6 +597,11 @@ async function main(): Promise<void> {
 
       await writeFile(tempPkgPath, `${JSON.stringify(tempPkg, null, 2)}\n`, "utf8");
       await ensurePublishArtifacts(tempPkgDir, tempPkg);
+
+      if (args.dryRun) {
+        console.log(`Dry run: ${name}@${targetVersion} from ${item.relDir}`);
+        continue;
+      }
 
       const publishArgs = ["publish", "--access", "public"];
       if (args.channel === "dev") {
