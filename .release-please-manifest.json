@@ -1,12 +1,12 @@
 {
-  "packages/core": "0.6.4",
-  "packages/modes": "0.6.4",
-  "packages/handoff": "0.6.4",
-  "packages/memories": "0.6.4",
-  "packages/subagents": "0.6.4",
-  "packages/tui": "0.6.4",
-  "packages/session-search": "0.6.4",
-  "packages/painter": "0.6.4",
-  "packages/references": "0.6.4",
-  "packages/extension": "0.6.4"
+  "packages/core": "1.0.0",
+  "packages/modes": "1.0.0",
+  "packages/handoff": "1.0.0",
+  "packages/memories": "1.0.0",
+  "packages/subagents": "1.0.0",
+  "packages/tui": "1.0.0",
+  "packages/session-search": "1.0.0",
+  "packages/painter": "1.0.0",
+  "packages/references": "1.0.0",
+  "packages/extension": "1.0.0"
 }
