@@ -3,6 +3,15 @@ import path from "node:path";
 import { Result } from "better-result";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { defaultReferencesCacheRoot, ensureRepository, type RepositoryCacheResult } from "./cache";
+import {
+  defaultPackageCacheRoot,
+  ensurePackage,
+  packageCachePath,
+  parsePackageConfig,
+  parsePackageReference,
+  type PackageCacheResult,
+  type PackageRegistry,
+} from "./package-cache";
 import type { ReferenceEntryConfig, ReferencesRuntimeConfig } from "./config";
 import {
   parseRemoteRepositoryReference,
@@ -26,7 +35,16 @@ export interface GitReferenceSource {
   readonly hidden?: boolean;
 }
 
-export type ReferenceSource = LocalReferenceSource | GitReferenceSource;
+export interface PackageReferenceSource {
+  readonly type: "package";
+  readonly package: string;
+  readonly registry: PackageRegistry;
+  readonly version: string;
+  readonly description?: string;
+  readonly hidden?: boolean;
+}
+
+export type ReferenceSource = LocalReferenceSource | GitReferenceSource | PackageReferenceSource;
 
 export interface ReferenceInfo {
   readonly name: string;
@@ -48,9 +66,11 @@ export interface ResolvedReferences {
 }
 
 export interface MaterializeReferencesResult {
-  readonly results: readonly RepositoryCacheResult[];
+  readonly results: readonly MaterializedReferenceResult[];
   readonly diagnostics: readonly ReferenceDiagnostic[];
 }
+
+export type MaterializedReferenceResult = RepositoryCacheResult | PackageCacheResult;
 
 function expandHome(value: string): string {
   if (value === "~") return os.homedir();
@@ -68,6 +88,10 @@ function stringEntryIsLocal(value: string): boolean {
   return value.startsWith(".") || value.startsWith("/") || value.startsWith("~");
 }
 
+function stringEntryIsPackage(value: string): boolean {
+  return value.startsWith("npm:") || value.startsWith("jsr:");
+}
+
 function entryDescription(entry: Exclude<ReferenceEntryConfig, string>): string | undefined {
   return entry.description;
 }
@@ -76,9 +100,14 @@ function entryHidden(entry: Exclude<ReferenceEntryConfig, string>): boolean | un
   return entry.hidden;
 }
 
+function packageCacheRoot(cacheRoot: string): string {
+  return path.join(cacheRoot, "packages");
+}
+
 function resolveEntry(input: {
   readonly cwd: string;
   readonly cacheRoot: string;
+  readonly packagesRoot: string;
   readonly name: string;
   readonly entry: ReferenceEntryConfig;
 }): Result<ReferenceInfo, ReferenceDiagnostic> {
@@ -100,6 +129,50 @@ function resolveEntry(input: {
     return Result.ok({
       name: input.name,
       path: source.path,
+      ...(source.description ? { description: source.description } : {}),
+      ...(source.hidden !== undefined ? { hidden: source.hidden } : {}),
+      source,
+    });
+  }
+
+  if (typeof input.entry === "string" && stringEntryIsPackage(input.entry)) {
+    const parsed = parsePackageReference(input.entry);
+    if (Result.isError(parsed)) {
+      return Result.err({ name: input.name, message: parsed.error.message, cause: parsed.error });
+    }
+    const source: PackageReferenceSource = {
+      type: "package",
+      package: parsed.value.package,
+      registry: parsed.value.registry,
+      version: parsed.value.version,
+    };
+    return Result.ok({
+      name: input.name,
+      path: packageCachePath(input.packagesRoot, parsed.value),
+      source,
+    });
+  }
+
+  if (typeof input.entry !== "string" && "package" in input.entry) {
+    const parsed = parsePackageConfig({
+      packageName: input.entry.package,
+      ...(input.entry.registry ? { registry: input.entry.registry } : {}),
+      ...(input.entry.version ? { version: input.entry.version } : {}),
+    });
+    if (Result.isError(parsed)) {
+      return Result.err({ name: input.name, message: parsed.error.message, cause: parsed.error });
+    }
+    const source: PackageReferenceSource = {
+      type: "package",
+      package: parsed.value.package,
+      registry: parsed.value.registry,
+      version: parsed.value.version,
+      ...(entryDescription(input.entry) ? { description: entryDescription(input.entry) } : {}),
+      ...(entryHidden(input.entry) !== undefined ? { hidden: entryHidden(input.entry) } : {}),
+    };
+    return Result.ok({
+      name: input.name,
+      path: packageCachePath(input.packagesRoot, parsed.value),
       ...(source.description ? { description: source.description } : {}),
       ...(source.hidden !== undefined ? { hidden: source.hidden } : {}),
       source,
@@ -147,8 +220,11 @@ export function resolveConfiguredReferences(input: {
   readonly cacheRoot?: string;
 }): ResolvedReferences {
   const cacheRoot = input.cacheRoot ?? defaultReferencesCacheRoot();
+  const packagesRoot = input.cacheRoot
+    ? packageCacheRoot(input.cacheRoot)
+    : defaultPackageCacheRoot();
   return Object.entries(input.config)
-    .map(([name, entry]) => resolveEntry({ cwd: input.cwd, cacheRoot, name, entry }))
+    .map(([name, entry]) => resolveEntry({ cwd: input.cwd, cacheRoot, packagesRoot, name, entry }))
     .reduce<ResolvedReferences>(
       (state, result) => {
         if (Result.isOk(result)) {
@@ -208,6 +284,62 @@ export async function materializeGitReferences(input: {
             pi: input.pi,
             reference: parsed.value,
             branch: source.branch,
+            refresh: true,
+            root: cacheRoot,
+            ...(input.signal ? { signal: input.signal } : {}),
+          });
+          if (Result.isError(result)) {
+            return Result.err({
+              name: reference.name,
+              message: result.error.message,
+              cause: result.error,
+            });
+          }
+          return Result.ok(result.value);
+        })(),
+      ];
+    }),
+  );
+
+  return materialized.reduce<MaterializeReferencesResult>(
+    (state, result) => {
+      if (Result.isOk(result)) {
+        return { results: [...state.results, result.value], diagnostics: state.diagnostics };
+      }
+      return { results: state.results, diagnostics: [...state.diagnostics, result.error] };
+    },
+    { results: [], diagnostics: [] },
+  );
+}
+
+export async function materializePackageReferences(input: {
+  readonly pi: Pick<ExtensionAPI, "exec">;
+  readonly references: readonly ReferenceInfo[];
+  readonly cacheRoot?: string;
+  readonly signal?: AbortSignal;
+}): Promise<MaterializeReferencesResult> {
+  const cacheRoot = input.cacheRoot ?? defaultPackageCacheRoot();
+  const materialized = await Promise.all(
+    input.references.flatMap((reference) => {
+      if (reference.source.type !== "package") return [];
+      const source = reference.source;
+      return [
+        (async () => {
+          const parsed = parsePackageConfig({
+            packageName: source.package,
+            registry: source.registry,
+            version: source.version,
+          });
+          if (Result.isError(parsed)) {
+            return Result.err({
+              name: reference.name,
+              message: parsed.error.message,
+              cause: parsed.error,
+            });
+          }
+          const result = await ensurePackage({
+            pi: input.pi,
+            reference: parsed.value,
             refresh: true,
             root: cacheRoot,
             ...(input.signal ? { signal: input.signal } : {}),

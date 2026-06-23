@@ -32,6 +32,10 @@
       "types": "./dist/cache.d.ts",
       "default": "./dist/cache.js"
     },
+    "./package-cache": {
+      "types": "./dist/package-cache.d.ts",
+      "default": "./dist/package-cache.js"
+    },
     "./references": {
       "types": "./dist/references.d.ts",
       "default": "./dist/references.js"
@@ -42,7 +46,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/extension.ts src/config.ts src/repository.ts src/cache.ts src/references.ts"
+    "build": "vp pack src/extension.ts src/config.ts src/repository.ts src/cache.ts src/package-cache.ts src/references.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",

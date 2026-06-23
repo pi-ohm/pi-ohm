@@ -49,14 +49,21 @@ Shape:
     },
     "local-shorthand": "./docs",
     "git-shorthand": "owner/repo",
+    "npm-shorthand": "npm:humanlayer@latest",
+    "pkg": {
+      "package": "@earendil-works/pi-coding-agent",
+      "version": "0.79.4",
+      "description": "Use for Pi extension APIs",
+    },
   },
 }
 ```
 
 Entries:
 
-- `string | { path, description?, hidden? } | { repository, branch?, description?, hidden? }`
+- `string | { path, description?, hidden? } | { repository, branch?, description?, hidden? } | { package, registry?, version?, description?, hidden? }`
 - string values starting with `.`, `/`, or `~` are local paths
+- string values starting with `npm:` are npm package references
 - all other string values are Git repository references
 - aliases cannot be empty or contain `/`, whitespace, backticks, or commas
 - invalid aliases are ignored
@@ -112,6 +119,35 @@ Materialization:
 - refresh first compares local `HEAD` with `git ls-remote`; fetch/reset only runs
   when the remote SHA differs or the configured branch is not checked out
 
+## Package references
+
+Accept npm package references:
+
+- `npm:package`
+- `npm:package@version`
+- `npm:@scope/package`
+- `npm:@scope/package@version`
+- `{ "package": "package", "registry": "npm", "version": "latest" }`
+
+`registry` defaults to `npm`, and `version` defaults to `latest`. `jsr` is
+reserved in the config shape but not materialized yet. Package subpaths are not
+part of the config shape; aliases point at the full unpacked package root.
+
+Package cache path:
+
+```text
+${XDG_DATA_HOME:-~/.local/share}/pi-ohm/agent/references/packages/npm/<package>/<version>
+```
+
+Materialization:
+
+- package refs appear in guidance immediately at their deterministic cache path
+- packing/extraction is deferred through `@pi-ohm/core/jobs`; startup never waits
+  for it
+- npm refs use `npm pack <package>@<version> --json --pack-destination <temp>`
+- tarballs are unpacked into a read-only reference cache root
+- cached package refs are refreshed quietly through the same deferred job path
+
 ## Runtime model
 
 Runtime reference info:
@@ -124,7 +160,15 @@ type ReferenceInfo = {
   hidden?: boolean;
   source:
     | { type: "local"; path: string; description?: string; hidden?: boolean }
-    | { type: "git"; repository: string; branch?: string; description?: string; hidden?: boolean };
+    | { type: "git"; repository: string; branch?: string; description?: string; hidden?: boolean }
+    | {
+        type: "package";
+        package: string;
+        registry: "npm" | "jsr";
+        version: string;
+        description?: string;
+        hidden?: boolean;
+      };
 };
 ```
 

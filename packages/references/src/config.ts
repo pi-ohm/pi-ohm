@@ -8,6 +8,7 @@ import { ReferencesConfigSchema } from "./schema";
 export {
   GitReferenceConfigSchema,
   LocalReferenceConfigSchema,
+  PackageReferenceConfigSchema,
   ReferenceEntryConfigSchema,
   ReferencesConfigSchema,
 } from "./schema";
@@ -27,7 +28,19 @@ export interface GitReferenceConfig {
   readonly hidden?: boolean;
 }
 
-export type ReferenceEntryConfig = string | LocalReferenceConfig | GitReferenceConfig;
+export interface PackageReferenceConfig {
+  readonly package: string;
+  readonly registry?: "npm" | "jsr";
+  readonly version?: string;
+  readonly description?: string;
+  readonly hidden?: boolean;
+}
+
+export type ReferenceEntryConfig =
+  | string
+  | LocalReferenceConfig
+  | GitReferenceConfig
+  | PackageReferenceConfig;
 export type ReferencesRuntimeConfig = Readonly<Record<string, ReferenceEntryConfig>>;
 
 const DEFAULT_REFERENCES_CONFIG: ReferencesRuntimeConfig = {};
@@ -67,11 +80,27 @@ function normalizeEntry(entry: ReferenceEntryConfig): ReferenceEntryConfig | und
     };
   }
 
+  if ("package" in entry) return normalizePackageEntry(entry);
+
   const repository = trimString(entry.repository);
   if (!repository) return undefined;
   return {
     repository,
     ...(optionalString(entry.branch) ? { branch: optionalString(entry.branch) } : {}),
+    ...(optionalString(entry.description)
+      ? { description: optionalString(entry.description) }
+      : {}),
+    ...(entry.hidden !== undefined ? { hidden: entry.hidden } : {}),
+  };
+}
+
+function normalizePackageEntry(entry: PackageReferenceConfig): PackageReferenceConfig | undefined {
+  const name = trimString(entry.package);
+  if (!name) return undefined;
+  return {
+    package: name,
+    ...(entry.registry ? { registry: entry.registry } : {}),
+    ...(optionalString(entry.version) ? { version: optionalString(entry.version) } : {}),
     ...(optionalString(entry.description)
       ? { description: optionalString(entry.description) }
       : {}),

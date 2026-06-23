@@ -21,6 +21,12 @@ Config lives under `references` in `.pi/ohm.json` or global `ohm.json`.
       "branch": "main",
       "description": "Use for JavaScript SDK implementation details",
     },
+    "humanlayer": "npm:humanlayer@latest",
+    "pi-sdk": {
+      "package": "@earendil-works/pi-coding-agent",
+      "version": "0.79.4",
+      "description": "Use for Pi extension APIs",
+    },
   },
 }
 ```
@@ -30,7 +36,24 @@ paths from system guidance and per-prompt reference invocation blocks.
 
 Git references are refreshed quietly through deferred jobs. Startup does not
 wait for clone/fetch work, and cached clones are checked with `git ls-remote`
-before fetching. Local `path` references are used directly.
+before fetching. Package references such as `npm:humanlayer@latest` are packed
+into the references cache with `npm pack` and exposed as unpacked, read-only
+package roots. Local `path` references are used directly.
+
+Package references currently support npm:
+
+```jsonc
+{
+  "references": {
+    "humanlayer": "npm:humanlayer@latest",
+    "zod": { "package": "zod", "version": "^4" },
+    "pi-sdk": { "package": "@earendil-works/pi-coding-agent", "version": "0.79.4" },
+  },
+}
+```
+
+`registry` defaults to `npm`, and `version` defaults to `latest`. Package aliases
+always point at the full unpacked package root.
 
 ## Prompt references
 

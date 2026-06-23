@@ -21,6 +21,7 @@ import { createDeferredJobs, type DeferredJobs } from "@pi-ohm/core/jobs";
 import { isReferencesRuntimeConfig, loadReferencesConfig, referencesConfigModule } from "./config";
 import {
   materializeGitReferences,
+  materializePackageReferences,
   renderReferenceGuidance,
   resolveConfiguredReferences,
   type ReferenceDiagnostic,
@@ -30,6 +31,7 @@ import {
 export * from "./config";
 export * from "./repository";
 export * from "./cache";
+export * from "./package-cache";
 export * from "./references";
 
 const MAX_AUTOCOMPLETE_ITEMS = 30;
@@ -100,7 +102,11 @@ function aliasItems(
       description:
         reference.source.type === "git"
           ? taggedDescription(reference.source.repository)
-          : taggedDescription(reference.source.path),
+          : reference.source.type === "package"
+            ? taggedDescription(
+                `${reference.source.registry}:${reference.source.package}@${reference.source.version}`,
+              )
+            : taggedDescription(reference.source.path),
     }));
 }
 
@@ -492,7 +498,9 @@ function renderReferences(references: readonly ReferenceInfo[]): string {
       const source =
         reference.source.type === "git"
           ? `${reference.source.repository}${reference.source.branch ? `#${reference.source.branch}` : ""}`
-          : reference.source.path;
+          : reference.source.type === "package"
+            ? `${reference.source.registry}:${reference.source.package}@${reference.source.version}`
+            : reference.source.path;
       const flags = [
         reference.description ? "described" : "no description",
         reference.hidden ? "hidden" : "visible",
@@ -528,18 +536,25 @@ function enqueueMaterialization(input: {
   readonly delayMs?: number;
 }): void {
   input.references
-    .filter((reference) => reference.source.type === "git")
+    .filter((reference) => reference.source.type === "git" || reference.source.type === "package")
     .forEach((reference) => {
       input.jobs.enqueue({
         key: `references:${reference.path}`,
         label: `@${reference.name}`,
         delayMs: input.delayMs,
         run: async ({ signal }) => {
-          const result = await materializeGitReferences({
-            pi: input.pi,
-            references: [reference],
-            signal,
-          });
+          const result =
+            reference.source.type === "git"
+              ? await materializeGitReferences({
+                  pi: input.pi,
+                  references: [reference],
+                  signal,
+                })
+              : await materializePackageReferences({
+                  pi: input.pi,
+                  references: [reference],
+                  signal,
+                });
           const diagnostic = result.diagnostics[0];
           if (diagnostic) throw new Error(diagnostic.message);
         },
@@ -566,18 +581,26 @@ async function ensureReferenceReady(input: {
   const invocation = resolveReferenceToken(input.value, input.references);
   if (!invocation) return undefined;
   const reference = input.references.find((candidate) => candidate.name === invocation.name);
-  if (!reference || reference.source.type !== "git") return undefined;
+  if (!reference) return undefined;
+  if (reference.source.type !== "git" && reference.source.type !== "package") return undefined;
 
   if (await exists(reference.path)) {
     enqueueMaterialization({ jobs: input.jobs, pi: input.pi, references: [reference] });
     return undefined;
   }
 
-  const result = await materializeGitReferences({
-    pi: input.pi,
-    references: [reference],
-    ...(input.signal ? { signal: input.signal } : {}),
-  });
+  const result =
+    reference.source.type === "git"
+      ? await materializeGitReferences({
+          pi: input.pi,
+          references: [reference],
+          ...(input.signal ? { signal: input.signal } : {}),
+        })
+      : await materializePackageReferences({
+          pi: input.pi,
+          references: [reference],
+          ...(input.signal ? { signal: input.signal } : {}),
+        });
   return result.diagnostics[0]?.message;
 }
 

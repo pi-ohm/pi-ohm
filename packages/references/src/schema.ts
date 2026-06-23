@@ -45,11 +45,41 @@ export const GitReferenceConfigSchema = Type.Object(
   },
 );
 
+export const PackageReferenceConfigSchema = Type.Object(
+  {
+    package: Type.String({
+      description: "Registry package name exposed as a reference.",
+      minLength: 1,
+    }),
+    registry: Type.Optional(
+      Type.Union([Type.Literal("npm"), Type.Literal("jsr")], {
+        default: "npm",
+        description: "Package registry. Only npm is materialized today; jsr is reserved.",
+      }),
+    ),
+    version: Type.Optional(Type.String({ description: "Package version, range, or tag." })),
+    description: Type.Optional(
+      Type.String({ description: "Human-readable reference description." }),
+    ),
+    hidden: Type.Optional(
+      Type.Boolean({
+        default: false,
+        description: "Hide this reference from default model-facing listings.",
+      }),
+    ),
+  },
+  {
+    additionalProperties: false,
+    description: "Package reference config.",
+  },
+);
+
 export const ReferenceEntryConfigSchema = Type.Union(
   [
     Type.String({ description: "Local path shorthand for this reference.", minLength: 1 }),
     LocalReferenceConfigSchema,
     GitReferenceConfigSchema,
+    PackageReferenceConfigSchema,
   ],
   { description: "Reference entry config." },
 );

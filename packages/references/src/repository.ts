@@ -6,14 +6,18 @@ export type ReferenceErrorCode =
   | "invalid_repository"
   | "unsupported_file_repository"
   | "invalid_branch"
+  | "invalid_package"
   | "cache_operation_failed"
-  | "git_command_failed";
+  | "git_command_failed"
+  | "package_command_failed";
 
 export class ReferencesError extends TaggedError("ReferencesError")<{
   readonly code: ReferenceErrorCode;
   readonly message: string;
   readonly repository?: string;
   readonly branch?: string;
+  readonly packageName?: string;
+  readonly registry?: string;
   readonly path?: string;
   readonly cause?: unknown;
 }>() {}
