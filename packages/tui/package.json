@@ -19,6 +19,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./command-hints": {
+      "types": "./dist/command-hints.d.ts",
+      "default": "./dist/command-hints.js"
+    },
     "./ohm-config": {
       "types": "./dist/ohm-config-extension.d.ts",
       "default": "./dist/ohm-config-extension.js"
@@ -29,7 +33,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "vp pack src/index.ts src/extension.ts src/ohm-config-extension.ts"
+    "build": "vp pack src/index.ts src/extension.ts src/ohm-config-extension.ts src/command-hints.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "catalog:pi",

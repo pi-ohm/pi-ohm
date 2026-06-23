@@ -1,4 +1,25 @@
 export {
+  clearOhmCommandHints,
+  completeOhmCommandArguments,
+  createOhmCommandArgumentCompletions,
+  defineOhmCommand,
+  renderOhmCommandArgumentHint,
+  renderOhmCommandHint,
+  setOhmCommandHints,
+  type OhmCommandArgument,
+  type OhmCommandCompletionAwaitable,
+  type OhmCommandCompletionContext,
+  type OhmCommandCompletionResult,
+  type OhmCommandFlag,
+  type OhmCommandHintContext,
+  type OhmCommandHintInstallInput,
+  type OhmCommandHintRenderInput,
+  type OhmCommandSpec,
+  type OhmCommandValue,
+  type OhmCommandVariant,
+} from "./command-hints";
+
+export {
   setOhmInputStatus,
   type OhmInputStatusColor,
   type OhmInputStatusColorInput,
