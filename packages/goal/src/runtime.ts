@@ -19,6 +19,12 @@ import {
   continuationPrompt,
   type GoalContinuationPromptKind,
 } from "./prompts";
+import type {
+  GoalCompactionReason,
+  GoalAgentIdleEvent,
+  GoalSessionBeforeCompactEvent,
+  GoalSessionCompactEvent,
+} from "./pi-events";
 import {
   applyGoalContextRewrites,
   GOAL_CONTINUATION_CUSTOM_TYPE,
@@ -58,6 +64,10 @@ export interface GoalAgentEndEvent {
   readonly messages: readonly unknown[];
 }
 
+type GoalCompactionState =
+  | { readonly type: "known"; readonly reason: GoalCompactionReason; readonly willRetry: boolean }
+  | { readonly type: "unknown" };
+
 interface TurnAccounting {
   readonly goalId?: string;
   readonly startedAtMs: number;
@@ -78,12 +88,14 @@ interface GoalSessionRuntime {
   continuationScheduledDelayMs?: number;
   continuationScheduledForGoalId?: string;
   continuationTimer?: ReturnType<typeof setTimeout>;
+  compactionInProgress?: GoalCompactionState;
 }
 
 export type GoalContinuationSkipReason =
   | "already_pending"
   | "aborted"
   | "auto_continue_disabled"
+  | "compaction_in_progress"
   | "disabled"
   | "no_goal"
   | "not_active"
@@ -102,6 +114,7 @@ export type GoalContinuationResult =
 
 export interface GoalContinueInput {
   readonly delayMs?: number;
+  readonly defer?: boolean;
   readonly expectedGoalId?: string;
   readonly kind?: GoalQueuedWorkKind;
   readonly prompt?: GoalContinuationPromptKind;
@@ -156,6 +169,7 @@ export interface GoalRuntime {
     input?: GoalContinueInput,
   ): Promise<GoalResult<GoalContinuationResult>>;
   handleAgentEnd(event: GoalAgentEndEvent, ctx: GoalRuntimeContext): Promise<void>;
+  handleAgentIdle(event: GoalAgentIdleEvent, ctx: GoalRuntimeContext): Promise<void>;
   handleBeforeAgentStart(event: GoalBeforeAgentStartEvent, ctx: GoalRuntimeContext): Promise<void>;
   handleContext<TMessage extends GoalContextMessage>(
     event: GoalContextEvent<TMessage>,
@@ -169,6 +183,11 @@ export interface GoalRuntime {
     event: GoalMessageStartEvent<TMessage>,
     ctx: GoalRuntimeContext,
   ): Promise<void>;
+  handleSessionBeforeCompact(
+    event: GoalSessionBeforeCompactEvent,
+    ctx: GoalRuntimeContext,
+  ): Promise<void>;
+  handleSessionCompact(event: GoalSessionCompactEvent, ctx: GoalRuntimeContext): Promise<void>;
   handleSessionTree(ctx: GoalRuntimeContext): Promise<void>;
   handleToolExecutionEnd(ctx: GoalRuntimeContext): Promise<void>;
   markContinuationStarted(ctx: GoalRuntimeContext): Promise<void>;
@@ -229,6 +248,15 @@ function messageWasAborted(message: unknown): boolean {
 
 function agentEndWasAborted(event: GoalAgentEndEvent): boolean {
   return event.messages.some(messageWasAborted);
+}
+
+function messageWasError(message: unknown): boolean {
+  if (!Value.Check(AssistantMessageLikeSchema, message)) return false;
+  return message.role === "assistant" && message.stopReason === "error";
+}
+
+function agentEndWasError(event: GoalAgentEndEvent): boolean {
+  return event.messages.some(messageWasError);
 }
 
 function sessionId(ctx: GoalRuntimeContext): GoalResult<string> {
@@ -326,6 +354,14 @@ function clearAbortSuppression(record: GoalSessionRuntime): void {
 function clearContinuationStateFor(record: GoalSessionRuntime, goalId: string): void {
   if (record.continuationQueuedForGoalId === goalId) record.continuationQueuedForGoalId = undefined;
   if (record.continuationScheduledForGoalId === goalId) clearContinuationTimer(record);
+}
+
+function compactionStateFromEvent(input: {
+  readonly reason?: GoalCompactionReason;
+  readonly willRetry?: boolean;
+}): GoalCompactionState {
+  if (input.reason === undefined || input.willRetry === undefined) return { type: "unknown" };
+  return { type: "known", reason: input.reason, willRetry: input.willRetry };
 }
 
 function detailsForContinuation(input: { readonly goal: Goal; readonly kind: GoalQueuedWorkKind }) {
@@ -462,9 +498,10 @@ export function createGoalRuntime(
     record.continuationTimer = setTimeout(() => {
       clearContinuationTimer(record);
       void continueIfIdle(ctx, {
-        ...input,
         delayMs: CONTINUATION_RETRY_MS,
         expectedGoalId: goal.goalId,
+        kind: input.kind,
+        prompt: input.prompt,
       });
     }, delayMs);
     record.continuationTimer.unref?.();
@@ -496,6 +533,9 @@ export function createGoalRuntime(
     if (goal.status !== "active") {
       return Result.ok({ state: "skipped", reason: "not_active", goal });
     }
+    if (state.value.record.compactionInProgress) {
+      return Result.ok({ state: "skipped", reason: "compaction_in_progress", goal });
+    }
     if (ctx.hasPendingMessages()) {
       return Result.ok(
         scheduleContinuationCheck(
@@ -512,6 +552,17 @@ export function createGoalRuntime(
     }
     if (state.value.record.continuationQueuedForGoalId === goal.goalId) {
       return Result.ok({ state: "skipped", reason: "already_pending", goal });
+    }
+    if (input.defer) {
+      return Result.ok(
+        scheduleContinuationCheck(
+          ctx,
+          state.value.record,
+          goal,
+          input,
+          input.delayMs ?? CONTINUATION_RETRY_MS,
+        ),
+      );
     }
     if (!ctx.isIdle()) {
       return Result.ok(
@@ -756,8 +807,25 @@ export function createGoalRuntime(
         return;
       }
 
+      await refreshStatus(ctx);
+      if (agentEndWasError(event)) return;
+
+      const continued = await continueIfIdle(ctx, {
+        delayMs: CONTINUATION_RETRY_MS,
+        defer: true,
+        kind: "continuation",
+        prompt: "compact",
+      });
+      if (Result.isError(continued) && ctx.hasUI) ctx.ui.notify?.(continued.error.message, "error");
+    },
+
+    async handleAgentIdle(event, ctx) {
+      if (agentEndWasAborted(event)) return;
+      if (agentEndWasError(event)) return;
+
       const continued = await continueIfIdle(ctx, {
         delayMs: 0,
+        defer: true,
         kind: "continuation",
         prompt: "compact",
       });
@@ -836,14 +904,23 @@ export function createGoalRuntime(
       await refreshStatus(ctx);
     },
 
+    async handleSessionBeforeCompact(event, ctx) {
+      const state = await current(ctx);
+      if (Result.isError(state)) return;
+      clearContinuationState(state.value.record);
+      state.value.record.compactionInProgress = compactionStateFromEvent(event);
+      await refreshStatus(ctx);
+    },
+
+    async handleSessionCompact(_event, ctx) {
+      const state = await current(ctx);
+      if (Result.isError(state)) return;
+      state.value.record.compactionInProgress = undefined;
+      await refreshStatus(ctx);
+    },
+
     async handleToolExecutionEnd(ctx) {
       await refreshStatus(ctx);
-      const continued = await continueIfIdle(ctx, {
-        delayMs: CONTINUATION_RETRY_MS,
-        kind: "continuation",
-        prompt: "compact",
-      });
-      if (Result.isError(continued) && ctx.hasUI) ctx.ui.notify?.(continued.error.message, "error");
     },
 
     async markContinuationStarted(ctx) {

@@ -73,6 +73,46 @@ function createRuntimeContext(): GoalRuntimeContext {
   };
 }
 
+interface GoalRuntimeHarness {
+  readonly runtime: GoalRuntime;
+  readonly ctx: GoalRuntimeContext;
+  readonly sent: SentGoalMessage[];
+}
+
+async function waitForContinuationTimer(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 80));
+}
+
+async function withRuntimeHarness(
+  run: (harness: GoalRuntimeHarness) => Promise<void>,
+  input: { readonly goalId?: string; readonly ctx?: GoalRuntimeContext } = {},
+): Promise<void> {
+  const sent: SentGoalMessage[] = [];
+  const previousDbPath = process.env.EXTENSION_DB_PATH;
+  process.env.EXTENSION_DB_PATH = ":memory:";
+  const runtime = createGoalRuntime(
+    {
+      sendMessage(message, options) {
+        sent.push({ message, options });
+      },
+    },
+    { createGoalId: () => input.goalId ?? "goal-runtime", now: () => 1_000 },
+  );
+  const ctx = input.ctx ?? createRuntimeContext();
+
+  try {
+    const created = await runtime.createUserGoal(ctx, { objective: "ship runtime" });
+    assert.equal(Result.isOk(created), true);
+    if (Result.isError(created)) assert.fail(created.error.message);
+
+    await run({ runtime, ctx, sent });
+  } finally {
+    runtime.shutdown(ctx);
+    if (previousDbPath === undefined) delete process.env.EXTENSION_DB_PATH;
+    if (previousDbPath !== undefined) process.env.EXTENSION_DB_PATH = previousDbPath;
+  }
+}
+
 function createRuntime(events: string[]): GoalRuntime {
   return {
     async getGoal() {
@@ -105,6 +145,7 @@ function createRuntime(events: string[]): GoalRuntime {
       return Result.ok({ state: "queued", goal: goal({ objective: "ship package" }) });
     },
     async handleAgentEnd() {},
+    async handleAgentIdle() {},
     async handleBeforeAgentStart() {},
     async handleContext() {
       return undefined;
@@ -113,6 +154,8 @@ function createRuntime(events: string[]): GoalRuntime {
       return undefined;
     },
     async handleMessageStart() {},
+    async handleSessionBeforeCompact() {},
+    async handleSessionCompact() {},
     async handleSessionTree() {},
     async handleToolExecutionEnd() {},
     async markContinuationStarted() {},
@@ -264,6 +307,108 @@ void test("createGoalRuntime queues marked followUp continuation messages", asyn
   }
 });
 
+void test("createGoalRuntime lets agent_idle supersede the deferred agent_end fallback", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleAgentEnd({ messages: [] }, harness.ctx);
+    assert.equal(harness.sent.length, 0);
+
+    await harness.runtime.handleAgentIdle({ type: "agent_idle", messages: [] }, harness.ctx);
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 1);
+    assert.equal(harness.sent[0]?.options?.deliverAs, "followUp");
+  });
+});
+
+void test("createGoalRuntime keeps deferred agent_end fallback for older Pi runtimes", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleAgentEnd({ messages: [] }, harness.ctx);
+    assert.equal(harness.sent.length, 0);
+
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 1);
+    assert.equal(harness.sent[0]?.options?.deliverAs, "followUp");
+  });
+});
+
+void test("createGoalRuntime does not continue from error agent_idle", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleAgentIdle(
+      { type: "agent_idle", messages: [{ role: "assistant", stopReason: "error" }] },
+      harness.ctx,
+    );
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 0);
+  });
+});
+
+void test("createGoalRuntime does not schedule fallback from error agent_end", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleAgentEnd(
+      { messages: [{ role: "assistant", stopReason: "error" }] },
+      harness.ctx,
+    );
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 0);
+  });
+});
+
+void test("createGoalRuntime clears scheduled continuation when compaction starts", async () => {
+  const pending = { value: true };
+  const ctx = {
+    ...createRuntimeContext(),
+    hasPendingMessages: () => pending.value,
+  };
+
+  await withRuntimeHarness(
+    async (harness) => {
+      await harness.runtime.handleAgentEnd({ messages: [] }, harness.ctx);
+      pending.value = false;
+
+      await harness.runtime.handleSessionBeforeCompact(
+        { type: "session_before_compact", reason: "threshold", willRetry: false },
+        harness.ctx,
+      );
+      await waitForContinuationTimer();
+
+      assert.equal(harness.sent.length, 0);
+    },
+    { ctx },
+  );
+});
+
+void test("createGoalRuntime waits for post-overflow retry idle after compaction", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleSessionBeforeCompact(
+      { type: "session_before_compact", reason: "overflow", willRetry: true },
+      harness.ctx,
+    );
+    await harness.runtime.handleSessionCompact(
+      { type: "session_compact", reason: "overflow", willRetry: true },
+      harness.ctx,
+    );
+    await waitForContinuationTimer();
+    assert.equal(harness.sent.length, 0);
+
+    await harness.runtime.handleAgentIdle({ type: "agent_idle", messages: [] }, harness.ctx);
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 1);
+  });
+});
+
+void test("createGoalRuntime does not queue continuation from tool execution end", async () => {
+  await withRuntimeHarness(async (harness) => {
+    await harness.runtime.handleToolExecutionEnd(harness.ctx);
+    await waitForContinuationTimer();
+
+    assert.equal(harness.sent.length, 0);
+  });
+});
+
 void test("createGoalRuntime suppresses continuation after abort until user input", async () => {
   const sent: SentGoalMessage[] = [];
   const previousDbPath = process.env.EXTENSION_DB_PATH;
@@ -307,6 +452,7 @@ void test("createGoalRuntime suppresses continuation after abort until user inpu
 
     currentTime = 10_000;
     await runtime.handleAgentEnd({ messages: [] }, ctx);
+    await runtime.handleAgentIdle({ type: "agent_idle", messages: [] }, ctx);
     assert.equal(sent.length, 0);
 
     const afterSuppressedEnd = await runtime.getGoal(ctx);
@@ -316,6 +462,8 @@ void test("createGoalRuntime suppresses continuation after abort until user inpu
 
     await runtime.handleInput({ source: "interactive", text: "continue" }, ctx);
     await runtime.handleAgentEnd({ messages: [] }, ctx);
+    await runtime.handleAgentIdle({ type: "agent_idle", messages: [] }, ctx);
+    await waitForContinuationTimer();
 
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.options?.deliverAs, "followUp");
