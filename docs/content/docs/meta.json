@@ -1,0 +1,17 @@
+{
+  "title": "pi-ohm",
+  "pages": [
+    "index",
+    "installation",
+    "getting-started",
+    "---Configuration---",
+    "...config",
+    "---Packages---",
+    "...subagents",
+    "...modes",
+    "...painter",
+    "...handoff",
+    "...references",
+    "...session-search"
+  ]
+}

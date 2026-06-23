@@ -1,0 +1,149 @@
+---
+title: References
+description: Named local directories and Git repositories for agent context.
+---
+
+References let you name external project context and make it available to Pi.
+They are useful for docs repos, SDK repos, adjacent services, upstream source,
+or any directory the agent should know how to inspect.
+
+## Package
+
+```bash
+pi install npm:@pi-ohm/references
+```
+
+## Config
+
+Config lives under `references` in project `.pi/ohm.json` or global `ohm.json`.
+
+```jsonc
+{
+  "references": {
+    "docs": {
+      "path": "../product-docs",
+      "description": "Use for product behavior and documentation conventions",
+    },
+    "opencode": {
+      "repository": "anomalyco/opencode",
+      "branch": "main",
+      "description": "OpenCode source for agent behavior references",
+    },
+    "local-shorthand": "./docs",
+    "git-shorthand": "owner/repo",
+  },
+}
+```
+
+Each reference value can be one of:
+
+- string shorthand
+- `{ "path": string, "description"?: string, "hidden"?: boolean }`
+- `{ "repository": string, "branch"?: string, "description"?: string, "hidden"?: boolean }`
+
+String values starting with `.`, `/`, or `~` are local paths. Other strings are
+Git repositories.
+
+Aliases cannot be empty or contain `/`, whitespace, backticks, or commas.
+Invalid aliases are ignored.
+
+## Local references
+
+Local references resolve to absolute paths:
+
+- `~/x` resolves under your home directory
+- absolute paths stay absolute
+- relative paths resolve from the current Pi cwd
+
+## Git references
+
+Git references accept common repository forms:
+
+- `owner/repo`
+- `github:owner/repo`
+- `github.com/owner/repo`
+- `gitlab.com/group/repo`
+- `git@github.com:owner/repo.git`
+- `https://github.com/owner/repo.git`
+- `ssh://git@github.com/owner/repo`
+
+Git refs are assigned a deterministic cache path immediately. Clone/fetch work
+is deferred quietly after startup, and existing clones are checked with
+`git ls-remote` before any fetch runs.
+
+```text
+${XDG_DATA_HOME:-~/.local/share}/pi-ohm/agent/references/repos/<host>/<path>
+```
+
+If an existing cache points at the wrong origin, it is deleted and recloned.
+Local `path` references are never cloned or refreshed.
+
+## Agent behavior
+
+References do not add a model-facing tool. Instead, described references are
+added to the agent's system prompt with their absolute paths.
+
+When a prompt includes `@alias` or `@alias/path`, the package also adds a
+collapsed reference message for that turn. The message contains a resolved XML
+block for the agent with mentioned paths grouped under the reference:
+
+```xml
+<reference name="opencode" token="@opencode" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode">
+The user inserted this project reference with @ autocomplete. Use the resolved path when reading or searching this referenced project.
+
+OpenCode source for agent behavior references
+
+<reference_files>
+  <file token="@opencode/packages/ai" relative_path="packages/ai" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode/packages/ai" />
+  <file token="@opencode/packages/tui" relative_path="packages/tui" path="/home/user/.local/share/pi-ohm/agent/references/repos/github.com/anomalyco/opencode/packages/tui" />
+</reference_files>
+</reference>
+```
+
+The agent then uses normal Pi tools like `read`, `bash`, `edit`, and `write`.
+References do not grant mutation permission by themselves.
+
+Read-only path tools (`read`, `ls`, `grep`, `find`) can receive `@alias` and
+`@alias/path`; the extension rewrites those path arguments to absolute paths
+before execution.
+
+Only references with `description` are advertised to the agent. A `hidden`
+reference with a description is still included in agent guidance.
+
+## TUI autocomplete
+
+In the TUI, visible references can be inserted with `@alias` or `@alias/path`.
+Autocomplete inserts the alias text, not the underlying absolute path, so the
+editor stays readable.
+
+When submitted, invoked references appear as a compact `[ref] @alias` block
+outside the prompt. Use `ctrl+o` to expand it and see the resolved path and
+description.
+
+Reference autocomplete rows are tagged in their description with `[Ω:REF]` so
+they are easy to distinguish from normal file results. Nested rows show relative
+paths like `packages/ai`, not the full cache path.
+
+`hidden: true` only hides a reference from autocomplete.
+
+## Command
+
+Use the user command to inspect resolved references:
+
+```text
+/ohm-references
+```
+
+## Quirks
+
+Pi autocomplete providers are wrapper-ordered. A provider registered later can
+handle `@...` first and stop delegation, so file-search extensions can hide
+reference aliases.
+
+`@ff-labs/pi-fff` intentionally uses FFF-backed `@` file search. If `@opencode`
+fuzzy-matches normal project files, `pi-fff` can return those results before a
+reference provider sees the request.
+
+`@pi-ohm/references` bridges `ctx.ui.addAutocompleteProvider` during session
+startup so reference suggestions stay outside later providers. Reference matches
+are merged first, so `@alias` rows stay visible without disabling `pi-fff`.

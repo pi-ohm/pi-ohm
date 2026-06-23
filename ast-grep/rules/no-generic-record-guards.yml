@@ -1,0 +1,47 @@
+id: no-generic-record-guards
+message: Do not parse unknown values with generic object/record guards. Parse at the boundary with a real schema or domain-specific discriminated union instead.
+severity: error
+language: TypeScript
+rule:
+  any:
+    - kind: function_declaration
+      has:
+        field: name
+        regex: ^(isRecord|isObjectRecord|isJson)$
+    - pattern: isRecord($VALUE)
+    - pattern: isObjectRecord($VALUE)
+    - pattern: isJson($VALUE)
+    - pattern: $VALUE as Record<string, unknown>
+    - pattern: $VALUE as Record<string, unknown> & $REST
+    - pattern: $VALUE as { $$$FIELDS }
+    - pattern: Type.Record(Type.String(), Type.Unknown())
+    - pattern: Value.Check(UnknownRecordSchema, $VALUE)
+    - pattern: Value.Check(JsonMapSchema, $VALUE)
+    - pattern: typeof $VALUE === "object" && $VALUE
+    - pattern: typeof $VALUE === 'object' && $VALUE
+    - pattern: $VALUE && typeof $VALUE === "object"
+    - pattern: $VALUE && typeof $VALUE === 'object'
+    - pattern: typeof $VALUE === "object" && $VALUE !== null && !Array.isArray($VALUE)
+    - pattern: typeof $VALUE === 'object' && $VALUE !== null && !Array.isArray($VALUE)
+    - all:
+        - pattern: typeof $VALUE === "object" && $VALUE !== null
+        - not:
+            inside:
+              pattern: typeof $VALUE === "object" && $VALUE !== null && !Array.isArray($VALUE)
+    - all:
+        - pattern: typeof $VALUE === 'object' && $VALUE !== null
+        - not:
+            inside:
+              pattern: typeof $VALUE === 'object' && $VALUE !== null && !Array.isArray($VALUE)
+    - pattern: typeof $VALUE !== "object" || $VALUE === null || Array.isArray($VALUE)
+    - pattern: typeof $VALUE !== 'object' || $VALUE === null || Array.isArray($VALUE)
+    - all:
+        - pattern: typeof $VALUE !== "object" || $VALUE === null
+        - not:
+            inside:
+              pattern: typeof $VALUE !== "object" || $VALUE === null || Array.isArray($VALUE)
+    - all:
+        - pattern: typeof $VALUE !== 'object' || $VALUE === null
+        - not:
+            inside:
+              pattern: typeof $VALUE !== 'object' || $VALUE === null || Array.isArray($VALUE)

@@ -20,12 +20,18 @@ on:
         type: choice
         options:
           - all
-          - config
+          - core
+          - pip-flue
           - modes
           - handoff
+          - memories
           - subagents
+          - tui
+          - goal
           - session-search
           - painter
+          - references
+          - profiler
           - pi-ohm
       channel:
         description: "npm dist-tag channel"
@@ -42,28 +48,46 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: Build distributables
+        run: vp run build
+
+      - name: Publish preflight
+        run: node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --exclude pi-ohm --dry-run
+
+      - name: Configure npm token auth
+        run: |
+          if [[ -n "${NPM_TOKEN:-}" ]]; then
+            npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish all packages to npm @dev
+        shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "false"
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for dev-channel publishing."
-            exit 1
-          fi
+          set -euo pipefail
 
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --provenance=false
+          echo "::warning title=Skipping pi-ohm::Auto publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Configure https://www.npmjs.com/package/pi-ohm/access"
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel dev --exclude pi-ohm)
+
+          "${cmd[@]}"
 
   release-dev:
     if: ${{ github.ref_name == 'dev' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release')) }}
@@ -96,24 +120,41 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: Build distributables
+        run: vp run build
+
+      - name: Publish preflight
+        run: node --experimental-strip-types ./scripts/publish-packages.ts --channel latest --exclude pi-ohm --dry-run
+
+      - name: Configure npm token auth
+        run: |
+          if [[ -n "${NPM_TOKEN:-}" ]]; then
+            npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish released package versions to npm @latest
+        shell: bash
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for stable publishing."
-            exit 1
-          fi
+          set -euo pipefail
 
-          node --experimental-strip-types ./scripts/publish-packages.ts --channel latest
+          echo "::warning title=Skipping pi-ohm::Auto publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Configure https://www.npmjs.com/package/pi-ohm/access"
+          cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel latest --exclude pi-ohm)
+
+          "${cmd[@]}"
 
       - name: Resolve release version
         id: release_meta
@@ -186,29 +227,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
+          cache: true
+          run-install: false
+
+      - name: Install
+        run: vp install --frozen-lockfile
+
+      - name: Build distributables
+        run: vp run build
+
+      - name: Configure npm token auth
+        run: |
+          if [[ -n "${NPM_TOKEN:-}" ]]; then
+            npm config set //registry.npmjs.org/:_authToken "${NPM_TOKEN}"
+          fi
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish selected package(s)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_ACCESS: public
-          NPM_CONFIG_PROVENANCE: ${{ inputs.channel == 'dev' && 'false' || 'true' }}
         shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required for manual publishing."
-            exit 1
-          fi
-
           case "${{ inputs.package }}" in
-            config)
-              only="@pi-ohm/config"
+            core)
+              only="@pi-ohm/core"
+              ;;
+            pip-flue)
+              only="@pi-ohm/pip-flue"
               ;;
             modes)
               only="@pi-ohm/modes"
@@ -216,14 +268,29 @@ jobs:
             handoff)
               only="@pi-ohm/handoff"
               ;;
+            memories)
+              only="@pi-ohm/memories"
+              ;;
             subagents)
               only="@pi-ohm/subagents"
+              ;;
+            tui)
+              only="@pi-ohm/tui"
+              ;;
+            goal)
+              only="@pi-ohm/goal"
               ;;
             session-search)
               only="@pi-ohm/session-search"
               ;;
             painter)
               only="@pi-ohm/painter"
+              ;;
+            references)
+              only="@pi-ohm/references"
+              ;;
+            profiler)
+              only="@pi-ohm/profiler"
               ;;
             pi-ohm)
               only="pi-ohm"
@@ -238,12 +305,16 @@ jobs:
           esac
 
           cmd=(node --experimental-strip-types ./scripts/publish-packages.ts --channel "${{ inputs.channel }}")
-          if [[ "${{ inputs.channel }}" == "dev" ]]; then
-            cmd+=(--provenance=false)
-          fi
           if [[ -n "${only}" ]]; then
             cmd+=(--only "${only}")
+          else
+            echo "::warning title=Skipping pi-ohm::Manual all publish excludes unscoped pi-ohm until package-owner npm auth or trusted publishing is configured. Use package=pi-ohm after configuring https://www.npmjs.com/package/pi-ohm/access"
+            cmd+=(--exclude pi-ohm)
           fi
+
+          preflight=("${cmd[@]}" --dry-run)
+          echo "Preflight: ${preflight[*]}"
+          "${preflight[@]}"
 
           echo "Running: ${cmd[*]}"
           "${cmd[@]}"

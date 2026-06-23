@@ -1,6 +1,6 @@
 {
   "name": "pi-ohm",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/extension#readme",
   "repository": {
     "type": "git",
@@ -8,31 +8,43 @@
     "directory": "packages/extension"
   },
   "files": [
-    "src/",
+    "dist/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/extension.ts",
-  "types": "src/extension.ts",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/extension.ts"
+  },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@pi-ohm/core": "workspace:*",
     "@pi-ohm/handoff": "workspace:*",
+    "@pi-ohm/memories": "workspace:*",
     "@pi-ohm/modes": "workspace:*",
     "@pi-ohm/painter": "workspace:*",
+    "@pi-ohm/references": "workspace:*",
     "@pi-ohm/session-search": "workspace:*",
-    "@pi-ohm/subagents": "workspace:*"
+    "@pi-ohm/subagents": "workspace:*",
+    "better-result": "catalog:"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "0.79.4"
   },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./dist/extension.js"
     ]
   }
 }

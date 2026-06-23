@@ -14,10 +14,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
+          run-install: false
 
       - name: Validate commit messages
         shell: bash
@@ -53,25 +54,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 24
-
-      - name: Setup Yarn
-        run: |
-          corepack enable
-          corepack prepare yarn@4.12.0 --activate
-          yarn --version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: yarn install --immutable
+        run: vp install --frozen-lockfile
 
-      - name: Format check
-        run: yarn format:check
+      - name: Build
+        run: vp run build
+
+      - name: Format
+        run: vp run format:check
 
       - name: Lint
-        run: yarn lint
+        run: vp run lint
+
+      - name: Test
+        run: vp run test
+
+      - name: Subagents tests
+        run: vp run test:subagents
+
+      - name: Memories tests
+        run: vp run test:memories
 
       - name: Typecheck
-        run: yarn typecheck
+        run: vp run typecheck

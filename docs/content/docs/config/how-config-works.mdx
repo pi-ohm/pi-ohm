@@ -1,0 +1,211 @@
+---
+title: How Config Works
+description: Planned pi-ohm config architecture, file precedence, schemas, and diagnostics.
+---
+
+This page describes the `@pi-ohm/core/config` registry architecture.
+
+`pi-ohm` config should live in `ohm.json`, not Pi's `settings.json`. Pi settings are for Pi itself. Ohm config is for Ohm packages and extension behavior.
+
+`@pi-ohm/core/config` is universal plumbing. It does not define pi-ohm package schemas, defaults, feature flags, modes, painter providers, or subagent settings. Each extension owns every field in its namespace.
+
+## Config files
+
+Ohm reads two files:
+
+1. Project config: `<cwd>/.pi/ohm.json`
+2. Global config: `${PI_CODING_AGENT_DIR:-~/.pi/agent}/ohm.json`
+
+Project config has first priority. Global config is second priority. Missing files are fine. Invalid JSON or invalid schemas are diagnostics.
+
+`PI_CODING_AGENT_DIR` points at the agent config directory itself. If it is set to `/tmp/pi-agent`, the global Ohm config is `/tmp/pi-agent/ohm.json`.
+
+## File shape
+
+Because the file is already named `ohm.json`, config is keyed by package namespace at the top level:
+
+```json title=".pi/ohm.json"
+{
+  "subagents": {
+    "reviewer": {
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "Find correctness, type safety, and design issues.",
+      "model": "anthropic/claude-sonnet-4-5"
+    }
+  },
+  "handoff": {
+    "enabled": true,
+    "visualizer": true
+  },
+  "modes": {
+    "defaultMode": "smart"
+  },
+  "painter": {
+    "enabled": true,
+    "openai": {
+      "enabled": true,
+      "model": "gpt-image-1"
+    }
+  }
+}
+```
+
+Do not wrap everything in an extra `ohm` key.
+
+## Package registration
+
+Packages define their own config modules. A module owns its namespace, TypeBox schema, defaults, and merge behavior.
+
+```ts
+import { Type, type StaticDecode } from "typebox";
+import { registerConfig } from "@pi-ohm/core/config";
+
+const SubagentsConfigSchema = Type.Object(
+  {
+    reviewer: Type.Optional(Type.Unknown()),
+  },
+  { additionalProperties: false },
+);
+
+type SubagentsConfigPatch = StaticDecode<typeof SubagentsConfigSchema>;
+
+export const subagentsConfigModule = registerConfig({
+  namespace: "subagents",
+  schema: SubagentsConfigSchema,
+  defaults: DEFAULT_SUBAGENTS_CONFIG,
+  merge(base, patch: SubagentsConfigPatch) {
+    return mergeSubagentsConfig(base, patch);
+  },
+});
+```
+
+`registerConfig()` is a library API, not a slash command. The user-facing command should be something like `/ohm-config`, which prints resolved config and diagnostics.
+
+## Loading flow
+
+A loader receives registered modules and returns typed resolved config.
+
+```ts
+const loaded = await loadConfig({
+  cwd,
+  modules: [subagentsConfigModule, handoffConfigModule, painterConfigModule],
+});
+```
+
+The loader does this deterministically:
+
+1. Read global `ohm.json`.
+2. Read project `.pi/ohm.json`.
+3. For each registered module, start from module defaults.
+4. Validate and merge the global namespace patch.
+5. Validate and merge the project namespace patch.
+6. Return resolved config plus diagnostics.
+
+## Precedence
+
+Precedence is fixed:
+
+1. Package defaults
+2. Global `${PI_CODING_AGENT_DIR:-~/.pi/agent}/ohm.json`
+3. Project `<cwd>/.pi/ohm.json`
+4. Explicit runtime/spawn arguments, when a feature has them
+
+Project config always overrides global config. Runtime arguments only override for the current operation and should not mutate config files.
+
+## TypeBox validation
+
+Config schemas use TypeBox because Pi tool schemas also use TypeBox.
+
+```ts
+import { Value } from "typebox/value";
+
+if (!Value.Check(module.schema, patch)) {
+  return Result.err(toSchemaError(module.namespace, patch));
+}
+
+const decoded = Value.Decode(module.schema, patch);
+```
+
+Modules may normalize permissive input before validation, but normalization must be explicit and tested. Do not silently ignore bad config.
+
+## Result-first diagnostics
+
+Recoverable config operations return `better-result` values.
+
+```ts
+interface LoadedExtensionConfig<T> {
+  readonly config: T;
+  readonly loadedFrom: readonly string[];
+  readonly diagnostics: readonly ExtensionConfigDiagnostic[];
+}
+```
+
+Rules:
+
+- Missing config files are not errors.
+- Invalid JSON is a diagnostic and should be shown by `/ohm-config`.
+- Invalid namespace patches are diagnostics and should not crash Pi startup.
+- A module with invalid config keeps its last valid/default value only when that fallback is recorded as a diagnostic.
+- No silent `catch { return null }` behavior.
+
+## Package boundaries
+
+`@pi-ohm/core/config` owns:
+
+- path resolution
+- JSON reading
+- module registration types
+- TypeBox validation helpers
+- deterministic merge orchestration
+- diagnostics
+
+It never owns:
+
+- extension namespaces
+- extension schemas
+- extension defaults
+- extension feature flags
+- package-specific normalization
+
+Feature packages own:
+
+- namespace schemas
+- defaults
+- merge semantics
+- domain-specific normalization
+- enablement flags
+
+## Experimental flags
+
+Experimental flags stay inside the package namespace:
+
+```json title=".pi/ohm.json"
+{
+  "goal": {
+    "experimental": {
+      "managed": {
+        "enabled": true
+      }
+    }
+  }
+}
+```
+
+Packages should use `defineExperimentalFlags()` from `@pi-ohm/core/config` for simple boolean experiments. The helper requires every flag to declare a default enabled value and a description, then provides the strict TypeBox schema, runtime defaults, merge helper, runtime guard, and `/ohm` metadata.
+
+```ts
+export const goalExperimentalFlags = defineExperimentalFlags("goal", {
+  managed: {
+    defaultEnabled: false,
+    description: "Enable the managed goal runtime.",
+  },
+});
+```
+
+Non-boolean experimental options remain package-owned. For example, an experimental feature can use the helper for `enabled` while keeping fields like `type`, `model`, or limits in its package schema.
+
+## Schema metadata
+
+Every config field should include a human-readable `description`. If the runtime has a default value for that field, the TypeBox schema should also expose the same `default`. This keeps generated `$schema` output useful for editor completions.
+
+This keeps config extensible without centralizing every package's domain model in `@pi-ohm/core/config`.

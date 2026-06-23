@@ -1,0 +1,9 @@
+id: no-generic-record-guards
+valid:
+  - "const schema = Type.Object({ enabled: Type.Boolean() });"
+  - "const parsed = Value.Check(ConfigSchema, value);"
+invalid:
+  - "function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value); }"
+  - "if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;"
+  - "const parsed = value as Record<string, unknown>;"
+  - "const schema = Type.Record(Type.String(), Type.Unknown());"

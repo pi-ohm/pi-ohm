@@ -1,9 +1,11 @@
 export const OHM_FEATURE_PACKAGES = [
   "@pi-ohm/modes",
+  "@pi-ohm/memories",
   "@pi-ohm/handoff",
   "@pi-ohm/subagents",
   "@pi-ohm/session-search",
   "@pi-ohm/painter",
+  "@pi-ohm/references",
 ] as const;
 
 export const OHM_RECOMMENDED_NEXT = [

@@ -1,0 +1,687 @@
+---
+title: How Subagents Work
+description: Planned SDK-backed subagent architecture, protocol, storage, and tool contract.
+---
+
+This page describes the target `@pi-ohm/subagents` architecture.
+
+The direction is simple: subagents should be real Pi coding-agent sessions, not a parallel task runtime. A parent session spawns child Pi sessions through Pi-in-Pi (`@pi-ohm/core/pip`), links them with Pi's native `parentSession` header, and records lifecycle pointers/results in the parent session file.
+
+## Design goals
+
+- Use Pi's native session model as the transcript source of truth.
+- Use the Pi SDK for configurable child sessions.
+- Store child sessions under the Ohm data dir, namespaced by the owning extension/package.
+- Use native Pi `parentSession` lineage instead of an external graph as the source of truth.
+- Store parent-visible state in the parent session with `appendCustomEntry` and `appendCustomMessageEntry`.
+- Keep agent configuration close to opencode-style agents/subagents.
+- Avoid the old non-standard settings extension.
+- Use `ohm.json` config from project `.pi/ohm.json` and global `${PI_CODING_AGENT_DIR:-~/.pi/agent}/ohm.json`.
+- Use `@earendil-works/*` Pi packages with exact pinned versions.
+- Treat `better-result` `Result` values as the primitive for recoverable errors. No thrown-control-flow across config, runner, child session lifecycle, parent session writes, or tool boundaries.
+
+## Naming contract
+
+Pi uses sessions, so storage and implementation names should use session language. Avoid `thread` names except when comparing this design to Codex or other systems.
+
+- Public/model-facing names: `agent_id`, `task_id`, `nickname`.
+- Storage names: `parent_session_id`, `child_session_id`, `child_session_path`.
+- Tool arguments may use `target` for any accepted lookup key: task id, agent id, nickname, or path.
+
+## Result-first error model
+
+Every recoverable boundary returns `Result<T, E>` from `better-result`. This includes config loading, runner protocol calls, child session lifecycle, parent session writes, and controller tool handlers.
+
+Rules:
+
+- Parse external input at boundaries into typed ADTs.
+- Return typed tagged errors with stable `code`, `stage`, `message`, and optional metadata.
+- Convert thrown SDK/process/libsql failures immediately into typed errors.
+- Do not silently fall back. Continue only when the error has been recorded as diagnostics and the fallback is part of the contract.
+- Tool responses should map `Result.err` into structured model-readable failures, not thrown exceptions.
+
+## Debug logging
+
+Subagents use `@pi-ohm/core/logging` for opt-in structured debug logs. Enable logs with:
+
+```sh
+PI_OHM_DEBUG_MODE=true
+```
+
+Use logs at package boundaries only:
+
+- controller tool actions
+- runner spawn/send/wait/close/resume calls
+- event/RPC send and reply
+- parent session writes
+
+Logs observe `Result` values and return them unchanged:
+
+```ts
+import { createDebug, debugResult } from "@pi-ohm/core/logging";
+
+const debug = createDebug("@pi-ohm/subagents");
+
+const result = await runner.spawn(input);
+
+debugResult(debug, "runner.spawn", result, {
+  taskId: input.taskId,
+  runner: "pip-sdk",
+});
+
+return result;
+```
+
+Debug logs are not durable state and are not model-visible context. Session custom entries remain the durable source for parent-visible subagent state.
+
+## Package boundaries
+
+Subagents consume Pi-in-Pi through `@pi-ohm/core/pip`:
+
+```ts
+import { PipController, createSdkPipRunner } from "@pi-ohm/core/pip";
+```
+
+PiP owns generic child Pi session lifecycle, parent session lifecycle entries, native Pi session linkage, and SDK failure mapping. Subagents owns agent config, nicknames, task names, prompts, tools, model-facing responses, and subagent event contracts.
+
+PiP owns its session storage root. Runtime child sessions should be stored under the Ohm data dir, not Pi's ambient global session directory. The storage namespace comes from `ownerPackage` by default, or from an extension bus prefix/namespace if the caller provides one later.
+
+Target layout:
+
+```txt
+<ohm-data-dir>/
+  sessions/
+    <namespace>/
+      <pip-id>/
+        <timestamp>_<child-session-id>.jsonl
+```
+
+Use Pi APIs with an explicit namespace-scoped `sessionDir` in runtime code:
+
+```ts
+const sessionDir = resolvePipSessionDir({ dataDir, ownerPackage, pipId });
+const childSessionFile = resolvePipSessionFile({ dataDir, childSessionPath });
+
+SessionManager.create(cwd, sessionDir);
+SessionManager.forkFrom(parentSessionFile, cwd, sessionDir);
+SessionManager.open(childSessionFile);
+```
+
+The namespace should be path-safe and deterministic. Prefer `ownerPackage`, for example `@pi-ohm/subagents`, sanitized for filesystem use. Fall back to `core` only for core-owned internal PiPs.
+
+Pi controls the session filename, so PiP should not require deterministic filenames. Use one directory per PiP id and discover the child JSONL by listing that directory. Store the relative child session path in the parent session once the file path is known.
+
+## SDK-backed PiP runner
+
+Each subagent is created through the PiP SDK runner. The low-level SDK implementation lives in `@pi-ohm/core/pip` so subagents and memories share one child-session implementation.
+
+```ts
+const pip = new PipController({
+  runner: createSdkPipRunner({ model, thinkingLevel, tools }),
+  entries: createSessionEntryWriter(parentSession),
+});
+```
+
+A subagent session is configured from resolved agent config, parent context, and spawn args:
+
+```ts
+const spawned = await pip.spawn({
+  ownerPackage: "@pi-ohm/subagents",
+  role: agentType,
+  parentSessionId,
+  cwd: effectiveCwd,
+  prompt: effectivePrompt,
+  parentSessionFile: forkContext ? parentSessionFile : undefined,
+});
+```
+
+Normal subagents should use persisted `SessionManager.create` or `SessionManager.forkFrom`, not `SessionManager.inMemory`. In-memory sessions are for tests or explicitly ephemeral agents.
+
+Subagents maps `PipSpawnResult` into `SpawnAgentResult`. PiP never exposes agent-specific names.
+
+## PiP session storage
+
+PiP must not use SQLite or metadata sidecars for child session context. Pi session JSONL plus hidden custom entries is the storage contract for reconnecting child sessions to parent-visible subagent lifecycle.
+
+Parent session entries are the source of truth for PiP lifecycle and lookup data:
+
+```ts
+appendCustomEntry("pi-ohm.pip", {
+  kind: "pip_spawned",
+  pipId,
+  ownerPackage,
+  role,
+  parentSessionId,
+  childSessionId,
+  childSessionPath,
+  status,
+  atEpochMs,
+});
+```
+
+This hidden entry is the durable subagent mapping: `task_id -> pipId -> childSessionPath -> childSessionId -> role/status`. Do not duplicate that mapping into external metadata files.
+
+Child sessions may also store a self-identifying hidden entry for recovery from the child side:
+
+```ts
+appendCustomEntry("pi-ohm.pip.child", {
+  pipId,
+  ownerPackage,
+  role,
+  parentSessionId,
+});
+```
+
+The child session header already stores native lineage:
+
+```json
+{
+  "type": "session",
+  "id": "child-session-id",
+  "cwd": "/repo/path",
+  "parentSession": "/absolute/path/to/parent.jsonl"
+}
+```
+
+Rules:
+
+- Store `childSessionPath` relative to the Ohm data dir.
+- Resolve relative paths to absolute paths only at runtime boundaries.
+- Treat session JSONL and custom entry data as untrusted input when loading from disk. Parse them into typed PiP lifecycle ADTs before use.
+- Do not leak raw JSON or raw session paths into subagents code.
+- Parent session custom entries are authoritative for `pipId`, owner package, role, task mapping, child session path, and lifecycle status.
+- The child session JSONL is authoritative for transcript, child session id, cwd, and native `parentSession` lineage.
+- Keep SQLite out of spawn/get/resume and out of subagent mapping.
+- If fast cross-session queries become necessary later, any DB must be a rebuildable search cache over parsed session/custom-entry data, not durable state.
+- Do not add metadata sidecars. Subagent mapping belongs in hidden Pi session custom entries.
+- Pi's `SessionManager` only flushes the session file after an assistant message. Parent custom entries must represent early lifecycle states like `pip_spawn_requested` and `running` even if the child JSONL is not durable yet.
+
+Suggested core modules:
+
+```txt
+packages/core/src/pi-in-pi/
+  storage.ts
+    resolvePipStorageRoot(...)
+    resolvePipNamespace(...)
+    resolvePipSessionDir(...)
+    resolvePipSessionFile(...)
+    listPipSessionFiles(...)
+    parsePipParentEntry(...)
+    parsePipChildEntry(...)
+```
+
+This is a parse-don't-validate boundary: `unknown session entries -> Pip lifecycle ADTs`. Internal code should only work with parsed IDs, relative paths, timestamps, and status ADTs.
+
+## Controller process lifecycle
+
+Default runtime shape is one SDK controller subprocess per root parent session. That process owns the live `AgentRegistry`, manages many child Pi sessions, and communicates with the parent extension over stdio JSON-RPC.
+
+Reasons:
+
+- One shared registry naturally enforces `agent_max_threads`, nicknames, and path reservations.
+- Child sessions stay isolated from the parent extension process without creating one controller process per agent.
+- Resume can rebuild live state from parent session custom entries, optional child identity custom entries, and native child session headers.
+
+Per-agent subprocesses are allowed only as an internal fallback/debug mode if the controller process proves too coupled or hard to recover.
+
+## Agent metadata and status
+
+```ts
+interface AgentMetadata {
+  readonly agent_id?: string | null;
+  readonly agent_path?: string | null;
+  readonly agent_nickname?: string | null;
+  readonly agent_type?: string | null;
+  readonly last_task_message?: string | null;
+  readonly child_session_path?: string | null;
+}
+
+type AgentStatus =
+  | { readonly state: "pending_init" }
+  | { readonly state: "running" }
+  | { readonly state: "interrupted" }
+  | { readonly state: "completed"; readonly result: string | null }
+  | { readonly state: "errored"; readonly error: string }
+  | { readonly state: "shutdown" }
+  | { readonly state: "not_found" };
+
+interface SessionSpawnSource {
+  readonly parent_session_id: string;
+  readonly depth: number;
+  readonly agent_path?: string | null;
+  readonly agent_nickname?: string | null;
+  readonly agent_role?: string | null;
+}
+```
+
+## Live storage
+
+`AgentControl` is cloned into every session in a root session tree. It owns an `AgentRegistry` shared by the root and descendants.
+
+`AgentRegistry` tracks:
+
+```ts
+interface AgentRegistryState {
+  readonly agent_sessions: ReadonlyMap<string, AgentMetadata>;
+  readonly used_agent_nicknames: ReadonlySet<string>;
+  readonly nickname_reset_count: number;
+  readonly total_count: number;
+  readonly agent_max_threads: number;
+}
+```
+
+Keys are canonical paths or `session:<id>`.
+
+Spawn uses a reservation object. Reservation increments agent count and reserves path/nickname before async work begins. If spawn fails before commit, cleanup releases reservations.
+
+```ts
+interface AgentReservation {
+  readonly task_id: string;
+  readonly path: string;
+  readonly nickname: string | null;
+  commit(metadata: AgentMetadata): void;
+  releaseIfUncommitted(): void;
+}
+```
+
+TS implementation should use `try/finally`:
+
+```ts
+const reservation = registry.reserve(input);
+
+try {
+  const spawned = await runner.spawn(input);
+  reservation.commit(spawned.metadata);
+  return spawned;
+} finally {
+  reservation.releaseIfUncommitted();
+}
+```
+
+## Native session lineage
+
+Pi already supports session trees. Child sessions are normal Pi session files stored under the PiP namespace in the Ohm data dir. Their header points at the parent session file:
+
+```json
+{
+  "type": "session",
+  "id": "child-session-id",
+  "parentSession": "/path/to/parent-session.jsonl"
+}
+```
+
+Pi's session selector uses this `parentSession` path to render session trees. PiP should lean on that instead of storing a separate graph as the source of truth.
+
+Rules:
+
+- On spawn, create the child through `SessionManager.create(cwd, sessionDir)` or `SessionManager.forkFrom(parentSessionFile, cwd, sessionDir)`.
+- Always choose a namespace-scoped child session directory under `<ohm-data-dir>/sessions/<namespace>/<pip-id>/` in production.
+- Record PiP lifecycle state in the parent session with `appendCustomEntry`.
+- Optionally mirror child identity in the child session with `appendCustomEntry("pi-ohm.pip.child", ...)`.
+- Session files remain the transcript source of truth.
+- DB may be added later as an optional index/cache, not required runtime state.
+
+## Session file writes
+
+Parent session writes hidden lifecycle state with custom entries:
+
+```ts
+interface ParentAgentEventEntry {
+  readonly kind:
+    | "agent_spawn_requested"
+    | "agent_spawned"
+    | "agent_status_changed"
+    | "agent_closed"
+    | "agent_resumed";
+  readonly task_id: string;
+  readonly child_session_id?: string;
+  readonly child_session_path?: string;
+  readonly status?: AgentStatus;
+  readonly at_epoch_ms: number;
+}
+```
+
+Use:
+
+- `appendCustomEntry("pi-ohm.pip", entry)` for hidden lifecycle state.
+- `appendCustomMessageEntry("pi-ohm.agent.result", content, true, details)` when the subagent result should become visible parent context.
+
+## Rollouts and forks
+
+Each subagent is its own Pi session with its own rollout.
+
+Fork flow:
+
+1. Parent rollout is materialized and flushed.
+2. Parent stored history is read, including archived history.
+3. History is filtered.
+4. Child session starts with forked initial history.
+
+Fork keeps:
+
+- system messages
+- developer messages
+- user messages
+- assistant final answers
+- compaction summaries
+- session metadata
+- relevant custom entries
+
+Fork drops:
+
+- reasoning
+- tool calls
+- tool outputs
+- search calls
+- image calls
+- transient turn context
+- prior multi-agent usage-hint developer messages
+
+## Agent config
+
+Subagents should keep an opencode-style configuration model, but stored in `ohm.json` under the `subagents` namespace.
+
+```json title=".pi/ohm.json"
+{
+  "subagents": {
+    "reviewer": {
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "You are a strict reviewer. Find correctness, type safety, and design issues.",
+      "model": "anthropic/claude-sonnet-4-5",
+      "tools": ["read", "grep", "bash"],
+      "maxTurns": 12
+    }
+  }
+}
+```
+
+Agent files should also be supported:
+
+```txt
+.pi/agents/reviewer.md
+~/.pi/agent/agents/reviewer.md
+```
+
+Config precedence is fixed: built-ins < global agent files < global `ohm.json` < project agent files < project `ohm.json` < spawn args. Config overrides files at the same scope. Project scope overrides global scope. Built-ins are defaults that user config can override.
+
+## Tool surface
+
+Subagents exposes separate lifecycle tools. Do not collapse these into one `agent_controller` action router. Separate tool names are easier for models to discover and avoid provider schema issues with top-level unions.
+
+### `spawn_agent`
+
+Creates a new Pi session and submits initial input. It does not wait for completion by default.
+
+```ts
+interface SpawnAgentArgs {
+  readonly task_name: string;
+  readonly prompt: string;
+  readonly summary: string;
+  readonly agent_type?: string;
+  readonly model?: string;
+  readonly thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  readonly max_turns?: number;
+  readonly run_in_background?: boolean;
+  readonly fork_context?: boolean;
+}
+
+interface SpawnAgentResult {
+  readonly task_name: string;
+  readonly task_id: string;
+  readonly nickname: string | null;
+}
+```
+
+Fields:
+
+- `task_name` - stable user/model-facing name for the task.
+- `prompt` - input sent to the child agent.
+- `summary` - UI summary shown to the user, not injected as the child prompt.
+- `agent_type` - builtin or custom agent from settings/files.
+- `model` - `<provider>/<model>` or fuzzy model name.
+- `thinking` - Pi thinking level.
+- `max_turns` - max agentic turns. Omit for unlimited.
+- `run_in_background` - run without blocking parent. Defaults to `true`.
+- `fork_context` - fork parent context into the child. Defaults from agent config.
+
+### `send_agent_input`
+
+Queues or steers input to an existing spawned Pi session.
+
+```ts
+interface SendInputArgs {
+  readonly target: string;
+  readonly prompt: string;
+  readonly mode?: "prompt" | "steer" | "follow_up";
+}
+
+interface SendInputResult {
+  readonly target: string;
+  readonly status: AgentStatus;
+}
+```
+
+### `wait_agent`
+
+Waits for agents to reach final status. If timed out, returns current known statuses.
+
+```ts
+interface WaitAgentArgs {
+  readonly targets: readonly string[];
+  readonly timeout_ms?: number;
+}
+
+interface WaitAgentResult {
+  readonly status: Readonly<Record<string, AgentStatus>>;
+  readonly timed_out: boolean;
+}
+```
+
+Once an agent reaches final status, the parent receives a notification with the same completed status.
+
+### `close_agent`
+
+Closes an agent and any open descendants.
+
+```ts
+interface CloseAgentArgs {
+  readonly target: string;
+}
+
+interface CloseAgentResult {
+  readonly previous_status: AgentStatus;
+}
+```
+
+Do not keep agents open longer than needed.
+
+### `resume_agent`
+
+Resumes a previously closed agent by id so it can receive input and wait calls.
+
+```ts
+interface ResumeAgentArgs {
+  readonly id: string;
+}
+
+interface ResumeAgentResult {
+  readonly status: AgentStatus;
+}
+```
+
+### `get_agent_result`
+
+Checks status and retrieves results from a spawned Pi session if available.
+
+```ts
+interface GetAgentResultArgs {
+  readonly target: string;
+}
+
+interface GetAgentResultResult {
+  readonly target: string;
+  readonly status: AgentStatus;
+  readonly result: string | null;
+  readonly session_path: string | null;
+}
+```
+
+### `list_agents`
+
+Lists live agents in the current root session tree. Can filter by task-path prefix.
+
+```ts
+interface ListAgentsArgs {
+  readonly path_prefix?: string;
+}
+
+interface ListedAgent {
+  readonly agent_name: string;
+  readonly agent_status: AgentStatus;
+  readonly last_task_message: string | null;
+}
+
+interface ListAgentsResult {
+  readonly agents: readonly ListedAgent[];
+}
+```
+
+Use direct tool calls:
+
+```ts
+spawn_agent({
+  task_name: "review-auth",
+  prompt: "Review the auth changes for correctness.",
+  summary: "Review auth changes",
+});
+```
+
+## Implementation modules
+
+Target package layout:
+
+```txt
+packages/subagents/src/
+  agents/
+    config.ts
+    registry.ts
+    prompts.ts
+  control/
+    controller.ts
+    status.ts
+  session/
+    entries.ts
+  tools/
+    agent-controller.ts
+```
+
+The old task runtime should be replaced incrementally by this PiP/session model.
+
+## Implementation plan
+
+Ship the implementation in small vertical slices. Each slice should be testable without requiring a polished TUI.
+
+### Slice 1: Core PiP storage and entries
+
+Add `@pi-ohm/core/pip` storage helpers:
+
+- Resolve the Ohm data dir.
+- Resolve path-safe namespaces from `ownerPackage`.
+- Resolve `sessions/<namespace>/<pip-id>/` session dirs.
+- List child `.jsonl` files inside one PiP session dir.
+- Resolve relative `childSessionPath` values to absolute paths at runtime boundaries.
+- Parse parent custom entries into typed lifecycle ADTs.
+- Parse optional child identity custom entries into typed identity ADTs.
+
+Tests:
+
+- Namespace sanitization is deterministic.
+- Relative child session paths cannot escape the Ohm data dir.
+- Unknown custom-entry JSON is rejected at the parse boundary.
+- Multiple PiP ids under the same namespace do not collide.
+
+### Slice 2: SDK runner creates real Pi sessions
+
+Implement the runner with Pi's `SessionManager`:
+
+- `spawn` creates `SessionManager.create(cwd, sessionDir)` for fresh child sessions.
+- `spawn` uses `SessionManager.forkFrom(parentSessionFile, cwd, sessionDir)` when `fork_context` is enabled.
+- The runner records the generated child JSONL path as soon as `SessionManager.getSessionFile()` returns it.
+- The runner writes parent custom entries for `pip_spawn_requested`, `pip_spawned`, `pip_status_changed`, and `pip_error`.
+- The runner never requires the child JSONL file to exist before reporting early lifecycle state.
+
+Tests:
+
+- Fresh spawn stores the child session under the namespace-scoped Ohm data dir.
+- Fork spawn writes a child session header with native `parentSession` lineage.
+- Early lifecycle state survives even when the child file has not flushed yet.
+- Failed spawn releases registry reservations and writes a typed parent error entry.
+
+### Slice 3: Subagents tools
+
+Register separate lifecycle tools:
+
+- `spawn_agent`
+- `send_agent_input`
+- `wait_agent`
+- `close_agent`
+- `resume_agent`
+- `get_agent_result`
+- `list_agents`
+
+The shared tool runtime maps subagent concepts to PiP concepts:
+
+- `task_id` maps to `pipId`.
+- `agent_type` maps to PiP `role`.
+- `child_session_path` comes from PiP storage.
+- Model-visible results use `appendCustomMessageEntry("pi-ohm.agent.result", ...)`.
+- Lifecycle-only state uses `appendCustomEntry("pi-ohm.pip", ...)`.
+
+Tests:
+
+- Each tool has a direct object schema with no top-level action union.
+- Every recoverable failure returns a typed `Result.err` and model-readable tool result.
+- `list_agents` can rebuild state from parent custom entries after restart.
+
+### Slice 4: Minimal TUI
+
+The first TUI should be intentionally small. Do not build a dashboard, tree browser, terminal multiplexer, or live child-output panel yet.
+
+Initial TUI contract:
+
+- Show one concise parent-session notification when an agent is spawned.
+- Show one concise notification when an agent completes, errors, or is closed.
+- Render model-visible agent results through the normal parent transcript via `appendCustomMessageEntry`.
+- Let users inspect child sessions through existing Pi session files/session selector behavior.
+- Rely on `list_agents` for status inspection.
+
+Defer:
+
+- Live streaming child transcript UI.
+- Inline child session trees.
+- Clickable agent dashboards.
+- Rich per-agent progress views.
+- Manual TUI controls for pause/resume/kill beyond the controller tool.
+
+Tests:
+
+- Spawn and completion notifications render without requiring a live dashboard.
+- Hidden lifecycle custom entries do not appear as model-visible transcript text.
+- Result custom messages appear in the parent transcript when requested.
+
+### Slice 5: Resume and recovery
+
+Resume should rebuild live controller state from durable session data:
+
+- Read parent custom entries.
+- Parse lifecycle entries into typed state.
+- Resolve known child session paths relative to the Ohm data dir.
+- If a child path is missing, inspect the PiP session dir for JSONL files.
+- Optionally read child identity custom entries if present.
+- Do not require SQLite or metadata sidecars.
+
+Tests:
+
+- Restart rebuilds registry state from parent entries only.
+- Missing child files produce typed recoverable errors, not silent fallbacks.
+- Multiple lifecycle entries collapse to the latest status per `pipId`.

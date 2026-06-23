@@ -8,28 +8,33 @@ pre-commit:
   commands:
     oxfmt-write:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs,json,yml,yaml,md}"
-      run: yarn oxfmt {staged_files}
+      exclude:
+        - "packages/*/CHANGELOG.md"
+      run: vp fmt {staged_files} --write
       stage_fixed: true
 
     oxlint-fix:
       glob: "*.{js,jsx,ts,tsx,cjs,mjs}"
-      run: yarn oxlint -- --fix {staged_files}
+      run: vp lint {staged_files} --fix
       stage_fixed: true
+
+    typecheck:
+      run: pnpm typecheck
 
 pre-push:
   parallel: true
   commands:
     oxfmt-check:
-      run: yarn format:check
+      run: pnpm format
 
     oxlint:
-      run: yarn lint
+      run: pnpm lint
 
     typecheck:
-      run: yarn typecheck
+      run: pnpm typecheck
 
 pre-merge-commit:
   parallel: false
   commands:
     oxlint:
-      run: yarn lint
+      run: pnpm lint

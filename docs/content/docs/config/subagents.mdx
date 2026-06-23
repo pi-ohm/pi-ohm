@@ -1,0 +1,151 @@
+---
+title: Subagents
+description: Configure Pi-backed subagents with JSON or markdown agent files.
+---
+
+Subagents use our Pi-in-Pi architecture located in `@pi-ohm/core/pip`. Use `/subagents` in Pi to inspect integrated agents and custom configured agents in a non-model-facing TUI widget.
+
+## Built-in
+
+Ohm comes with three integrated subagents.
+
+### Librarian
+
+multi-repository codebase understanding and explanation
+
+### Oracle
+
+reasoning-heavy review, planning, debugging, and architecture advice
+
+### Finder
+
+behavior-based code search for concepts, flows, and broad terms
+
+## JSON
+
+Configure agents in your ohm.json config file:
+
+```json title="ohm.json"
+{
+  "subagents": {
+    "reviewer": {
+      "disabled": false,
+      "model": "openai-codex/gpt-5.4-mini:medium",
+      "description": "Use for reviewing diffs and checking implementation quality.",
+      "prompt": "Find correctness, type safety, and design issues.",
+      "tools": ["read", "grep", "bash"],
+      "maxTurns": 12,
+      "permissions": {
+        "read": "allow",
+        "grep": "allow",
+        "bash": "deny"
+      }
+    },
+    "oracle": {
+      "disabled": true
+    }
+  }
+}
+```
+
+Important behavior:
+
+- `subagents.<name>` is the only JSON agent shape. There is no `subagents.profiles` fallback.
+- Do not add an `agents` wrapper. That exists only in the internal resolved config shape.
+- There are no backend/runtime switching options. Subagents always use the Pi SDK PiP runner.
+- `description` is the model-facing guidance for when to use an agent.
+- `disabled: true` keeps the agent visible in the user-only `/subagents` UI, but model-facing tools treat it as unavailable.
+- Disabled agents are not exposed to the main model as usable options, and their configured prompts are never included in tool results.
+- If `model` is omitted, the subagent inherits the current main session model.
+- `model` accepts `<provider>/<model>` with optional `:<thinking>`.
+- Configure thinking in config through the model suffix, for example `openai-codex/gpt-5.4-mini:high`.
+- Known models resolve through Pi's model registry and Pi AI built-ins.
+- Custom providers from `models.json` or provider extensions are allowed.
+- Unknown providers pass through as external models.
+- Agent-level `permissions` values are `allow` or `deny`.
+- Denied tools are removed from the child session `tools` allowlist.
+
+Model precedence:
+
+1. `spawn_agent.model` and `spawn_agent.thinking`
+2. agent `model`, including optional `:<thinking>` suffix
+3. current main session model and thinking, when no agent model is configured
+4. fallback default only when Pi has no active model
+
+## Fork history
+
+`spawn_agent.fork_turns` controls parent context inheritance:
+
+- omitted or `"none"` starts a fresh child session
+- `"all"` forks the current parent branch
+- a positive integer string, like `"2"`, forks the last N user turns
+
+Optional summarization only applies to explicit forks:
+
+```json title="ohm.json"
+{
+  "subagents": {
+    "experimental": {
+      "summarize_history": {
+        "enabled": true,
+        "type": "branch"
+      }
+    }
+  }
+}
+```
+
+`type` is `"branch"` or `"compact"`; omitted defaults to `"branch"`. `"summary"` is not valid. `branch` creates a single Pi `branch_summary` bootstrap entry. `compact` uses Pi's compaction path with Pi defaults, yielding a standard `compaction` entry plus retained suffix. If summarization or compaction fails, `spawn_agent` falls back to raw fork context and records a user-only bootstrap warning in the parent session.
+
+`summarize_history.model` is accepted for config compatibility, but runtime ignores it. Fork summarization uses the active main session model and auth.
+
+## Markdown
+
+Markdown agent files are the intended authoring shape for richer agents. They should live in one of these locations:
+
+```txt
+.pi/agents/<name>.md
+${PI_CONFIG_DIR|PI_CODING_AGENT_DIR|PI_AGENT_DIR|~/.pi/agent}/agents/<name>.md
+```
+
+Example:
+
+```md title=".pi/agents/reviewer.md"
+---
+disabled: false
+model: openai-codex/gpt-5.4-mini:medium
+tools:
+  - read
+  - grep
+  - bash
+maxTurns: 12
+description: Use for reviewing diffs and checking implementation quality.
+permissions:
+  bash: deny
+  read: allow
+  grep: allow
+---
+
+You are Reviewer.
+
+Find correctness, type safety, and design issues. Prefer concrete file references and avoid style nitpicks unless they hide a real defect.
+```
+
+Another custom agent:
+
+```md title=".pi/agents/security-reviewer.md"
+---
+description: Use for auth, permission, injection, and secret-handling reviews.
+tools:
+  - read
+  - grep
+permissions:
+  read: allow
+  grep: allow
+  bash: deny
+---
+
+Find auth, injection, secret handling, and permission bugs. Return only issues with exploitability or clear risk.
+```
+
+Markdown support is planned as the agent-file layer described above. Today, JSON config is the source of truth implemented by the subagents package.

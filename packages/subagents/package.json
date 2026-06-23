@@ -1,6 +1,6 @@
 {
   "name": "@pi-ohm/subagents",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/subagents#readme",
   "repository": {
     "type": "git",
@@ -8,26 +8,52 @@
     "directory": "packages/subagents"
   },
   "files": [
-    "src/",
+    "dist/",
+    "src/runtime/backend/prompts/",
     "README.md"
   ],
   "type": "module",
-  "main": "src/extension.ts",
-  "types": "src/extension.ts",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "default": "./dist/config.js"
+    }
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true
   },
+  "scripts": {
+    "build": "vp pack src/extension.ts src/config.ts src/agent-controller.ts src/spawn-config.ts"
+  },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@pi-ohm/config": "workspace:*"
+    "@earendil-works/pi-agent-core": "catalog:pi",
+    "@earendil-works/pi-ai": "catalog:pi",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@pi-ohm/core": "workspace:*",
+    "@pi-ohm/tui": "workspace:*",
+    "better-result": "catalog:",
+    "typebox": "^1.0.68",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "0.79.4",
+    "@earendil-works/pi-tui": "0.79.4"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
   },
   "pi": {
     "extensions": [
-      "./src/extension.ts"
+      "./dist/extension.js"
     ]
   }
 }

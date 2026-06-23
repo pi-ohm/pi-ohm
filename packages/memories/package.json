@@ -1,0 +1,49 @@
+{
+  "name": "@pi-ohm/memories",
+  "version": "0.6.4",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/memories#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/memories"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "ARCH.md",
+    "TODO.md"
+  ],
+  "type": "module",
+  "main": "dist/extension.js",
+  "types": "dist/extension.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/extension.d.ts",
+      "default": "./dist/extension.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack src/extension.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
+    "@libsql/client": "catalog:",
+    "better-result": "catalog:",
+    "typebox": "^1.0.68",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.79.4",
+    "@earendil-works/pi-tui": "0.79.4"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  }
+}

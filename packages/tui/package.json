@@ -1,0 +1,56 @@
+{
+  "name": "@pi-ohm/tui",
+  "version": "0.6.4",
+  "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/tui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pi-ohm/pi-ohm.git",
+    "directory": "packages/tui"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./command-hints": {
+      "types": "./dist/command-hints.d.ts",
+      "default": "./dist/command-hints.js"
+    },
+    "./ohm-config": {
+      "types": "./dist/ohm-config-extension.d.ts",
+      "default": "./dist/ohm-config-extension.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack src/index.ts src/extension.ts src/ohm-config-extension.ts src/command-hints.ts"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@earendil-works/pi-tui": "catalog:pi",
+    "@pi-ohm/core": "workspace:*",
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "typebox": "^1.0.68"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "0.79.4",
+    "@earendil-works/pi-tui": "0.79.4"
+  },
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  }
+}

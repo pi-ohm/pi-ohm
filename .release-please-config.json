@@ -14,20 +14,23 @@
       "type": "linked-versions",
       "groupName": "pi-ohm-lockstep",
       "components": [
-        "config",
+        "core",
         "modes",
         "handoff",
+        "memories",
         "subagents",
+        "tui",
         "session-search",
         "painter",
+        "references",
         "pi-ohm"
       ]
     }
   ],
   "packages": {
-    "packages/config": {
-      "component": "config",
-      "package-name": "@pi-ohm/config",
+    "packages/core": {
+      "component": "core",
+      "package-name": "@pi-ohm/core",
       "skip-github-release": true
     },
     "packages/modes": {
@@ -40,9 +43,19 @@
       "package-name": "@pi-ohm/handoff",
       "skip-github-release": true
     },
+    "packages/memories": {
+      "component": "memories",
+      "package-name": "@pi-ohm/memories",
+      "skip-github-release": true
+    },
     "packages/subagents": {
       "component": "subagents",
       "package-name": "@pi-ohm/subagents",
+      "skip-github-release": true
+    },
+    "packages/tui": {
+      "component": "tui",
+      "package-name": "@pi-ohm/tui",
       "skip-github-release": true
     },
     "packages/session-search": {
@@ -53,6 +66,11 @@
     "packages/painter": {
       "component": "painter",
       "package-name": "@pi-ohm/painter",
+      "skip-github-release": true
+    },
+    "packages/references": {
+      "component": "references",
+      "package-name": "@pi-ohm/references",
       "skip-github-release": true
     },
     "packages/extension": {

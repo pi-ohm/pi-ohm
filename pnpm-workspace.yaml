@@ -1,0 +1,21 @@
+packages:
+  - "packages/*"
+  - "docs"
+
+catalog:
+  "@libsql/client": ^0.17.0
+  better-result: 2.9.2
+  chokidar: ^4.0.3
+  drizzle-orm: ^0.45.2
+  fumadocs-ui: npm:@fumadocs/base-ui@16.9.3
+  vite: npm:@voidzero-dev/vite-plus-core@0.1.24
+  vite-plus: 0.1.24
+  vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
+  zod: ^4
+
+catalogs:
+  pi:
+    "@earendil-works/pi-agent-core": 0.79.4
+    "@earendil-works/pi-ai": 0.79.4
+    "@earendil-works/pi-coding-agent": 0.79.4
+    "@earendil-works/pi-tui": 0.79.4

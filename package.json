@@ -6,6 +6,7 @@
   "keywords": [
     "handoff",
     "imagegen",
+    "memories",
     "ohm",
     "pi",
     "pi-coding-agent",
@@ -16,9 +17,6 @@
   ],
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev#readme",
   "license": "MIT",
-  "workspaces": [
-    "packages/*"
-  ],
   "files": [
     "extensions/",
     "packages/",
@@ -30,37 +28,86 @@
   ],
   "type": "module",
   "scripts": {
+    "build": "pnpm --filter './packages/*' --if-present run build && pnpm run build:schema",
+    "build:schema": "tsx scripts/build-schemas.ts",
+    "build:docs": "pnpm --filter docs run build",
+    "dev:docs": "pnpm --filter docs run dev",
+    "build:watch": "pnpm --parallel --filter './packages/*' --if-present run build -- --watch",
     "release:dev": "node --experimental-strip-types ./scripts/publish-packages.ts --channel dev",
     "release:latest": "node --experimental-strip-types ./scripts/publish-packages.ts --channel latest",
     "typecheck": "tsgo --noEmit -p tsconfig.json",
-    "oxlint": "oxlint --tsconfig tsconfig.json --type-aware",
-    "lint": "yarn oxlint -- .",
-    "lint:fix": "yarn oxlint -- --fix .",
-    "oxfmt": "oxfmt --write",
-    "format": "yarn oxfmt -- .",
-    "format:check": "yarn oxfmt -- --check .",
+    "test:subagents": "pnpm --filter @pi-ohm/subagents exec tsx --test \"src/**/*.test.ts\"",
+    "test:subagents:dist": "pnpm build && pnpm --filter @pi-ohm/subagents exec tsx --test \"tests-dist/**/*.test.ts\"",
+    "test:subagents:golden": "pnpm --filter @pi-ohm/subagents exec tsx --test src/runtime/backend/tests/system-prompt-harness.test.ts",
+    "test:subagents:golden:update": "UPDATE_PROMPTS=1 pnpm test:subagents:golden",
+    "test": "vp test",
+    "lint:ast-grep": "ast-grep --config sgconfig.yml scan . --globs '!**/dist/**' --globs '!**/src_legacy/**' --globs '!docs/.output/**' --report-style short",
+    "oxlint": "sh scripts/lint.sh ox",
+    "lint:ox": "sh scripts/lint.sh ox",
+    "lint:ast": "sh scripts/lint.sh ast",
+    "lint": "sh scripts/lint.sh ox",
+    "postlint": "sh scripts/lint.sh ast",
+    "lint:fix": "sh scripts/lint.sh fix",
+    "oxfmt": "vp fmt . --write",
+    "format": "vp fmt . --write",
+    "format:check": "vp fmt . --check",
     "hooks:install": "lefthook install",
-    "postinstall": "sh -c 'if [ -d .git ]; then lefthook install; fi'"
+    "postinstall": "sh -c 'if [ -d .git ]; then lefthook install; fi'",
+    "test:memories": "pnpm --filter @pi-ohm/memories exec tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
-    "@juanibiapina/pi-extension-settings": "^0.5.0",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "catalog:pi",
-    "@mariozechner/pi-tui": "catalog:pi",
+    "@ast-grep/cli": "^0.44.0",
     "@types/node": "^24.3.1",
     "@typescript/native-preview": "^7.0.0-dev.20260217.1",
     "lefthook": "^2.1.1",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
-    "oxlint-tsgolint": "^0.14.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.20.0",
+    "tuistory": "^0.10.0",
+    "typebox": "^1.2.8",
+    "typescript": "^5.9.3",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
-  "packageManager": "yarn@4.12.0",
+  "packageManager": "pnpm@10.25.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@ast-grep/cli",
+      "@google/genai",
+      "esbuild",
+      "koffi",
+      "lefthook",
+      "protobufjs",
+      "sharp",
+      "workerd"
+    ],
+    "overrides": {
+      "esbuild": "0.28.1",
+      "glob": "13.0.6",
+      "vite": "npm:@voidzero-dev/vite-plus-core@0.1.24",
+      "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.24",
+      "ws": "8.21.0"
+    },
+    "packageExtensions": {
+      "alchemy@*": {
+        "dependencies": {
+          "undici": "7.24.8"
+        }
+      }
+    },
+    "allowedDeprecatedVersions": {
+      "node-domexception": "1.0.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@libsql/client": "0.17.3",
+        "vite": "0.1.24"
+      }
+    }
+  },
   "pi": {
     "extensions": [
-      "./node_modules/@juanibiapina/pi-extension-settings/dist/index.js",
       "./extensions"
     ]
   }

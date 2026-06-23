@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { FEATURE_CATALOG } from "./feature-catalog";
 import { loadOhmConfig } from "./config/load-config";
 

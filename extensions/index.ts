@@ -1,6 +1,7 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import registerPiOhmExtension from "../packages/extension/src/extension";
 
-export default function (pi: ExtensionAPI) {
+type Pi = Parameters<typeof registerPiOhmExtension>[0];
+
+export default function (pi: Pi) {
   registerPiOhmExtension(pi);
 }

@@ -1,23 +1,155 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile, cp } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 
 type PublishChannel = "latest" | "dev";
 
 interface CliArgs {
   channel: PublishChannel;
   only: string[] | null;
+  exclude: string[] | null;
   provenance: boolean | null;
+  dryRun: boolean;
 }
 
 interface LoadedPackage {
   relDir: string;
   absDir: string;
-  pkg: Record<string, unknown> & { name: string; version: string };
+  pkg: PackageMetadata;
+}
+
+type JsonObject = Record<string, unknown>;
+type PackageMetadata = JsonObject & { name: string; version: string };
+type TempPackageMetadata = JsonObject & { name: string; version?: string };
+
+interface CatalogConfig {
+  defaultCatalog: ReadonlyMap<string, string>;
+  namedCatalogs: ReadonlyMap<string, ReadonlyMap<string, string>>;
+}
+
+function isTypeDefinitionPath(filePath: string): boolean {
+  return filePath.endsWith(".d.ts") || filePath.endsWith(".d.cts") || filePath.endsWith(".d.mts");
+}
+
+function isRuntimeTypeScriptPath(filePath: string): boolean {
+  if (isTypeDefinitionPath(filePath)) return false;
+  return filePath.endsWith(".ts") || filePath.endsWith(".mts") || filePath.endsWith(".cts");
+}
+
+function normalizeRelativeFilePath(value: string): string {
+  if (value.startsWith("./")) return value.slice(2);
+  return value;
+}
+
+function isLocalPackageFilePath(value: string): boolean {
+  if (value.startsWith("node:")) return false;
+  if (value.includes("://")) return false;
+  if (path.isAbsolute(value)) return false;
+  return true;
+}
+
+const JsonObjectSchema = Type.Unsafe<JsonObject>({
+  type: "object",
+  additionalProperties: true,
+});
+const PackageMetadataSchema = Type.Unsafe<PackageMetadata>({
+  type: "object",
+  required: ["name", "version"],
+  properties: {
+    name: { type: "string" },
+    version: { type: "string" },
+  },
+  additionalProperties: true,
+});
+const TempPackageMetadataSchema = Type.Unsafe<TempPackageMetadata>({
+  type: "object",
+  required: ["name"],
+  properties: {
+    name: { type: "string" },
+    version: { type: "string" },
+  },
+  additionalProperties: true,
+});
+const PackagePiFieldSchema = Type.Object(
+  { extensions: Type.Optional(Type.Array(Type.Unknown())) },
+  { additionalProperties: true },
+);
+const NpmVersionsPayloadSchema = Type.Object(
+  { versions: Type.Optional(JsonObjectSchema) },
+  { additionalProperties: true },
+);
+
+function collectExportPaths(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectExportPaths(item));
+  }
+  if (!Value.Check(JsonObjectSchema, value)) return [];
+
+  const output: string[] = [];
+  for (const nested of Object.values(value)) {
+    output.push(...collectExportPaths(nested));
+  }
+  return output;
+}
+
+async function ensurePublishArtifacts(
+  pkgDir: string,
+  pkg: Record<string, unknown> & { name: string },
+): Promise<void> {
+  const filesToCheck = new Set<string>();
+
+  const mainField = pkg.main;
+  if (typeof mainField === "string") filesToCheck.add(mainField);
+
+  const moduleField = pkg.module;
+  if (typeof moduleField === "string") filesToCheck.add(moduleField);
+
+  const typesField = pkg.types;
+  if (typeof typesField === "string") filesToCheck.add(typesField);
+
+  const exportsField = pkg.exports;
+  if (exportsField !== undefined) {
+    for (const exportPath of collectExportPaths(exportsField)) {
+      filesToCheck.add(exportPath);
+    }
+  }
+
+  const piField = pkg.pi;
+  if (Value.Check(PackagePiFieldSchema, piField)) {
+    const extensions = piField.extensions;
+    if (Array.isArray(extensions)) {
+      for (const extensionPath of extensions) {
+        if (typeof extensionPath === "string") {
+          filesToCheck.add(extensionPath);
+        }
+      }
+    }
+  }
+
+  for (const filePath of filesToCheck) {
+    if (!isLocalPackageFilePath(filePath)) continue;
+    if (isRuntimeTypeScriptPath(filePath)) {
+      throw new Error(
+        `Package '${pkg.name}' still references TypeScript runtime path '${filePath}' in package metadata.`,
+      );
+    }
+
+    const absoluteFilePath = path.join(pkgDir, normalizeRelativeFilePath(filePath));
+    try {
+      await access(absoluteFilePath);
+    } catch {
+      throw new Error(
+        `Package '${pkg.name}' is missing required publish artifact '${filePath}'. Run 'pnpm build' before publishing.`,
+      );
+    }
+  }
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -25,17 +157,29 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, "..");
 
 const PACKAGE_DIRS = [
-  "packages/config",
+  "packages/core",
+  "packages/pip-flue",
   "packages/modes",
   "packages/handoff",
+  "packages/memories",
   "packages/subagents",
+  "packages/tui",
+  "packages/goal",
   "packages/session-search",
   "packages/painter",
+  "packages/references",
   "packages/extension",
+  "packages/profiler",
 ] as const;
 
 function parseArgs(argv: string[]): CliArgs {
-  const args: CliArgs = { channel: "latest", only: null, provenance: null };
+  const args: CliArgs = {
+    channel: "latest",
+    only: null,
+    exclude: null,
+    provenance: null,
+    dryRun: false,
+  };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -58,20 +202,24 @@ function parseArgs(argv: string[]): CliArgs {
     }
 
     if (arg === "--only" && argv[i + 1]) {
-      args.only = argv[i + 1]
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      args.only = parseList(argv[i + 1]);
       i += 1;
       continue;
     }
 
     if (arg.startsWith("--only=")) {
-      args.only = arg
-        .slice("--only=".length)
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean);
+      args.only = parseList(arg.slice("--only=".length));
+      continue;
+    }
+
+    if (arg === "--exclude" && argv[i + 1]) {
+      args.exclude = parseList(argv[i + 1]);
+      i += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--exclude=")) {
+      args.exclude = parseList(arg.slice("--exclude=".length));
       continue;
     }
 
@@ -82,6 +230,11 @@ function parseArgs(argv: string[]): CliArgs {
 
     if (arg === "--no-provenance") {
       args.provenance = false;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      args.dryRun = true;
       continue;
     }
 
@@ -98,8 +251,17 @@ function parseArgs(argv: string[]): CliArgs {
   return args;
 }
 
-async function readJson(filePath: string): Promise<Record<string, unknown>> {
-  return JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
+function parseList(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function readJson(filePath: string): Promise<JsonObject> {
+  const parsed: unknown = JSON.parse(await readFile(filePath, "utf8"));
+  if (Value.Check(JsonObjectSchema, parsed)) return Value.Decode(JsonObjectSchema, parsed);
+  throw new Error(`Expected JSON object in ${filePath}`);
 }
 
 function run(command: string, args: string[], options: { cwd?: string } = {}): void {
@@ -126,6 +288,92 @@ function buildDevSuffix(): string {
   const runAttempt = process.env.GITHUB_RUN_ATTEMPT ?? "1";
   const sha = (process.env.GITHUB_SHA ?? "local").slice(0, 7);
   return `dev.${runId}.${runAttempt}.${sha}`;
+}
+
+function parseYamlKey(source: string): string {
+  const trimmed = source.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseCatalogEntry(line: string, indent: number): [string, string] | null {
+  const prefix = " ".repeat(indent);
+  if (!line.startsWith(prefix)) return null;
+
+  const trimmed = line.slice(indent);
+  if (trimmed.length === 0 || trimmed.startsWith("- ") || trimmed.startsWith("#")) return null;
+
+  const separator = trimmed.indexOf(":");
+  if (separator < 0) return null;
+
+  const key = parseYamlKey(trimmed.slice(0, separator));
+  const value = trimmed.slice(separator + 1).trim();
+  if (value.length === 0) return null;
+
+  return [key, value];
+}
+
+function toStringMap(source: unknown, label: string): Map<string, string> {
+  if (!Value.Check(JsonObjectSchema, source)) {
+    throw new Error(`Expected '${label}' to be an object in pnpm workspace config.`);
+  }
+
+  const output = new Map<string, string>();
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value !== "string") {
+      throw new Error(`Expected '${label}.${key}' to be a string in pnpm workspace config.`);
+    }
+    output.set(key, value);
+  }
+
+  return output;
+}
+
+async function loadCatalogConfig(): Promise<CatalogConfig> {
+  const text = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const lines = text.split(/\r?\n/);
+  const catalogRaw: Record<string, string> = {};
+  const catalogsRaw: Record<string, Record<string, string>> = {};
+  const catalogStart = lines.findIndex((line) => line.trim() === "catalog:");
+  const catalogsStart = lines.findIndex((line) => line.trim() === "catalogs:");
+
+  if (catalogStart >= 0) {
+    const end = catalogsStart >= 0 ? catalogsStart : lines.length;
+    for (const line of lines.slice(catalogStart + 1, end)) {
+      const entry = parseCatalogEntry(line, 2);
+      if (!entry) continue;
+      catalogRaw[entry[0]] = entry[1];
+    }
+  }
+
+  if (catalogsStart >= 0) {
+    const nested = lines.slice(catalogsStart + 1);
+    const names = nested
+      .map((line, index) => ({ line, index }))
+      .filter((entry) => /^ {2}[^ ].*:\s*$/.test(entry.line));
+
+    for (const [index, name] of names.entries()) {
+      const catalogName = parseYamlKey(name.line.trim().slice(0, -1));
+      const next = names[index + 1]?.index ?? nested.length;
+      const entries: Record<string, string> = {};
+      for (const line of nested.slice(name.index + 1, next)) {
+        const entry = parseCatalogEntry(line, 4);
+        if (!entry) continue;
+        entries[entry[0]] = entry[1];
+      }
+      catalogsRaw[catalogName] = entries;
+    }
+  }
+
+  const defaultCatalog = toStringMap(catalogRaw, "catalog");
+  const namedCatalogs = new Map<string, ReadonlyMap<string, string>>();
+  for (const [catalogName, entries] of Object.entries(catalogsRaw)) {
+    namedCatalogs.set(catalogName, toStringMap(entries, `catalogs.${catalogName}`));
+  }
+
+  return { defaultCatalog, namedCatalogs };
 }
 
 function normalizeWorkspaceRange(
@@ -158,10 +406,48 @@ function normalizeWorkspaceRange(
   return resolvedVersion;
 }
 
+function resolveCatalogRange(
+  depName: string,
+  depRange: string,
+  catalogs: CatalogConfig,
+  pkgName: string,
+): string | null {
+  if (!depRange.startsWith("catalog:")) {
+    return null;
+  }
+
+  const catalogName = depRange.slice("catalog:".length).trim();
+  if (catalogName.length === 0) {
+    const version = catalogs.defaultCatalog.get(depName);
+    if (!version) {
+      throw new Error(
+        `Missing pnpm default catalog entry for '${depName}' in package '${pkgName}'.`,
+      );
+    }
+    return version;
+  }
+
+  const namedCatalog = catalogs.namedCatalogs.get(catalogName);
+  if (!namedCatalog) {
+    throw new Error(
+      `Missing pnpm named catalog '${catalogName}' for dependency '${depName}' in package '${pkgName}'.`,
+    );
+  }
+
+  const version = namedCatalog.get(depName);
+  if (!version) {
+    throw new Error(
+      `Missing pnpm catalog entry '${catalogName}.${depName}' in package '${pkgName}'.`,
+    );
+  }
+  return version;
+}
+
 function rewriteInternalDependencies(
   pkg: Record<string, unknown> & { name: string },
   versionByName: Map<string, string>,
   channel: PublishChannel,
+  catalogs: CatalogConfig,
 ): void {
   const dependencyFields = [
     "dependencies",
@@ -172,22 +458,27 @@ function rewriteInternalDependencies(
 
   for (const field of dependencyFields) {
     const section = pkg[field];
-    if (!section || typeof section !== "object") continue;
+    if (!Value.Check(JsonObjectSchema, section)) continue;
 
-    const dependencySection = section as Record<string, unknown>;
-
-    for (const [depName, depRange] of Object.entries(dependencySection)) {
+    for (const [depName, depRange] of Object.entries(section)) {
       if (typeof depRange !== "string") continue;
-      if (!depRange.startsWith("workspace:")) continue;
 
-      const resolvedVersion = versionByName.get(depName);
-      if (!resolvedVersion) {
-        throw new Error(
-          `Unable to resolve workspace dependency '${depName}' for package '${pkg.name}'.`,
-        );
+      if (depRange.startsWith("workspace:")) {
+        const resolvedVersion = versionByName.get(depName);
+        if (!resolvedVersion) {
+          throw new Error(
+            `Unable to resolve workspace dependency '${depName}' for package '${pkg.name}'.`,
+          );
+        }
+
+        section[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+        continue;
       }
 
-      dependencySection[depName] = normalizeWorkspaceRange(depRange, resolvedVersion, channel);
+      const catalogRange = resolveCatalogRange(depName, depRange, catalogs, pkg.name);
+      if (catalogRange !== null) {
+        section[depName] = catalogRange;
+      }
     }
   }
 }
@@ -213,9 +504,11 @@ async function versionExistsOnNpm(name: string, version: string): Promise<boolea
     }
 
     if (response.ok) {
-      const payload = (await response.json()) as { versions?: Record<string, unknown> };
+      const payload: unknown = await response.json();
       return Boolean(
-        payload.versions && Object.prototype.hasOwnProperty.call(payload.versions, version),
+        Value.Check(NpmVersionsPayloadSchema, payload) &&
+        payload.versions &&
+        Object.prototype.hasOwnProperty.call(payload.versions, version),
       );
     }
   } catch {
@@ -232,6 +525,7 @@ async function versionExistsOnNpm(name: string, version: string): Promise<boolea
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
+  const catalogs = await loadCatalogConfig();
 
   const packages: LoadedPackage[] = [];
   for (const relDir of PACKAGE_DIRS) {
@@ -239,16 +533,20 @@ async function main(): Promise<void> {
     const pkgPath = path.join(absDir, "package.json");
     const rawPkg = await readJson(pkgPath);
 
-    if (typeof rawPkg.name !== "string" || typeof rawPkg.version !== "string") {
+    if (!Value.Check(PackageMetadataSchema, rawPkg)) {
       throw new Error(`Invalid package.json in ${relDir}`);
     }
 
-    packages.push({ relDir, absDir, pkg: rawPkg as LoadedPackage["pkg"] });
+    packages.push({ relDir, absDir, pkg: Value.Decode(PackageMetadataSchema, rawPkg) });
   }
 
-  const selected = args.only
+  const included = args.only
     ? packages.filter((item) => args.only?.includes(item.pkg.name))
     : packages;
+
+  const selected = args.exclude
+    ? included.filter((item) => !args.exclude?.includes(item.pkg.name))
+    : included;
 
   if (selected.length === 0) {
     throw new Error("No packages selected for publishing.");
@@ -276,7 +574,7 @@ async function main(): Promise<void> {
       throw new Error(`Missing target version for ${name}`);
     }
 
-    if (await versionExistsOnNpm(name, targetVersion)) {
+    if (!args.dryRun && (await versionExistsOnNpm(name, targetVersion))) {
       console.log(`Skipping ${name}@${targetVersion} (already published)`);
       continue;
     }
@@ -289,15 +587,21 @@ async function main(): Promise<void> {
 
       const tempPkgPath = path.join(tempPkgDir, "package.json");
       const rawTempPkg = await readJson(tempPkgPath);
-      if (typeof rawTempPkg.name !== "string") {
+      if (!Value.Check(TempPackageMetadataSchema, rawTempPkg)) {
         throw new Error(`Invalid temp package.json for ${item.relDir}`);
       }
 
-      const tempPkg = rawTempPkg as Record<string, unknown> & { name: string; version?: string };
+      const tempPkg = Value.Decode(TempPackageMetadataSchema, rawTempPkg);
       tempPkg.version = targetVersion;
-      rewriteInternalDependencies(tempPkg, versionByName, args.channel);
+      rewriteInternalDependencies(tempPkg, versionByName, args.channel, catalogs);
 
       await writeFile(tempPkgPath, `${JSON.stringify(tempPkg, null, 2)}\n`, "utf8");
+      await ensurePublishArtifacts(tempPkgDir, tempPkg);
+
+      if (args.dryRun) {
+        console.log(`Dry run: ${name}@${targetVersion} from ${item.relDir}`);
+        continue;
+      }
 
       const publishArgs = ["publish", "--access", "public"];
       if (args.channel === "dev") {

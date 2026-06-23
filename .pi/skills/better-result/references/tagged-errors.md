@@ -14,11 +14,7 @@ class NotFoundError extends TaggedError("NotFoundError")<{
 }>() {}
 
 // Usage
-new NotFoundError({
-  resource: "User",
-  id: "123",
-  message: "User 123 not found",
-});
+new NotFoundError({ resource: "User", id: "123", message: "User 123 not found" });
 ```
 
 ### Error with Computed Message
@@ -179,10 +175,7 @@ class NotFoundError extends AppError {
   }
 }
 // TO: TaggedError
-class NotFoundError extends TaggedError("NotFoundError")<{
-  id: string;
-  message: string;
-}>() {
+class NotFoundError extends TaggedError("NotFoundError")<{ id: string; message: string }>() {
   constructor(args: { id: string }) {
     super({ ...args, message: `Not found: ${args.id}` });
   }

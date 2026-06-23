@@ -1,0 +1,5 @@
+{
+  "title": "Config",
+  "description": "",
+  "pages": ["how-config-works", "subagents", "prompts"]
+}

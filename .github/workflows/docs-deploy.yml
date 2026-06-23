@@ -1,0 +1,80 @@
+name: Docs Deploy
+
+on:
+  push:
+    branches: ["dev", "prod"]
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage to deploy"
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+
+concurrency:
+  group: docs-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      STAGE: ${{ github.event_name == 'workflow_dispatch' && inputs.stage || (github.ref_name == 'prod' && 'prod' || 'dev') }}
+      DOCS_DEV_DOMAIN: ${{ vars.DOCS_DEV_DOMAIN || 'dev.ohm.moe' }}
+      DOCS_PROD_DOMAIN: ${{ vars.DOCS_PROD_DOMAIN || 'ohm.moe' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 24
+          cache: true
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: vp run build
+
+      - name: Deploy docs with Alchemy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          log="$(mktemp)"
+          set +e
+          vp run docs#deploy 2>&1 | tee "${log}"
+          status="${PIPESTATUS[0]}"
+          set -e
+
+          if [[ "${status}" -eq 0 ]]; then
+            exit 0
+          fi
+
+          if [[ "${STAGE}" == "dev" ]] && grep -Fq "[CloudflareStateStore] The token is invalid" "${log}"; then
+            echo "::warning title=Alchemy state token drift::Retrying dev docs deploy with forceUpdate=true."
+            for attempt in 1 2 3; do
+              if [[ "${attempt}" -gt 1 ]]; then
+                sleep 20
+              fi
+
+              if ALCHEMY_STATE_FORCE_UPDATE=1 vp run docs#deploy; then
+                exit 0
+              fi
+            done
+          fi
+
+          exit "${status}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}

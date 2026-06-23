@@ -10,6 +10,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["extensions/**/*.ts", "packages/**/*.ts"],
-  "exclude": ["node_modules", "src_legacy"]
+  "include": ["extensions/**/*.ts", "packages/**/*.ts", "scripts/**/*.ts"],
+  "exclude": ["node_modules", "**/src_legacy/**/*.ts"]
 }

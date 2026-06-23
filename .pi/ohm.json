@@ -1,0 +1,62 @@
+{
+  "$schema": "../.schema/schema.json",
+  "subagents": {
+    "librarian": {
+      "model": "openai-codex/gpt-5.5:medium"
+    },
+    "oracle": {
+      "model": "openai-codex/gpt-5.5:xhigh"
+    },
+    "finder": {
+      "model": "openai-codex/gpt-5.5:low"
+    },
+    "experimental": {
+      "summarize_history": {
+        "enabled": true,
+        "type": "compact",
+        "model": "openai-codex/gpt-5.5:medium"
+      }
+    }
+  },
+  "references": {
+    "opencode": {
+      "repository": "anomalyco/opencode",
+      "branch": "dev",
+      "description": "The open source coding agent.",
+      "hidden": false
+    },
+    "pi": {
+      "repository": "https://github.com/earendil-works/pi",
+      "branch": "main",
+      "description": "Use whenever working on Pi-related code.",
+      "hidden": false
+    },
+    "codex": {
+      "repository": "https://github.com/openai/codex",
+      "branch": "main",
+      "description": "Lightweight coding agent that runs in your terminal.",
+      "hidden": false
+    },
+    "pi-codex-goal": {
+      "repository": "https://github.com/fitchmultz/pi-codex-goal",
+      "branch": "main",
+      "description": "Codex-style goal tracking and continuation for pi.",
+      "hidden": false
+    },
+    "flue": {
+      "repository": "https://github.com/withastro/flue",
+      "branch": "main",
+      "description": "The sandbox agent framework.",
+      "hidden": false
+    },
+    "howaboua-pi-stuff": {
+      "repository": "https://github.com/IgorWarzocha/howaboua-pi-stuff",
+      "branch": "main",
+      "description": "Monorepo of pi extensions and skills. Most important one is ./packages/pi-codex-conversion.",
+      "hidden": false
+    }
+  },
+  "goal": {
+    "enabled": true
+  }
+}

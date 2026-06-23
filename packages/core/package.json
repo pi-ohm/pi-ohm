@@ -1,7 +1,6 @@
 {
   "name": "@pi-ohm/core",
-  "version": "0.6.2",
-  "private": true,
+  "version": "0.6.4",
   "homepage": "https://github.com/pi-ohm/pi-ohm/tree/dev/packages/core#readme",
   "repository": {
     "type": "git",
@@ -9,15 +8,73 @@
     "directory": "packages/core"
   },
   "files": [
-    "src/",
+    "dist/",
+    "drizzle/",
     "README.md"
   ],
   "type": "module",
   "sideEffects": false,
   "exports": {
-    "./errors": "./src/errors.ts"
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./grammar": {
+      "types": "./dist/grammar.d.ts",
+      "default": "./dist/grammar.js"
+    },
+    "./jobs": {
+      "types": "./dist/jobs.d.ts",
+      "default": "./dist/jobs.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    },
+    "./toolkit": {
+      "types": "./dist/toolkit.d.ts",
+      "default": "./dist/toolkit.js"
+    },
+    "./db": {
+      "types": "./dist/db/index.d.ts",
+      "default": "./dist/db/index.js"
+    },
+    "./config": {
+      "types": "./dist/config/index.d.ts",
+      "default": "./dist/config/index.js"
+    },
+    "./events": {
+      "types": "./dist/events/index.d.ts",
+      "default": "./dist/events/index.js"
+    },
+    "./logging": {
+      "types": "./dist/logging/index.d.ts",
+      "default": "./dist/logging/index.js"
+    },
+    "./pip": {
+      "types": "./dist/pi-in-pi/index.d.ts",
+      "default": "./dist/pi-in-pi/index.js"
+    },
+    "./pip/experimental": {
+      "types": "./dist/pi-in-pi/experimental.d.ts",
+      "default": "./dist/pi-in-pi/experimental.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "vp pack src/errors.ts src/grammar.ts src/jobs.ts src/paths.ts src/toolkit.ts src/db/index.ts src/config/index.ts src/events/index.ts src/logging/index.ts src/pi-in-pi/index.ts src/pi-in-pi/experimental.ts"
   },
   "dependencies": {
-    "better-result": "catalog:"
+    "@earendil-works/pi-agent-core": "catalog:pi",
+    "@earendil-works/pi-ai": "catalog:pi",
+    "@earendil-works/pi-coding-agent": "catalog:pi",
+    "@libsql/client": "catalog:",
+    "better-result": "catalog:",
+    "chokidar": "catalog:",
+    "drizzle-orm": "catalog:",
+    "typebox": "^1.0.68"
   }
 }

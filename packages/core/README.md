@@ -5,3 +5,13 @@ Internal shared runtime primitives for pi-ohm packages.
 Current module:
 
 - `@pi-ohm/core/errors`
+- `@pi-ohm/core/grammar`
+- `@pi-ohm/core/paths`
+- `@pi-ohm/core/toolkit`
+- `@pi-ohm/core/db`
+- `@pi-ohm/core/config`
+- `@pi-ohm/core/events`
+- `@pi-ohm/core/logging`
+- `@pi-ohm/core/pip`
+
+`@pi-ohm/core/db`, `@pi-ohm/core/config`, `@pi-ohm/core/events`, `@pi-ohm/core/logging`, and `@pi-ohm/core/pip` are subpath exports. Root `@pi-ohm/core` imports must stay DB-free so non-DB consumers do not pull libsql.
