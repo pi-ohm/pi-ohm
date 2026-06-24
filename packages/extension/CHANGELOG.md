@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.0.0](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.4...pi-ohm-v1.0.0) (2026-06-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* **root,core:** move config to core package
+* **root:** migrate to vite plus
+
+### refac
+
+* **root,core:** move config to core package ([a67ab17](https://github.com/pi-ohm/pi-ohm/commit/a67ab17a2278a359999dfb9d4724388618d42823))
+
+
+### Features
+
+* **memories:** add memory extension MVP ([9503f12](https://github.com/pi-ohm/pi-ohm/commit/9503f12b3ae16dacba1ff4103e830e7380eabd57))
+* **mono:** add profiler extension wiring and shi ([d35cb9d](https://github.com/pi-ohm/pi-ohm/commit/d35cb9de47f04aef9b6dab430c982f2b6e0a2c50))
+* **repo,core,config,modes,handoff,subagents,session-search,painter,tui,pi-ohm:** migrate publish pipeline to tsdown dist artifacts ([0e8e307](https://github.com/pi-ohm/pi-ohm/commit/0e8e307ed19938965d1e5bd535eb8eccf7aa9b98))
+* **root:** migrate to vite plus ([126299d](https://github.com/pi-ohm/pi-ohm/commit/126299d94d04bb833a253c0316260b4a0fbfe5f1))
+
+
+### Bug Fixes
+
+* **mono:** remove internal profiler ext from global pi-ohm extension ([73c13e5](https://github.com/pi-ohm/pi-ohm/commit/73c13e57dbf2b69a016f175f86d9b7125e4c1252))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @pi-ohm/core bumped to 1.0.0
+    * @pi-ohm/handoff bumped to 1.0.0
+    * @pi-ohm/memories bumped to 1.0.0
+    * @pi-ohm/modes bumped to 1.0.0
+    * @pi-ohm/painter bumped to 1.0.0
+    * @pi-ohm/references bumped to 1.0.0
+    * @pi-ohm/session-search bumped to 1.0.0
+    * @pi-ohm/subagents bumped to 1.0.0
+
 ## [0.6.4](https://github.com/pi-ohm/pi-ohm/compare/pi-ohm-v0.6.3...pi-ohm-v0.6.4) (2026-02-18)
 
 ### Miscellaneous Chores
